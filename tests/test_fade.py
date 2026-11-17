@@ -101,7 +101,8 @@ def pair(tmp_path: Path, span) -> tuple[Path, Path]:
 
 def test_the_start_rises_from_black_and_silence(tmp_path):
     on, off = pair(tmp_path, (0.0, 3.0))
-    assert frame_at(on, 0.0).mean() < 3 < 20 < frame_at(off, 0.0).mean()
+    assert frame_at(on, 0.0).mean() < 3
+    assert frame_at(off, 0.0).mean() > 20
     assert close(frame_at(on, 1.0), frame_at(off, 1.0))
     assert loudness(on, 0.0, 0.05) < 0.15 * loudness(off, 0.0, 0.05)
     assert loudness(on, 1.0) == pytest.approx(loudness(off, 1.0), rel=0.05)
