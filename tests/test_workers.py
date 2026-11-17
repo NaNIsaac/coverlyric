@@ -32,3 +32,11 @@ def test_workers_can_be_set(monkeypatch):
 def test_memory_is_read():
     total, available = media.memory_mb()
     assert total > available > 0
+
+
+@pytest.mark.parametrize(("given", "expected"), [("abc", None), ("0", None), ("50", 8), (" 3 ", 3)])
+def test_a_bad_worker_setting_does_not_break_the_render(monkeypatch, given, expected):
+    monkeypatch.setenv("COVERLYRIC_WORKERS", given)
+    monkeypatch.setattr(cli.os, "cpu_count", lambda: 4)
+    monkeypatch.setattr(media, "memory_mb", lambda: (8000.0, 4000.0))
+    assert cli.workers() == (expected or 3)

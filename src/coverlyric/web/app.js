@@ -23,9 +23,15 @@ let again = false;
 let lastBoxes = {};
 let dragging = false;
 
-function toast(text, ms = 3500) {
+function toast(text, ms = 3500, action = null) {
   const t = $("toast");
   t.textContent = text;
+  if (action) {
+    const b = document.createElement("button");
+    b.textContent = action.label;
+    b.addEventListener("click", () => { t.classList.remove("show"); action.run(); });
+    t.append(b);
+  }
   t.classList.add("show");
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => t.classList.remove("show"), ms);
@@ -364,6 +370,7 @@ function fillAll() {
   $("artist").value = state.artist;
   $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
   $("art-name").textContent = state.has_art ? "표지 있음" : "정사각형 권장";
+  updateStatus();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
   else $("player").removeAttribute("src");
   $("time").max = Math.max(1, state.duration || 60);
@@ -428,7 +435,10 @@ function drawLines() {
     row.querySelector(".x").addEventListener("change", (e) => { state.lines[i][1] = e.target.value; scheduleSync(); });
     row.addEventListener("click", (e) => {
       const a = e.target.dataset && e.target.dataset.a;
-      if (!a) return;
+      if (!a) {
+        if (!e.target.closest(".mine")) goLine(i);
+        return;
+      }
       if (a === "minus" || a === "plus") {
         if (state.lines[i][0] == null) return;
         state.lines[i][0] = Math.max(0, Math.round((state.lines[i][0] + (a === "plus" ? 0.1 : -0.1)) * 100) / 100);
@@ -440,16 +450,26 @@ function drawLines() {
         p.currentTime = Math.max(0, (state.lines[i][0] || 0) - 1);
         p.play();
       } else if (a === "del") {
-        state.lines.splice(i, 1);
-        diff.splice(i, 1);
+        const [gone] = state.lines.splice(i, 1);
+        const [goneDiff] = diff.splice(i, 1);
         notes = {};
         drawLines();
         scheduleSync();
+        toast("줄을 지웠습니다.", 6000, {
+          label: "되돌리기",
+          run: () => {
+            state.lines.splice(i, 0, gone);
+            if (diff.length >= i) diff.splice(i, 0, goneDiff);
+            drawLines();
+            scheduleSync();
+          },
+        });
       }
     });
     holder.appendChild(row);
   });
   updateCheck();
+  markNow(Number($("time").value));
   const next = holder.querySelector(".line.next");
   if (next) next.scrollIntoView({ block: "center", behavior: "smooth" });
 }
@@ -457,12 +477,172 @@ function drawLines() {
 function updateCheck() {
   const timed = state.lines.filter(([t]) => t != null).length;
   $("check").textContent = state.lines.length ? `시간 입력됨: ${timed} / ${state.lines.length}줄` : "";
+  updateStatus();
 }
 
-function showAt(t) {
+function mark(holder, parts) {
+  holder.innerHTML = "";
+  for (const [text, cls] of parts) {
+    const span = document.createElement("span");
+    span.className = cls;
+    span.textContent = text;
+    holder.append(span);
+  }
+}
+
+// What each step still lacks, readable from the closed headers before pressing make.
+function updateStatus() {
+  mark($("state-files"), [
+    [state.has_audio ? "노래" : "노래 없음", state.has_audio ? "ok" : "miss"],
+    [state.has_art ? "표지" : "표지 없음", state.has_art ? "ok" : "miss"],
+  ]);
+  const count = state.lines.length;
+  mark($("state-lyrics"), [[count ? `${count}줄` : "없음", count ? "" : "miss"]]);
+  const timed = state.lines.filter(([t]) => t != null).length;
+  mark($("state-timing"), count ? [[`${timed}/${count}`, timed === count ? "ok" : "miss"]] : []);
+}
+
+function lineAt(t) {
+  let at = -1;
+  state.lines.forEach(([start], i) => {
+    if (start != null && start <= t && (at < 0 || start >= state.lines[at][0])) at = i;
+  });
+  return at;
+}
+
+function markNow(t) {
+  const at = lineAt(t);
+  const rows = $("lines").children;
+  for (let i = 0; i < rows.length; i++) rows[i].classList.toggle("now", i === at);
+  const row = rows[at];
+  if (row && !$("player").paused && !$("lines").contains(document.activeElement)) {
+    row.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function goLine(i) {
+  const start = state.lines[i][0];
+  if (start == null || tapIndex >= 0) return;
+  const p = $("player");
+  if (!p.paused) p.currentTime = start;
+  showAt(start + 0.3, 0);
+}
+
+function showAt(t, delay = 150) {
   $("time").value = t;
   $("time-label").textContent = clock(t).replace(/\.\d+$/, "");
-  scheduleSync();
+  markNow(t);
+  scheduleSync(delay);
+}
+
+// While the song plays the still follows it about once a second; a pause or a seek shows that moment.
+let follow = null;
+function followPlayer() {
+  const p = $("player");
+  clearInterval(follow);
+  follow = null;
+  if (!p.paused) {
+    follow = setInterval(() => {
+      if (!dragging && !document.hidden) showAt(p.currentTime, 0);
+    }, 1000);
+  }
+  showAt(p.currentTime, 0);
+}
+
+function togglePlay() {
+  const p = $("player");
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 1단계에서 넣으세요."); return; }
+  if (p.paused) p.play(); else p.pause();
+}
+
+function seekBy(seconds) {
+  const p = $("player");
+  if (!state.has_audio) return;
+  p.currentTime = Math.min(Math.max(0, p.currentTime + seconds), p.duration || state.duration || 0);
+}
+
+const TEXT_FIELDS = 'input:not([type]), input[type="text"], input[type="number"], textarea, select, [contenteditable]';
+
+// Space and the arrows drive the song unless the key belongs to the focused control: a text field,
+// a slider, the audio element, or a button reached with the keyboard.
+function shortcut(e) {
+  if (e.ctrlKey || e.altKey || e.metaKey || $("crop").open) return;
+  const el = document.activeElement;
+  if (el && (el.matches(TEXT_FIELDS) || el.tagName === "AUDIO")) return;
+  if (e.code === "Space") {
+    if (el && el !== document.body && el.matches(":focus-visible")) return;
+    if (e.repeat) { e.preventDefault(); return; }
+    e.preventDefault();
+    if (el && el !== document.body) el.blur();
+    togglePlay();
+  } else if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+    if (el && el.matches('input[type="range"], input[type="radio"]')) return;
+    e.preventDefault();
+    seekBy(e.code === "ArrowLeft" ? -5 : 5);
+  }
+}
+
+const KINDS = {
+  audio: [".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"],
+  art: [".png", ".jpg", ".jpeg", ".webp", ".bmp"],
+  anim: [".gif", ".png", ".jpg", ".jpeg", ".webp"],
+  timing: [".srt", ".lrc", ".vtt"],
+  lyrics: [".txt"],
+  font: [".ttf", ".otf", ".ttc"],
+};
+
+function kindOf(file, onAnim) {
+  const name = file.name.toLowerCase();
+  const is = (kind) => KINDS[kind].some((s) => name.endsWith(s));
+  if (onAnim && is("anim")) return "anim";
+  if (name.endsWith(".gif")) return "anim";
+  return ["audio", "art", "timing", "lyrics", "font"].find(is) || null;
+}
+
+async function takeFiles(files, onAnim) {
+  const groups = {};
+  for (const file of files) {
+    const kind = kindOf(file, onAnim);
+    if (!kind) { toast(`${file.name}: 넣을 수 없는 파일입니다. 노래, 사진, 자막, 가사, 글꼴 파일을 놓으세요.`, 6000); continue; }
+    (groups[kind] ||= []).push(file);
+  }
+  if (groups.audio) { await upload("audio", groups.audio[0]); $("step-files").open = true; }
+  if (groups.font) await upload("font", groups.font[0]);
+  if (groups.timing) {
+    try { await importText(groups.timing[0].name, await groups.timing[0].text()); } catch (e) { toast(e.message); }
+    $("step-timing").open = true;
+  }
+  if (groups.lyrics) {
+    $("lyrics-text").value = await groups.lyrics[0].text();
+    $("step-lyrics").open = true;
+    $("lyrics-apply").click();
+  }
+  if (groups.anim) { await addAnim(groups.anim); $("step-look").open = true; }
+  if (groups.art) openCrop(groups.art[0]);
+}
+
+function bindDrop() {
+  let depth = 0;
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+  document.addEventListener("dragenter", (e) => {
+    if (!hasFiles(e)) return;
+    depth += 1;
+    $("drop").hidden = false;
+  });
+  document.addEventListener("dragleave", (e) => {
+    if (!hasFiles(e)) return;
+    depth = Math.max(0, depth - 1);
+    if (!depth) $("drop").hidden = true;
+  });
+  document.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+  document.addEventListener("drop", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    depth = 0;
+    $("drop").hidden = true;
+    const onAnim = Boolean(e.target.closest && e.target.closest("#anim-group"));
+    takeFiles([...e.dataTransfer.files], onAnim).catch((err) => toast(err.message));
+  });
 }
 
 async function upload(kind, file) {
@@ -808,7 +988,7 @@ function bind() {
   $("tap-undo").addEventListener("click", untap);
   $("tap-stop").addEventListener("click", () => stopTap());
   document.addEventListener("keydown", (e) => {
-    if ($("tap-bar").hidden) return;
+    if ($("tap-bar").hidden) { shortcut(e); return; }
     const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
     if (typing) return;
     if (e.code === "Space" || e.code === "Enter") {
@@ -913,8 +1093,15 @@ function bind() {
     scheduleSync(0);
   });
 
-  $("time").addEventListener("input", (e) => showAt(Number(e.target.value)));
-  $("time-now").addEventListener("click", () => showAt($("player").currentTime));
+  $("time").addEventListener("input", (e) => {
+    const t = Number(e.target.value);
+    const p = $("player");
+    if (!p.paused) p.currentTime = t;
+    showAt(t);
+  });
+  for (const ev of ["play", "pause", "ended"]) $("player").addEventListener(ev, followPlayer);
+  $("player").addEventListener("seeked", () => showAt($("player").currentTime, 0));
+  bindDrop();
   $("clip-make").addEventListener("click", async () => {
     if (!$("clip").hidden) return closeClip();
     try {

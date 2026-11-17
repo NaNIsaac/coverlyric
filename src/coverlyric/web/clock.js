@@ -4,9 +4,10 @@
 
 function clock(seconds) {
   if (seconds == null || Number.isNaN(seconds)) return "";
-  const s = Math.max(0, seconds);
-  const m = Math.floor(s / 60);
-  return `${m}:${(s - m * 60).toFixed(2).padStart(5, "0")}`;
+  // Rounded to hundredths first, so 59.999 shows as 1:00.00 and not 0:60.00.
+  const cs = Math.round(Math.max(0, seconds) * 100);
+  const m = Math.floor(cs / 6000);
+  return `${m}:${((cs - m * 6000) / 100).toFixed(2).padStart(5, "0")}`;
 }
 
 // m:ss.d, the form a typed time is shown in once the box loses focus.
