@@ -871,8 +871,8 @@ async function pollRender() {
     $("make").disabled = true;
     const share = job.total ? job.done / job.total : 0;
     $("progress-bar").value = share;
-    const left = job.eta != null ? ` · 남은 시간 약 ${Math.max(1, Math.round(job.eta / 60))}분` : " · 남은 시간 계산 중";
-    $("progress-text").textContent = `${Math.round(share * 100)}%${left}`;
+    $("progress-text").textContent = `${Math.round(share * 100)}%${job.eta != null ? timeLeft(job.eta) : " · 남은 시간 계산 중"}`;
+    showRenderPlace(job.done || 0, job.total || state.duration || 0);
     setTimeout(pollRender, 1000);
     return;
   }
@@ -898,6 +898,7 @@ async function pollClip() {
   if (job.state === "running") {
     $("clip-make").disabled = true;
     label.textContent = `만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`;
+    showRenderPlace((job.at || 0) + (job.done || 0), state.duration || 0);
     setTimeout(pollClip, 500);
     return;
   }
@@ -923,6 +924,18 @@ function closeClip() {
   video.hidden = true;
   $("boxes").hidden = false;
   $("clip-label").textContent = "10초 미리보기 영상";
+}
+
+// Progress in song terms: how far into the song the video is made, and the lyric sung there, so the
+// pace reads against the song itself.
+function showRenderPlace(done, total) {
+  const short = (t) => clock(t).replace(/\.\d+$/, "");
+  $("progress-song").textContent = `${short(done)} / ${short(total)}`;
+  const at = lineAt(done);
+  const text = at < 0 ? "" : state.lines[at][1].trim();
+  const el = $("progress-line");
+  el.textContent = text || (at < 0 ? "전주" : "간주");
+  el.classList.toggle("gap", !text);
 }
 
 function showRenderError(message) {
