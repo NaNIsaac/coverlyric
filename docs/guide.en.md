@@ -98,7 +98,7 @@ are in the **색** group, the rest in **모양**.
 - **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
 - **띠 색:** colour of the band behind the current line and of the progress bar.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
-- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, with an outline or
+- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, title and artist, with an outline or
   shadow that keeps them readable on a light cover.
 - **움직이는 그림** (moving picture): one GIF or several images (png, jpg, webp) loop over the video.
   Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장** (frames per second). Turn off

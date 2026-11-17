@@ -281,6 +281,30 @@ def tracked(
         x += w + gap
 
 
+def lettered(
+    draw: ImageDraw.ImageDraw,
+    centre: tuple[float, float],
+    text: str,
+    f: ImageFont.FreeTypeFont,
+    alpha: int,
+    style: Style,
+    tracking: float = TRACKING,
+) -> None:
+    """``tracked`` text in the lyric colour, with the style's outline or shadow: the lyrics, the title
+    and the artist share them so a light cover can be read in all three."""
+    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
+    if style.lyric_edge == "shadow":
+        # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
+        drop = f.size * SHADOW_DROP
+        x, y = centre
+        tracked(draw, (x + drop, y + drop), text, f, (*rim, round(alpha * SHADOW_ALPHA)), tracking)
+    if style.lyric_edge == "outline":
+        stroke = max(1, round(f.size * OUTLINE_WIDTH))
+        tracked(draw, centre, text, f, (*ink, alpha), tracking, stroke, (*rim, alpha))
+    else:
+        tracked(draw, centre, text, f, (*ink, alpha), tracking)
+
+
 def text_width(text: str, f: ImageFont.FreeTypeFont, tracking: float = TRACKING) -> float:
     """The width ``tracked`` draws ``text`` at."""
     return sum(f.getlength(ch) for ch in text) + f.size * tracking * max(0, len(text) - 1)
@@ -387,21 +411,23 @@ def background(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
     box = round(TITLE_BOX * s)
     text = Image.new("RGBA", (W * SS, box * SS), (0, 0, 0, 0))
     d = ImageDraw.Draw(text)
-    tracked(
+    lettered(
         d,
         (W * SS / 2, TITLE_Y * s * SS),
         song.title,
         font(face, 58 * s * SS, 600),
-        (255, 255, 255, 255),
+        255,
+        style,
         0.06,
     )
     if song.artist:
-        tracked(
+        lettered(
             d,
             (W * SS / 2, ARTIST_Y * s * SS),
             song.artist,
             font(face, 26 * s * SS, 400),
-            (255, 255, 255, 165),
+            165,
+            style,
             0.18,
         )
     place(bg, text.resize((W, box), Image.LANCZOS), cx - W // 2, top)
@@ -617,7 +643,6 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
     row = g.row
     mid = ph / 2
     face, now, room, row_px = panel_fit(style)
-    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
 
     def filled(k: int) -> float:
         return 1.0 if 0 <= k < len(lines) and lines[k][1] else 0.0
@@ -651,15 +676,7 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
         pitch = size * ROW_PITCH
         for n, part in enumerate(rows):
             at = y + (n - (len(rows) - 1) / 2) * pitch
-            if style.lyric_edge == "shadow":
-                # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
-                drop = size * SHADOW_DROP
-                tracked(d, (pw / 2 + drop, at + drop), part, f, (*rim, round(alpha * SHADOW_ALPHA)))
-            if style.lyric_edge == "outline":
-                stroke = max(1, round(size * OUTLINE_WIDTH))
-                tracked(d, (pw / 2, at), part, f, (*ink, alpha), TRACKING, stroke, (*rim, alpha))
-            else:
-                tracked(d, (pw / 2, at), part, f, (*ink, alpha))
+            lettered(d, (pw / 2, at), part, f, alpha, style)
     # Averaging each 2x2 block takes 8 ms where LANCZOS took 37 ms, and this runs on every frame of a
     # move; the panel differs from LANCZOS by about one level of 255 on average (PSNR about 47 dB).
     return layer.reduce(SS)

@@ -66,3 +66,21 @@ def test_outline_grows_the_text(lines):
     plain = panel(lines)[..., 3] > 0
     edged = panel(lines, lyric_edge="outline")[..., 3] > 0
     assert edged.sum() > plain.sum()
+
+
+def title_strip(**style) -> np.ndarray:
+    s = render.Style(**style)
+    _, top, scale = render.geometry(s).title
+    bg = render.background(Project.load(DEMO).song(), s)
+    return np.asarray(bg.crop((0, top, render.W, top + round(render.TITLE_BOX * scale))))
+
+
+def test_title_and_artist_follow_the_lyric_colour_and_edge():
+    assert ink(title_strip(), (255, 255, 255)) > 300
+    red = title_strip(lyric_colour="#e02020")
+    assert ink(red, (224, 32, 32)) > 300
+    assert ink(red, (255, 255, 255)) == 0
+    assert (
+        ink(title_strip(lyric_edge="outline"), (0, 0, 0), 60)
+        > ink(title_strip(), (0, 0, 0), 60) + 300
+    )
