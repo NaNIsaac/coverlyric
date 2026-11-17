@@ -1295,27 +1295,32 @@ def render(
     frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by.
     `quick` makes a small clip at half the frame rate to look at in the page.
     When memory runs out, the render starts again with less (`steps`), and `note` says how (#12).
-    Returns what the user should know about the video: ANIM_DROPPED, or "" when it is as asked."""
+    Returns what the user should know about the video: ANIM_DROPPED and SMALLER, or "" when it is
+    as asked."""
     codec = "libx264" if quick else media.encoder()
-    tries = steps(workers, bool(song.anim))
-    for k, (count, shared, moving) in enumerate(tries):
+    tries = steps(workers, bool(song.anim), not quick and not HEIGHTS.get(style.height))
+    for k, (count, shared, moving, small) in enumerate(tries):
         part = song if moving else replace(song, anim=())
+        look = replace(style, height=720) if small else style
         try:
             try:
-                encode(out, lines, part, style, count, span, report, codec, quick, shared)
+                encode(out, lines, part, look, count, span, report, codec, quick, shared)
             except RuntimeError:
                 if codec == "libx264":
                     raise
                 # A graphics driver can pass the short test and still fail on a whole song.
                 codec = "libx264"
-                encode(out, lines, part, style, count, span, report, codec, quick, shared)
-            return "" if moving or not song.anim else ANIM_DROPPED
+                encode(out, lines, part, look, count, span, report, codec, quick, shared)
+            told = [ANIM_DROPPED] if song.anim and not moving else []
+            return " ".join([*told, SMALLER] if small else told)
         except Exception as e:
             if k + 1 == len(tries) or not out_of_memory(e):
                 raise
-            count, shared, moving = tries[k + 1]
+            count, shared, moving, small = tries[k + 1]
             how = (
-                "without the moving picture"
+                "at 720p"
+                if small
+                else "without the moving picture"
                 if not moving
                 else "the CD turn drawn on each frame, any moving picture loaded in the worker"
                 if not shared
@@ -1328,17 +1333,26 @@ def render(
 
 
 ANIM_DROPPED = "메모리가 부족해 움직이는 그림 없이 만들었습니다."
+SMALLER = "메모리가 부족해 720p로 만들었습니다."
 
 
-def steps(workers: int, anim: bool = False) -> list[tuple[int, bool, bool]]:
-    """The tries when memory runs short, as (workers, shared blocks, moving picture): the workers
-    halved down to one; then one worker without shared blocks, which draws the CD turn on each frame
-    and loads the moving picture itself; last, when there is one, without the moving picture."""
+def steps(
+    workers: int, anim: bool = False, smaller: bool = False
+) -> list[tuple[int, bool, bool, bool]]:
+    """The tries when memory runs short, as (workers, shared blocks, moving picture, 720p): the
+    workers halved down to one; then one worker without shared blocks, which draws the CD turn on
+    each frame and loads the moving picture itself; then, when there is one, without the moving
+    picture. With `smaller`, a 1080p video gets the leanest try once more at 720p, whose encoder
+    needs about half the memory (a 60 s part: 1080p failed under 650 MB of commit, 720p ran in 330)."""
     counts = [max(1, workers)]
     while counts[-1] > 1:
         counts.append(counts[-1] // 2)
-    tries = [(n, True, True) for n in counts] + [(1, False, True)]
-    return tries + [(1, False, False)] if anim else tries
+    tries = [(n, True, True, False) for n in counts] + [(1, False, True, False)]
+    if anim:
+        tries.append((1, False, False, False))
+    if smaller:
+        tries.append((*tries[-1][:3], True))
+    return tries
 
 
 # Windows: ERROR_NOT_ENOUGH_MEMORY, ERROR_COMMITMENT_LIMIT (the paging file is too small).
@@ -1351,7 +1365,7 @@ FFMPEG_MEMORY = ("Cannot allocate memory", "malloc of size")
 
 def ffmpeg_failure(code: int, said: str) -> Exception:
     """The error for an ffmpeg that stopped before the last frame. Out of memory it can take the
-    failed read as the end of the input and exit 0 with a short video, so a broken pipe counts
+    failed read as the end of the input and exit 0 with a short video, so a frame not taken counts
     whatever the code; an allocation failure is a MemoryError for the steps of `render` (#15)."""
     lines = said.strip().splitlines()
     text = f"ffmpeg 오류 (종료 코드 {code}): " + " / ".join(lines[-3:])
@@ -1520,15 +1534,15 @@ def encode(
                 return pool.submit(render_chunk, (*chunks[k][:-1], (k % ahead) * CHUNK))
 
             waiting = deque(submit(k) for k in range(min(ahead, len(chunks))))
-            stopped = False
+            written = 0
             for k in range(len(chunks)):
                 slots = waiting.popleft().result()
                 try:
                     for slot in slots:
                         with frames.buf[slot * FRAME : (slot + 1) * FRAME] as view:
                             ff.stdin.write(view)
+                        written += 1
                 except OSError:
-                    stopped = True
                     break
                 if k + ahead < len(chunks):
                     waiting.append(submit(k + ahead))
@@ -1541,7 +1555,7 @@ def encode(
             except OSError:
                 pass
             ff.wait()
-            if ff.returncode or stopped:
+            if ff.returncode or written != count:
                 errors.seek(0)
                 raise ffmpeg_failure(ff.returncode, errors.read().decode("utf-8", "replace"))
     finally:
