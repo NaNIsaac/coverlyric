@@ -102,6 +102,7 @@ class Style:
     anim_fps: float = 8.0  # frames per second of an image list; a GIF keeps its own delays
     anim_above: bool = True  # over everything, or under the album and the lyrics
     tone: str = "none"  # background colour: none | warm | cool | mono | cover (tinted with the cover's colour)
+    vignette: float = 0.0  # 0 to 1: how much darker the background gets towards the frame's edges
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -429,7 +430,22 @@ def toned(bg: Image.Image, tone: str, path: str, art_stamp: float) -> Image.Imag
 
 
 @lru_cache(maxsize=2)
-def backdrop(path: str, art_stamp: float, blur: int, dim: float, tone: str = "none") -> Image.Image:
+@lru_cache(maxsize=2)
+def vignette_mask(strength: float) -> Image.Image:
+    """Multiplier for the background: 1 in the middle, falling smoothly to 1 - 0.85 x strength at the
+    corners. Elliptical, so it follows the 16:9 frame."""
+    y, x = np.ogrid[0:H, 0:W]
+    d = np.hypot((x - W / 2) / (W / 2), (y - H / 2) / (H / 2)) / math.sqrt(2)
+    u = np.clip((d - 0.35) / 0.65, 0, 1)
+    fall = u * u * (3 - 2 * u)
+    mask = (1 - 0.85 * strength * fall) * 255
+    return Image.fromarray(mask.astype(np.uint8), "L").convert("RGB")
+
+
+@lru_cache(maxsize=2)
+def backdrop(
+    path: str, art_stamp: float, blur: int, dim: float, tone: str = "none", vignette: float = 0.0
+) -> Image.Image:
     """The cover filling the frame, blurred and darkened. It does not depend on where anything is placed,
     so moving the album or the lyrics on the preview does not redo it. Shared: callers copy it."""
     art = square(path, art_stamp)
@@ -446,13 +462,15 @@ def backdrop(path: str, art_stamp: float, blur: int, dim: float, tone: str = "no
     if blur > 0:
         bg = bg.filter(ImageFilter.GaussianBlur(blur))
     bg = toned(bg.convert("RGB"), tone, path, art_stamp)
+    if vignette > 0:
+        bg = ImageChops.multiply(bg, vignette_mask(min(vignette, 1.0)))
     return Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), dim).convert("RGBA")
 
 
 def background(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
     g = geometry(style)
     face = fonts.resolve(style.font)
-    bg = backdrop(song.art, art_stamp, style.blur, style.dim, style.tone).copy()
+    bg = backdrop(song.art, art_stamp, style.blur, style.dim, style.tone, style.vignette).copy()
     cx, top, s = g.title
     if not style.show_title:
         return Image.alpha_composite(bg, panel_layer(g, style))

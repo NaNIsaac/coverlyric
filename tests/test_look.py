@@ -167,3 +167,16 @@ def test_an_unknown_tone_leaves_the_background_as_it_is(demo):
     a = render.backdrop(song.art, 0.0, 30, 0.5, "none")
     b = render.backdrop(song.art, 0.0, 30, 0.5, "sepia")
     assert ImageChops.difference(a, b).getbbox() is None
+
+
+def test_vignette_darkens_the_edges_and_leaves_the_middle(demo):
+    song = demo.song()
+    plain = np.asarray(render.backdrop(song.art, 0.0, 30, 0.0)).astype(int)
+    dark = np.asarray(render.backdrop(song.art, 0.0, 30, 0.0, "none", 1.0)).astype(int)
+    h, w = plain.shape[:2]
+    middle = (slice(h // 2 - 20, h // 2 + 20), slice(w // 2 - 20, w // 2 + 20))
+    corner = (slice(0, 40), slice(0, 40))
+    assert np.abs(dark[middle] - plain[middle]).max() <= 1
+    assert dark[corner][..., :3].mean() < 0.3 * plain[corner][..., :3].mean()
+    none = render.backdrop(song.art, 0.0, 30, 0.0, "none", 0.0)
+    assert ImageChops.difference(none, render.backdrop(song.art, 0.0, 30, 0.0)).getbbox() is None
