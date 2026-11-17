@@ -78,7 +78,8 @@ stays at the bottom whatever the group. A red dot marks a group that still lacks
 4. **Look:** the cover sits in a clear CD case with the disc half out and turning (both
    switchable), or as a round cover. Drag the album, the lyrics, the title and the playback bar on
    the preview to move them, and drag a corner to resize. Pick the font; the band colour,
-   background blur and darkness are in the 색 (colour) group. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
+   background blur, darkness and tone (as is, warm, cool, black and white, or tinted with the
+   cover's own colour) are in the 색 (colour) group. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
    webp) that loop over the video: reorder them with ↑ ↓, set the frames per second, choose above
    or under the album and lyrics, and drag it on the preview.
 5. **Render:** **10초 미리보기** above it first makes a small 10 s clip from the preview time and
