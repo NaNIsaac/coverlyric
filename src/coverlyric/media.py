@@ -102,23 +102,38 @@ def duration(path: str) -> float:
     raise ValueError(f"not an audio file ffmpeg can read: {path}")
 
 
+class _Status(ctypes.Structure):
+    _fields_ = [
+        ("length", ctypes.c_ulong),
+        ("load", ctypes.c_ulong),
+        ("total", ctypes.c_ulonglong),
+        ("available", ctypes.c_ulonglong),
+        ("commit_total", ctypes.c_ulonglong),
+        ("commit_available", ctypes.c_ulonglong),
+        ("rest", ctypes.c_ulonglong * 3),
+    ]
+
+
+def _status() -> _Status | None:
+    status = _Status(length=ctypes.sizeof(_Status))
+    return status if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)) else None
+
+
+def commit_mb() -> float | None:
+    """On Windows, the memory that can still be committed (physical memory plus paging file) in MB.
+    Shared memory blocks are backed by the paging file and count against this, so a PC with free
+    RAM but a small paging file runs out here first (#12). None elsewhere or when it cannot be read."""
+    if sys.platform != "win32":
+        return None
+    status = _status()
+    return status.commit_available / 2**20 if status else None
+
+
 def memory_mb() -> tuple[float, float]:
     """Installed and currently available memory in MB, or (0.0, 0.0) when they cannot be read."""
     if sys.platform == "win32":
-
-        class Status(ctypes.Structure):
-            _fields_ = [
-                ("length", ctypes.c_ulong),
-                ("load", ctypes.c_ulong),
-                ("total", ctypes.c_ulonglong),
-                ("available", ctypes.c_ulonglong),
-                ("rest", ctypes.c_ulonglong * 5),
-            ]
-
-        status = Status(length=ctypes.sizeof(Status))
-        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-            return status.total / 2**20, status.available / 2**20
-        return 0.0, 0.0
+        status = _status()
+        return (status.total / 2**20, status.available / 2**20) if status else (0.0, 0.0)
     try:
         page = os.sysconf("SC_PAGE_SIZE")
         return (

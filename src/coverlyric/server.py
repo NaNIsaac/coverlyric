@@ -378,7 +378,7 @@ class App:
         output (a traceback, ffmpeg's message) kept for the error."""
         part = out.with_name(out.stem + ".making.mp4")
         tail: list[str] = []
-        said = ""
+        said = notice = ""
         logged = 0
         for raw in proc.stdout:
             if self.proc is not proc:
@@ -392,7 +392,10 @@ class App:
                     LOG.info("render %d%% (%.0f of %.0f s)", logged * 10, done, total)
             elif line.startswith("out "):
                 out = Path(line[4:])  # another name when the old video was held open
-            elif line.startswith("start "):
+            elif line.startswith(("start ", "memory ")):
+                LOG.info("render %s", line)
+            elif line.startswith("notice "):
+                notice = line[7:]
                 LOG.info("render %s", line)
             elif line.startswith("error: "):
                 said = line[7:]
@@ -407,6 +410,8 @@ class App:
             spent = time.time() - self.job.get("started", time.time())
             LOG.info("render done in %.0f s: %s", spent, out)
             self.job = {"state": "done", "out": str(out), "folder": str(self.output)}
+            if notice:
+                self.job["note"] = notice
             return
         if self.job.get("state") == "stopped":
             LOG.info("render stopped by the user")
@@ -457,12 +462,18 @@ class App:
 
     def watch_clip(self, proc: subprocess.Popen, out: Path, start: float) -> None:
         tail: list[str] = []
+        said = notice = ""
         for raw in proc.stdout:
             line = raw.rstrip()
             if m := re.match(r"progress ([\d.]+) ([\d.]+)", line):
                 self.clip["done"], self.clip["total"] = float(m[1]), float(m[2])
             elif line.startswith("out "):
                 out = Path(line[4:])  # another name while the page still holds the last clip
+            elif line.startswith(("memory ", "notice ")):
+                LOG.info("preview clip %s", line)
+                notice = line[7:] if line.startswith("notice ") else notice
+            elif line.startswith("error: "):
+                said = line[7:]  # the words for the page; the traceback before it goes to the log
             elif line and not line.startswith("start "):
                 tail = (tail + [line])[-20:]
         code = proc.wait()
@@ -472,11 +483,13 @@ class App:
             version = int(out.stat().st_mtime * 1000)
             self.clip_file = out
             self.clip = {"state": "done", "url": f"/media/clip?v={version}", "at": start}
+            if notice:
+                self.clip["note"] = notice
             return
         for line in tail:
             LOG.info("  %s", line)
-        LOG.error("preview clip failed (exit code %s)", code)
-        reason = tail[-1] if tail else "미리보기 영상을 만들지 못했습니다."
+        LOG.error("preview clip failed (exit code %s): %s", code, said)
+        reason = said or (tail[-1] if tail else "미리보기 영상을 만들지 못했습니다.")
         self.clip = {"state": "error", "message": f"{reason} (종료 코드 {code})"}
 
     def stop_clip(self) -> dict:
