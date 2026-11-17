@@ -88,7 +88,7 @@ video.
 
 ![Look group](screenshots/4-look.png)
 
-The preview is one frame of the video and redraws on every change. Band colour and background
+The preview is one frame of the video and redraws on every change. Band, background and lyric colours
 are in the **색** group, the rest in **모양**.
 
 - **Move and resize:** drag the dashed boxes in the preview; drag the lower-right corner to resize.
@@ -100,6 +100,8 @@ are in the **색** group, the rest in **모양**.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
 - **배경 색감** (background tone): **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백**
   (black and white) or **표지 색** (tinted with the cover's most telling colour).
+- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, with an outline or
+  shadow that keeps them readable on a light cover.
 - **움직이는 그림** (moving picture): one GIF or several images (png, jpg, webp) loop over the video.
   Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장** (frames per second). Turn off
   **앨범과 가사 위에 보이기** to draw it below them.

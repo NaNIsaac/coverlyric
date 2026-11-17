@@ -41,3 +41,19 @@ def test_the_current_line_stays_inside_the_band():
     text = band_rows[:, :, 3] > 200  # the band itself is about 165 opaque
     assert not text[:, :edge].any() and not text[:, -edge:].any()
     assert text.any()
+
+
+def outline_height(text: str) -> int:
+    """Rows of the panel's middle where the current line's red outline shows."""
+    style = render.Style(lyric_edge="outline", lyric_edge_colour="#ff0000")
+    panel = np.asarray(render.panel_at(0.0, ((0.0, text), (5.0, SHORT)), style)).astype(int)
+    mid = panel.shape[0] // 2
+    band = panel[mid - 60 : mid + 60]
+    red = (band[..., 0] > 200) & (band[..., 1] < 80) & (band[..., 2] < 80) & (band[..., 3] > 200)
+    rows = np.flatnonzero(red.any(axis=1))
+    return int(rows[-1] - rows[0]) if rows.size else 0
+
+
+def test_both_rows_of_a_wrapped_line_get_the_outline():
+    one = outline_height(SHORT)
+    assert one > 0 and outline_height(LONG) > 1.4 * one
