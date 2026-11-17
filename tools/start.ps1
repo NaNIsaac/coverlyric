@@ -25,17 +25,16 @@ $need = if ($first) { 500MB } else { 200MB }
 $short = @(Short-Disks $need @($root, $env:LOCALAPPDATA) | Select-Object -Unique)
 if ($short) {
     Write-Host ''
-    Write-Host ('디스크 공간이 부족해요. {0} MB 이상 비워 주세요:' -f ($need / 1MB))
+    Write-Host ('디스크 공간 부족: 아래 드라이브에 {0} MB 이상의 여유 공간이 필요합니다.' -f ($need / 1MB))
     $short | ForEach-Object { Write-Host "  $_" }
-    Write-Host '공간을 비운 뒤 다시 실행해 주세요.'
-    Read-Host '창을 닫으려면 Enter를 누르세요'
+    Write-Host '공간을 확보한 뒤 다시 실행하세요.'
     exit 1
 }
 if ($first) {
     Write-Host ''
-    Write-Host '처음 실행이에요. 필요한 프로그램을 내려받아 설치해요.'
-    Write-Host '내려받는 양은 약 150 MB, 쓰는 디스크 공간은 약 300 MB예요.'
-    Write-Host '보통 1~3분, 인터넷이 느리면 더 걸려요. 이 창을 닫지 마세요.'
+    Write-Host '첫 실행: 필요한 프로그램을 내려받아 설치합니다.'
+    Write-Host '내려받기 약 150 MB, 디스크 사용 약 300 MB.'
+    Write-Host '보통 1~3분 걸립니다. 끝날 때까지 이 창을 닫지 마세요.'
     Write-Host ''
 }
 
@@ -49,21 +48,22 @@ if (-not $uv) {
         try {
             Invoke-RestMethod 'https://astral.sh/uv/0.11.32/install.ps1' | Invoke-Expression
         } catch {
-            Write-Host "내려받기에 실패했어요: $_"
+            Write-Host "내려받기 실패: $_"
         }
         if (-not (Test-Path $uv)) {
-            Write-Host '설치하지 못했어요. 인터넷 연결을 확인하고 다시 실행해 주세요.'
+            Write-Host '설치 실패. 인터넷 연결을 확인하고 다시 실행하세요.'
             exit 1
         }
     }
 }
 
 $env:COVERLYRIC_UV = $uv
-Write-Host '프로그램을 여는 중이에요. 잠시 뒤 브라우저에 페이지가 열려요.'
-Write-Host '쓰는 동안 이 터미널 창은 열어 두세요. 끝낼 때는 페이지의 [끝내기]를 누르세요.'
+Write-Host '프로그램을 시작합니다. 잠시 뒤 브라우저에 페이지가 열립니다.'
+Write-Host '사용하는 동안 이 창을 열어 두세요. 끝내려면 페이지의 [끝내기]를 누르세요.'
 & $uv run --frozen --no-dev coverlyric
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
-    Write-Host '문제가 생겼어요. 이 창의 글을 사진으로 찍어서 물어봐 주세요.'
+    Write-Host "프로그램이 오류로 끝났습니다 (종료 코드 $LASTEXITCODE). 위 메시지를 확인하세요."
+    Write-Host '해결되지 않으면 이 창의 내용을 https://github.com/NaNIsaac/coverlyric/issues 에 올리세요.'
     exit 1
 }

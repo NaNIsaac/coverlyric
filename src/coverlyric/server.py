@@ -109,7 +109,9 @@ class App:
         suffix = Path(name).suffix.lower()
         if kind == "audio":
             if suffix not in AUDIO:
-                raise ValueError("노래 파일은 mp3, wav, m4a, flac, ogg 중 하나여야 해요.")
+                raise ValueError(
+                    "지원하지 않는 노래 파일 형식입니다. mp3, wav, m4a, flac, ogg 파일을 고르세요."
+                )
             for old in self.work.glob("song.*"):
                 old.unlink()
             target = self.work / f"song{suffix}"
@@ -120,7 +122,7 @@ class App:
                 self.project.title = Path(name).stem
         elif kind == "art":
             if suffix not in IMAGES:
-                raise ValueError("표지는 png, jpg, webp 그림이어야 해요.")
+                raise ValueError("지원하지 않는 그림 형식입니다. png, jpg, webp 파일을 고르세요.")
             for old in self.work.glob("cover.*"):
                 old.unlink()
             target = self.work / f"cover{suffix}"
@@ -128,7 +130,7 @@ class App:
             self.project.art = target.name
         elif kind == "font":
             if suffix not in fonts.SUFFIXES:
-                raise ValueError("글꼴 파일은 ttf, otf, ttc 중 하나여야 해요.")
+                raise ValueError("지원하지 않는 글꼴 형식입니다. ttf, otf, ttc 파일을 고르세요.")
             folder = self.work / "fonts"
             folder.mkdir(exist_ok=True)
             target = folder / safe_name(Path(name).name)
@@ -156,7 +158,9 @@ class App:
 
     def reset(self) -> dict:
         if self.job.get("state") == "running":
-            raise ValueError("영상을 만드는 중에는 새로 시작할 수 없어요.")
+            raise ValueError(
+                "영상을 만드는 중에는 새로 시작할 수 없습니다. 완료되거나 멈춘 뒤 다시 하세요."
+            )
         for old in self.work.iterdir():
             if old.is_file():
                 old.unlink()
@@ -168,7 +172,7 @@ class App:
     def preview(self, t: float) -> tuple[bytes, dict]:
         p = self.project
         if not p.art:
-            raise ValueError("먼저 앨범 표지를 넣어 주세요.")
+            raise ValueError("앨범 표지가 없습니다. 1단계에서 표지를 넣으세요.")
         song = p.song()
         with self.lock:
             img = render.frame(t, p.preview_lines(), song, p.style)
@@ -182,9 +186,9 @@ class App:
             return self.job
         p = self.project
         if not p.audio or not p.art:
-            raise ValueError("노래 파일과 앨범 표지를 먼저 넣어 주세요.")
+            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 1단계에서 넣으세요.")
         if not p.lines:
-            raise ValueError("가사가 없어요.")
+            raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
         timing.ready(p.lines)
         name = safe_name(p.title)
         out = self.output / f"{name}.mp4"
@@ -379,7 +383,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     text = self.body().decode("utf-8-sig", errors="replace")
                     lines = timing.parse(name, text)
                     if not lines:
-                        raise ValueError("이 파일에서 가사를 찾지 못했어요.")
+                        raise ValueError(
+                            "이 파일에서 가사 줄을 찾지 못했습니다. SRT, LRC, VTT 파일인지 확인하세요."
+                        )
                     own = [text for _, text in app.project.lines if text]
                     diff = timing.check(own, lines) if own else [None] * len(lines)
                     self.json(
@@ -422,7 +428,7 @@ def serve(home: Path, port: int = 0, browser: bool = True) -> None:
     ref.append(server)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"coverlyric 가사 영상 만들기: {url}")
-    print("이 창을 닫거나 화면의 [끝내기]를 누르면 프로그램이 끝나요.", flush=True)
+    print("프로그램을 끝내려면 이 창을 닫거나 페이지의 [끝내기]를 누르세요.", flush=True)
     if browser:
         webbrowser.open(url)
     try:

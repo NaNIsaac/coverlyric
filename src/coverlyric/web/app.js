@@ -169,8 +169,8 @@ function fillLook() {
 function fillAll() {
   $("title").value = state.title;
   $("artist").value = state.artist;
-  $("audio-name").textContent = state.has_audio ? `${clock(state.duration).replace(/\.\d+$/, "")} 길이의 노래` : "아직 없어요";
-  $("art-name").textContent = state.has_art ? "표지 있음" : "정사각형 그림이 좋아요";
+  $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
+  $("art-name").textContent = state.has_art ? "표지 있음" : "정사각형 권장";
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
   else $("player").removeAttribute("src");
   $("time").max = Math.max(1, state.duration || 60);
@@ -217,7 +217,7 @@ function drawLines() {
     box.addEventListener("change", () => {
       if (bad()) {
         box.classList.add("invalid");
-        toast("시간은 10, 10.5, 1:05, 1:05.3 처럼 써 주세요.");
+        toast("시간 형식: 10, 10.5, 1:05, 1:05.3");
         return;
       }
       state.lines[i][0] = box.value.trim() === "" ? null : parseClock(box.value);
@@ -255,7 +255,7 @@ function drawLines() {
 
 function updateCheck() {
   const timed = state.lines.filter(([t]) => t != null).length;
-  $("check").textContent = state.lines.length ? `가사 ${state.lines.length}줄 중 ${timed}줄에 시간이 있어요.` : "";
+  $("check").textContent = state.lines.length ? `시간 입력됨: ${timed} / ${state.lines.length}줄` : "";
 }
 
 function showAt(t) {
@@ -276,7 +276,7 @@ async function upload(kind, file) {
     state = await res.json();
     if (kind === "font") await loadFonts();
     fillAll();
-    toast("넣었어요.");
+    toast("완료");
   } catch (e) {
     toast(e.message);
   }
@@ -311,11 +311,11 @@ async function importText(name, text) {
   const bad = diff.filter((d) => d != null).length;
   const sung = data.lines.filter(([, x]) => x).length;
   if (data.own && bad) {
-    toast(`${sung}줄을 넣었어요. 내 가사와 다른 줄 ${bad}개는 빨간 테두리로 표시했어요.`, 6000);
+    toast(`${sung}줄을 넣었습니다. 내 가사와 다른 줄 ${bad}개는 테두리로 표시됩니다.`, 6000);
   } else if (data.own && sung !== data.own) {
-    toast(`${sung}줄을 넣었어요. 내 가사는 ${data.own}줄이에요. 확인해 주세요.`, 6000);
+    toast(`${sung}줄을 넣었습니다. 내 가사(${data.own}줄)와 줄 수가 다르니 목록을 확인하세요.`, 6000);
   } else {
-    toast(`${sung}줄을 넣었어요.`);
+    toast(`${sung}줄을 넣었습니다.`);
   }
 }
 
@@ -330,7 +330,7 @@ function setTab(name) {
 function tapNextLabel() {
   if (tapIndex < 0) { $("tap-next").textContent = ""; return; }
   $("tap-next").textContent = tapIndex >= state.lines.length
-    ? "끝까지 맞췄어요. 목록에서 다듬어 보세요."
+    ? "모든 줄에 시간이 들어갔습니다. 목록에서 다듬으세요."
     : state.lines[tapIndex][1] || "(빈 줄)";
 }
 
@@ -419,23 +419,23 @@ function bind() {
 
   $("lyrics-apply").addEventListener("click", async () => {
     const text = $("lyrics-text").value;
-    if (!text.trim()) { toast("가사를 먼저 붙여 넣어 주세요."); return; }
-    if (state.lines.some(([t]) => t != null) && !confirm("지금 목록의 시간이 지워져요. 새 가사로 바꿀까요?")) return;
+    if (!text.trim()) { toast("가사 칸이 비어 있습니다. 가사를 붙여 넣으세요."); return; }
+    if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 지워집니다. 새 가사로 바꾸시겠습니까?")) return;
     const res = await api("/api/import", { method: "POST", headers: { "X-Name": "lyrics.txt" }, body: text });
     state.lines = (await res.json()).lines;
     diff = [];
     drawLines();
     scheduleSync();
     $("step-timing").open = true;
-    toast(`${state.lines.length}줄을 넣었어요. 이제 3단계에서 타이밍을 맞추세요.`);
+    toast(`${state.lines.length}줄을 넣었습니다. 3단계에서 타이밍을 맞추세요.`);
   });
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   $("step-timing").addEventListener("toggle", showTiming);
 
   $("tap-start").addEventListener("click", () => {
-    if (!state.has_audio) { toast("먼저 노래 파일을 넣어 주세요."); return; }
-    if (!state.lines.length) { toast("먼저 2단계에서 가사를 넣어 주세요."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 1단계에서 넣으세요."); return; }
+    if (!state.lines.length) { toast("가사가 없습니다. 2단계에서 가사를 넣으세요."); return; }
     tapIndex = 0;
     tapUndo = [];
     diff = [];
@@ -469,10 +469,10 @@ function bind() {
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       const data = await (await api("/api/prompt")).json();
-      if (!data.lines) { toast("먼저 2단계에서 가사를 넣어 주세요."); return; }
+      if (!data.lines) { toast("가사가 없습니다. 2단계에서 가사를 넣으세요."); return; }
       $("prompt").value = data.prompt;
       await navigator.clipboard.writeText(data.prompt);
-      toast("복사했어요. 채팅 AI에 노래 파일과 함께 붙여 넣으세요.", 5000);
+      toast("복사했습니다. 채팅 AI에 노래 파일과 함께 붙여 넣으세요.", 5000);
     } catch (e) {
       $("prompt").hidden = false;
       $("prompt").select();
@@ -481,7 +481,7 @@ function bind() {
   });
   $("answer-apply").addEventListener("click", async () => {
     const text = $("answer").value;
-    if (!text.trim()) { toast("받은 자막을 먼저 붙여 넣어 주세요."); return; }
+    if (!text.trim()) { toast("붙여 넣기 칸이 비어 있습니다. 받은 자막을 붙여 넣으세요."); return; }
     try { await importText("answer.srt", text); } catch (e) { toast(e.message); }
   });
   $("timing-file").addEventListener("change", async (e) => {
@@ -531,12 +531,12 @@ function bind() {
   $("make").addEventListener("click", async () => {
     const untimed = state.lines.findIndex(([t]) => t == null);
     if (untimed >= 0) {
-      toast(`${untimed + 1}번째 줄에 시간이 없어요. 3단계에서 맞춰 주세요.`, 6000);
+      toast(`${untimed + 1}번째 줄에 시간이 없습니다. 3단계에서 시간을 넣거나 줄을 지우세요.`, 6000);
       $("step-timing").open = true;
       return;
     }
     const minutes = Math.max(1, Math.round((state.duration || 60) / 60));
-    if (!confirm(`지금 미리보기 모양 그대로 영상을 만들까요?\n${minutes}~${minutes * 2}분쯤 걸려요.`)) return;
+    if (!confirm(`미리보기 모양 그대로 영상을 만드시겠습니까?\n예상 시간: ${minutes}~${minutes * 3}분`)) return;
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       await api("/api/render", { method: "POST" });
@@ -546,13 +546,13 @@ function bind() {
     }
   });
   $("make-stop").addEventListener("click", async () => {
-    if (!confirm("영상 만들기를 그만둘까요?")) return;
+    if (!confirm("영상 만들기를 멈추시겠습니까?")) return;
     await api("/api/render/stop", { method: "POST" });
   });
   $("open-folder").addEventListener("click", () => api("/api/open", { method: "POST" }));
 
   $("demo").addEventListener("click", async () => {
-    if (state.has_audio && !confirm("지금 작업 대신 데모 노래를 불러올까요?")) return;
+    if (state.has_audio && !confirm("지금 작업 대신 데모 노래를 불러오시겠습니까?")) return;
     state = await (await api("/api/demo", { method: "POST" })).json();
     diff = [];
     $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
@@ -560,7 +560,7 @@ function bind() {
     $("step-look").open = true;
   });
   $("new").addEventListener("click", async () => {
-    if (!confirm("지금 작업을 지우고 새로 시작할까요? 만든 영상은 지워지지 않아요.")) return;
+    if (!confirm("지금 작업을 지우고 새로 시작하시겠습니까? 만든 영상은 남습니다.")) return;
     try {
       state = await (await api("/api/new", { method: "POST" })).json();
       diff = [];
@@ -571,9 +571,9 @@ function bind() {
     }
   });
   $("quit").addEventListener("click", async () => {
-    if (!confirm("프로그램을 끝낼까요? 작업은 저장돼 있어요.")) return;
+    if (!confirm("프로그램을 끝내시겠습니까? 작업은 저장되어 있습니다.")) return;
     await api("/api/quit", { method: "POST" });
-    document.body.innerHTML = "<p style='padding:40px;font-size:20px'>끝났어요. 이 창을 닫아도 돼요.</p>";
+    document.body.innerHTML = "<p style='padding:40px;font-size:20px'>프로그램을 끝냈습니다. 이 탭을 닫으세요.</p>";
   });
 }
 
