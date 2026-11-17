@@ -348,6 +348,7 @@ async function addAnim(files) {
 function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
+  for (const r of document.querySelectorAll('input[name="tone"]')) r.checked = r.value === s.tone;
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
@@ -1128,6 +1129,9 @@ function bind() {
 
   for (const r of document.querySelectorAll('input[name="layout"]')) {
     r.addEventListener("change", () => { state.style.layout = r.value; fillLook(); scheduleSync(0); });
+  }
+  for (const r of document.querySelectorAll('input[name="tone"]')) {
+    r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
   }
   $("spin").addEventListener("change", (e) => { state.style.spin = e.target.checked ? 7 : 0; scheduleSync(0); });
   $("show_cd").addEventListener("change", (e) => { state.style.show_cd = e.target.checked; fillLook(); scheduleSync(0); });

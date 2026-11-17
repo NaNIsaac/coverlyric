@@ -9,6 +9,7 @@ the default style is the original look.
 
 from __future__ import annotations
 
+import colorsys
 import math
 import subprocess
 import tempfile
@@ -21,7 +22,7 @@ from multiprocessing import shared_memory
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from . import anim, fonts, media
 
@@ -100,6 +101,7 @@ class Style:
     anim_scale: float = 1.0
     anim_fps: float = 8.0  # frames per second of an image list; a GIF keeps its own delays
     anim_above: bool = True  # over everything, or under the album and the lyrics
+    tone: str = "none"  # background colour: none | warm | cool | mono | cover (tinted with the cover's colour)
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -387,8 +389,47 @@ def circle_mask(size: int, inner: float = 0.0, outer: float = 1.0) -> Image.Imag
     return mask.resize((size, size), Image.LANCZOS)
 
 
+TONES = ("none", "warm", "cool", "mono", "cover")
+# Channel mixes for the warm and cool tones, as the 12 numbers Image.convert takes (R, G, B rows).
+WARM = (1.08, 0.04, 0, 0, 0, 1.0, 0, 0, 0, 0, 0.86, 0)
+COOL = (0.88, 0, 0, 0, 0, 1.0, 0.02, 0, 0, 0.04, 1.1, 0)
+
+
 @lru_cache(maxsize=2)
-def backdrop(path: str, art_stamp: float, blur: int, dim: float) -> Image.Image:
+def cover_colour(path: str, art_stamp: float = 0.0) -> tuple[int, int, int]:
+    """The cover's own colour: of its five main colours, the one with the most area times saturation,
+    so a small grey border or a dark corner does not win over the colour people see."""
+    small = square(path, art_stamp).convert("RGB").resize((64, 64))
+    pal = small.quantize(5, method=Image.Quantize.MEDIANCUT)
+    rgb = pal.getpalette()
+
+    def weight(item: tuple[int, int]) -> float:
+        count, k = item
+        _, sat, val = colorsys.rgb_to_hsv(*(c / 255 for c in rgb[k * 3 : k * 3 + 3]))
+        return count * (sat * val + 0.05)
+
+    k = max(pal.getcolors(), key=weight)[1]
+    return tuple(rgb[k * 3 : k * 3 + 3])
+
+
+def toned(bg: Image.Image, tone: str, path: str, art_stamp: float) -> Image.Image:
+    if tone == "warm":
+        return bg.convert("RGB", WARM)
+    if tone == "cool":
+        return bg.convert("RGB", COOL)
+    if tone == "mono":
+        return ImageOps.grayscale(bg).convert("RGB")
+    if tone == "cover":
+        colour = cover_colour(path, art_stamp)
+        lift = 255 / max(max(colour), 1)
+        return ImageOps.colorize(
+            ImageOps.grayscale(bg), (0, 0, 0), tuple(round(c * lift) for c in colour)
+        )
+    return bg
+
+
+@lru_cache(maxsize=2)
+def backdrop(path: str, art_stamp: float, blur: int, dim: float, tone: str = "none") -> Image.Image:
     """The cover filling the frame, blurred and darkened. It does not depend on where anything is placed,
     so moving the album or the lyrics on the preview does not redo it. Shared: callers copy it."""
     art = square(path, art_stamp)
@@ -404,13 +445,14 @@ def backdrop(path: str, art_stamp: float, blur: int, dim: float) -> Image.Image:
     )
     if blur > 0:
         bg = bg.filter(ImageFilter.GaussianBlur(blur))
+    bg = toned(bg.convert("RGB"), tone, path, art_stamp)
     return Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), dim).convert("RGBA")
 
 
 def background(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
     g = geometry(style)
     face = fonts.resolve(style.font)
-    bg = backdrop(song.art, art_stamp, style.blur, style.dim).copy()
+    bg = backdrop(song.art, art_stamp, style.blur, style.dim, style.tone).copy()
     cx, top, s = g.title
     if not style.show_title:
         return Image.alpha_composite(bg, panel_layer(g, style))
@@ -729,7 +771,7 @@ def progress_bar(t: float, song: Song, style: Style) -> Image.Image:
 
 def forget_art() -> None:
     """Drop every cached layer made from the cover, after a new cover is saved under the same name."""
-    for cached in (square, backdrop, scene, round_album):
+    for cached in (square, backdrop, cover_colour, scene, round_album):
         cached.cache_clear()
 
 

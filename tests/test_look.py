@@ -138,3 +138,32 @@ def test_a_still_frame_is_not_drawn_again(demo):
         p.raw(n / render.FPS) is first
         for n in range(round(7 * render.FPS) + 1, round(9 * render.FPS))
     )
+
+
+def test_background_tones(demo):
+    song = demo.song()
+    plain = np.asarray(render.backdrop(song.art, 0.0, 30, 0.0, "none"))[..., :3].astype(float)
+
+    def mean(tone):
+        return (
+            np.asarray(render.backdrop(song.art, 0.0, 30, 0.0, tone))[..., :3]
+            .astype(float)
+            .mean((0, 1))
+        )
+
+    r, _, b = plain.mean((0, 1))
+    warm, cool = mean("warm"), mean("cool")
+    assert warm[0] / warm[2] > r / b > cool[0] / cool[2]
+    mono = np.asarray(render.backdrop(song.art, 0.0, 30, 0.0, "mono"))[..., :3]
+    assert (mono[..., 0] == mono[..., 1]).all() and (mono[..., 1] == mono[..., 2]).all()
+    tint = np.array(render.cover_colour(song.art))
+    cover = mean("cover")
+    cos = cover @ tint / (np.linalg.norm(cover) * np.linalg.norm(tint))
+    assert cos > 0.98
+
+
+def test_an_unknown_tone_leaves_the_background_as_it_is(demo):
+    song = demo.song()
+    a = render.backdrop(song.art, 0.0, 30, 0.5, "none")
+    b = render.backdrop(song.art, 0.0, 30, 0.5, "sepia")
+    assert ImageChops.difference(a, b).getbbox() is None

@@ -252,6 +252,8 @@ body.timing-open .editor { display: flex; }
 .group legend + * { clear: both; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; margin-bottom: 8px; background: var(--field); border-radius: 7px; }
 .seg label { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; border-radius: 5px; cursor: pointer; color: var(--muted); }
+.seg.tones { grid-template-columns: repeat(5, 1fr); }
+.seg.tones label { font-size: 12px; white-space: nowrap; }
 .seg label:has(input:checked) { background: var(--raised); color: var(--ink); font-weight: 700; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label:has(input:focus-visible) { outline: 2px solid var(--focus); }
