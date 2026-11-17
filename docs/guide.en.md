@@ -97,8 +97,8 @@ are in the **색** group, the rest in **모양**.
   **CD 돌기** hide or stop the CD.
 - **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
 - **띠 색:** colour of the band behind the current line and of the progress bar. **표지 색으로**
-  beside it takes the cover's most telling colour, darkened a little if needed so the white line stays
-  readable.
+  beside it takes the cover's most telling colour, darkened (light lyrics) or lightened (dark lyrics) a
+  little if needed so the lyric colour stays readable on it.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
 - **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
   the eye to the album and the lyrics.
