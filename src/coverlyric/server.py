@@ -10,6 +10,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -63,6 +64,30 @@ def start_log(home: Path) -> Path:
         LOG.addHandler(file)
         LOG.addHandler(terminal)
     return path
+
+
+def new_group() -> dict:
+    """Popen arguments that let kill_tree end the child and everything it starts."""
+    return {} if sys.platform == "win32" else {"start_new_session": True}
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """End a job child with its own children: `uv run` starts the transcriber, and the render
+    starts its workers and ffmpeg. Killing only the parent leaves those running."""
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+            check=False,
+            capture_output=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if proc.poll() is None:
+        proc.kill()
 
 
 def safe_name(name: str) -> str:
@@ -216,6 +241,7 @@ class App:
             encoding="utf-8",
             errors="replace",
             **media.below_normal(),
+            **new_group(),
         )
         self.job = {"state": "running", "done": 0.0, "total": p.duration, "started": time.time()}
         LOG.info("render started: %s (%.1f s)", out.name, p.duration)
@@ -229,6 +255,8 @@ class App:
         said = ""
         logged = 0
         for raw in proc.stdout:
+            if self.proc is not proc:
+                break
             line = raw.rstrip()
             if m := re.match(r"progress ([\d.]+) ([\d.]+)", line):
                 done, total = float(m[1]), float(m[2])
@@ -243,6 +271,8 @@ class App:
             elif line:
                 tail = (tail + [line])[-40:]
         code = proc.wait()
+        if self.proc is not proc:  # stopped and replaced by a newer render
+            return
         if code == 0 and out.exists():
             spent = time.time() - self.job.get("started", time.time())
             LOG.info("render done in %.0f s: %s", spent, out)
@@ -267,7 +297,7 @@ class App:
         if self.proc and self.proc.poll() is None:
             self.job = {"state": "stopped"}
             LOG.info("render stop requested")
-            self.proc.kill()
+            kill_tree(self.proc)
         return self.job
 
     def progress(self) -> dict:
@@ -318,6 +348,7 @@ class App:
             encoding="utf-8",
             errors="replace",
             **media.below_normal(),
+            **new_group(),
         )
         self.auto = {"state": "running", "phase": "install", "done": 0.0, "total": p.duration}
         self.auto["started"] = self.auto["phase_started"] = time.time()
@@ -327,6 +358,8 @@ class App:
     def watch_auto(self, proc: subprocess.Popen) -> None:
         tail = []
         for raw in proc.stdout:
+            if self.auto_proc is not proc:
+                break
             if m := re.match(r"phase (\w+) ([\d.]+) ([\d.]+)", raw):
                 if m[1] != self.auto.get("phase"):
                     self.auto["phase_started"] = time.time()
@@ -340,6 +373,8 @@ class App:
                 if self.auto.get("phase") == "install" and raw.strip():
                     self.auto["detail"] = raw.strip()[:80]
         code = proc.wait()
+        if self.auto_proc is not proc:  # cancelled and replaced by a newer run
+            return
         result = self.work / "auto-result.json"
         if code == 0 and result.exists():
             data = json.loads(result.read_text(encoding="utf-8"))
@@ -350,7 +385,7 @@ class App:
     def stop_auto(self) -> dict:
         if self.auto_proc and self.auto_proc.poll() is None:
             self.auto = {"state": "stopped"}
-            self.auto_proc.kill()
+            kill_tree(self.auto_proc)
         return self.auto
 
     def auto_progress(self) -> dict:

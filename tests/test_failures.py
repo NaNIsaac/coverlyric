@@ -69,6 +69,7 @@ def test_a_child_that_dies_without_a_word_still_gives_a_reason(tmp_path):
         stdout=server.subprocess.PIPE,
         text=True,
     )
+    app.proc = proc
     app.job = {"state": "running", "started": time.time()}
     app.watch(proc, tmp_path / "never.mp4")
     assert app.job["state"] == "error"
