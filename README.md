@@ -20,8 +20,9 @@ browser; everything runs on your own computer.
 ## Install and start
 
 On Windows, download the repository as a ZIP, unzip it, and double-click `가사영상 만들기.bat`. The
-first start downloads [uv](https://docs.astral.sh/uv/), Python and the packages (about 150 MB), which
-takes a few minutes. No administrator rights are needed. Later starts take a few seconds.
+first start downloads [uv](https://docs.astral.sh/uv/), Python, ffmpeg and the packages (about 150 MB,
+about 300 MB on disk), which takes from under a minute to a few minutes. No administrator rights
+are needed. Later starts take a few seconds.
 
 With uv already installed, from the repository folder:
 
