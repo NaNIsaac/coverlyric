@@ -754,6 +754,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
 
 
 def serve(home: Path, port: int = 0, browser: bool = True) -> None:
+    home.mkdir(parents=True, exist_ok=True)  # the log file opens before App makes its folders
     start_log(home)
     app = App(home)
     ref: list = []
