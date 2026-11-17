@@ -1345,6 +1345,21 @@ def steps(workers: int, anim: bool = False) -> list[tuple[int, bool, bool]]:
 WIN_MEMORY = (8, 1455)
 
 
+# What ffmpeg and x264 write when an allocation fails.
+FFMPEG_MEMORY = ("Cannot allocate memory", "malloc of size")
+
+
+def ffmpeg_failure(code: int, said: str) -> Exception:
+    """The error for an ffmpeg that stopped before the last frame. Out of memory it can take the
+    failed read as the end of the input and exit 0 with a short video, so a broken pipe counts
+    whatever the code; an allocation failure is a MemoryError for the steps of `render` (#15)."""
+    lines = said.strip().splitlines()
+    text = f"ffmpeg 오류 (종료 코드 {code}): " + " / ".join(lines[-3:])
+    if any(word in said for word in FFMPEG_MEMORY):
+        return MemoryError(text)
+    return RuntimeError(text)
+
+
 def out_of_memory(e: BaseException) -> bool:
     """A failure that less memory could avoid: Python out of memory, a worker killed (on this PC
     almost always for memory), or the system refusing to commit more."""
@@ -1505,6 +1520,7 @@ def encode(
                 return pool.submit(render_chunk, (*chunks[k][:-1], (k % ahead) * CHUNK))
 
             waiting = deque(submit(k) for k in range(min(ahead, len(chunks))))
+            stopped = False
             for k in range(len(chunks)):
                 slots = waiting.popleft().result()
                 try:
@@ -1512,7 +1528,8 @@ def encode(
                         with frames.buf[slot * FRAME : (slot + 1) * FRAME] as view:
                             ff.stdin.write(view)
                 except OSError:
-                    break  # ffmpeg stopped; its exit code says so below
+                    stopped = True
+                    break
                 if k + ahead < len(chunks):
                     waiting.append(submit(k + ahead))
                 done = len(range(begin, chunks[k][1], step))
@@ -1524,10 +1541,9 @@ def encode(
             except OSError:
                 pass
             ff.wait()
-            if ff.returncode:
+            if ff.returncode or stopped:
                 errors.seek(0)
-                said = errors.read().decode("utf-8", "replace").strip().splitlines()[-3:]
-                raise RuntimeError(f"ffmpeg 오류 (종료 코드 {ff.returncode}): " + " / ".join(said))
+                raise ffmpeg_failure(ff.returncode, errors.read().decode("utf-8", "replace"))
     finally:
         for memory in (turns, pictures, frames):
             if memory:
