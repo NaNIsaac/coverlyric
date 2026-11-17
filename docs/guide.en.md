@@ -38,7 +38,9 @@ line without a time).
 
 ![Lyrics group](screenshots/2-lyrics.png)
 
-- Each line becomes one line on screen.
+- Each line becomes one line on screen. A line wider than the band is drawn smaller, and if it is
+  still too wide, on two rows. Such lines are underlined in the timing list, and the count shows
+  above it.
 - Marks such as `[후렴]` or `[Chorus]` are dropped.
 
 ## Timing
