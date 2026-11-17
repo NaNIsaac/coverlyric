@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import subprocess
@@ -48,3 +49,25 @@ def duration(path: str) -> float:
     if m := re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", run.stderr):
         return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
     raise ValueError(f"not an audio file ffmpeg can read: {path}")
+
+
+def memory_gb() -> float:
+    """Installed memory in GB, or 0.0 when it cannot be read."""
+    if sys.platform == "win32":
+
+        class Status(ctypes.Structure):
+            _fields_ = [
+                ("length", ctypes.c_ulong),
+                ("load", ctypes.c_ulong),
+                ("total", ctypes.c_ulonglong),
+                ("rest", ctypes.c_ulonglong * 6),
+            ]
+
+        status = Status(length=ctypes.sizeof(Status))
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return status.total / 2**30
+        return 0.0
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+    except (ValueError, OSError, AttributeError):
+        return 0.0
