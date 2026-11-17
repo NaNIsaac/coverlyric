@@ -3,6 +3,7 @@ folder, draws previews and runs the render in a child process."""
 
 from __future__ import annotations
 
+import importlib.util
 import io
 import json
 import logging
@@ -25,7 +26,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import auto, fonts, media, render, timing
+from . import anim, auto, fonts, media, render, timing
 from .project import Project
 from .render import Style
 
@@ -114,6 +115,7 @@ class App:
         self.proc: subprocess.Popen | None = None
         self.clip: dict = {"state": "idle"}
         self.clip_proc: subprocess.Popen | None = None
+        self.clip_file = self.work / "preview-clip.mp4"
 
     def save(self) -> None:
         self.project.save(self.file)
@@ -140,7 +142,19 @@ class App:
                     "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣으세요."
                 )
             p.style = style
+        if "anim" in data:
+            # Reorder or remove the moving picture's files; new ones come through upload.
+            kept = [str(name) for name in data["anim"] if str(name) in p.anim]
+            self.drop_anim(set(p.anim) - set(kept))
+            p.anim = kept
         self.save()
+
+    def drop_anim(self, names: set[str]) -> None:
+        folder = (self.work / "anim").resolve()
+        for name in names:
+            path = (self.work / name).resolve()
+            if path.parent == folder:  # never a file outside the project's anim folder
+                path.unlink(missing_ok=True)
 
     def upload(self, kind: str, name: str, body: bytes) -> dict:
         suffix = Path(name).suffix.lower()
@@ -173,6 +187,27 @@ class App:
             target = folder / safe_name(Path(name).name)
             target.write_bytes(body)
             self.project.style = replace(self.project.style, font=str(target))
+        elif kind == "anim":
+            # A GIF is the whole moving picture; images are its frames, added one by one in order.
+            if suffix not in anim.SUFFIXES:
+                raise ValueError("움직이는 그림은 gif, png, jpg, webp 파일만 넣을 수 있습니다.")
+            try:
+                Image.open(io.BytesIO(body)).verify()
+            except (OSError, SyntaxError) as e:
+                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고르세요.") from e
+            p = self.project
+            if suffix == ".gif" or any(name.lower().endswith(".gif") for name in p.anim):
+                self.drop_anim(set(p.anim))
+                p.anim = []
+            folder = self.work / "anim"
+            folder.mkdir(exist_ok=True)
+            stem, n = safe_name(Path(name).stem), 1
+            target = folder / f"{stem}{suffix}"
+            while target.exists():
+                n += 1
+                target = folder / f"{stem}-{n}{suffix}"
+            target.write_bytes(body)
+            p.anim.append(f"anim/{target.name}")
         else:
             raise ValueError(f"unknown upload kind {kind}")
         render.forget_art()
@@ -182,6 +217,7 @@ class App:
     def demo(self) -> dict:
         for old in [*self.work.glob("song.*"), *self.work.glob("cover.*")]:
             old.unlink()
+        self.drop_anim(set(self.project.anim))
         shutil.copy(DEMO / "tone.wav", self.work / "song.wav")
         shutil.copy(DEMO / "cover.png", self.work / "cover.png")
         demo = Project.load(DEMO / "demo.json")
@@ -198,6 +234,7 @@ class App:
             raise ValueError(
                 "영상을 만드는 중에는 새로 시작할 수 없습니다. 완료되거나 멈춘 뒤 다시 하세요."
             )
+        self.drop_anim(set(self.project.anim))
         for old in self.work.iterdir():
             if old.is_file():
                 old.unlink()
@@ -218,7 +255,7 @@ class App:
         small = img.resize((width, round(width * 9 / 16)), Image.LANCZOS)
         buf = io.BytesIO()
         small.save(buf, "JPEG", quality=88)
-        return buf.getvalue(), render.boxes(p.style, t)
+        return buf.getvalue(), render.boxes(p.style, t, song)
 
     def start_render(self) -> dict:
         if self.job.get("state") == "running":
@@ -238,6 +275,7 @@ class App:
         job = self.work / "job.json"
         data = p.to_dict()
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
+        data["anim"] = [p.path(name) for name in p.anim]
         data["out"] = str(out)
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         cmd = [sys.executable, "-m", "coverlyric", "render-job", str(job)]
@@ -259,6 +297,7 @@ class App:
     def watch(self, proc: subprocess.Popen, out: Path) -> None:
         """Follow the render child: progress into the job, every tenth into the log, and any other
         output (a traceback, ffmpeg's message) kept for the error."""
+        part = out.with_name(out.stem + ".making.mp4")
         tail: list[str] = []
         said = ""
         logged = 0
@@ -272,6 +311,8 @@ class App:
                 if total and done / total >= (logged + 1) / 10:
                     logged = int(done / total * 10)
                     LOG.info("render %d%% (%.0f of %.0f s)", logged * 10, done, total)
+            elif line.startswith("out "):
+                out = Path(line[4:])  # another name when the old video was held open
             elif line.startswith("start "):
                 LOG.info("render %s", line)
             elif line.startswith("error: "):
@@ -279,6 +320,8 @@ class App:
             elif line:
                 tail = (tail + [line])[-40:]
         code = proc.wait()
+        # A stopped or crashed child cannot remove its own part file.
+        part.unlink(missing_ok=True)
         if self.proc is not proc:  # stopped and replaced by a newer render
             return
         if code == 0 and out.exists():
@@ -339,6 +382,8 @@ class App:
             line = raw.rstrip()
             if m := re.match(r"progress ([\d.]+) ([\d.]+)", line):
                 self.clip["done"], self.clip["total"] = float(m[1]), float(m[2])
+            elif line.startswith("out "):
+                out = Path(line[4:])  # another name while the page still holds the last clip
             elif line and not line.startswith("start "):
                 tail = (tail + [line])[-20:]
         code = proc.wait()
@@ -346,6 +391,7 @@ class App:
             return
         if code == 0 and out.exists():
             version = int(out.stat().st_mtime * 1000)
+            self.clip_file = out
             self.clip = {"state": "done", "url": f"/media/clip?v={version}", "at": start}
             return
         for line in tail:
@@ -380,6 +426,25 @@ class App:
             for name, (_, size) in auto.MODELS.items()
         }
 
+    def check_disk(self, model: str) -> None:
+        """The first run installs faster-whisper into the program's environment and downloads the
+        model into the Hugging Face cache; a full drive would fail half way with a vague message."""
+        need: list[tuple[Path, int]] = []
+        if not auto.has_model(model):
+            need.append((auto.model_cache(), auto.MODELS[model][1] + 100))
+        if importlib.util.find_spec("faster_whisper") is None:
+            need.append((PROJECT, 300))
+        for folder, mb in need:
+            while not folder.exists() and folder.parent != folder:
+                folder = folder.parent
+            free = shutil.disk_usage(folder)[2] / 1e6
+            if free < mb:
+                raise ValueError(
+                    f"디스크 공간 부족: 자동 맞추기를 처음 쓰려면 {folder.anchor or folder}에 "
+                    f"여유 공간 {mb} MB가 필요합니다 (현재 {free:.0f} MB). "
+                    "공간을 늘린 뒤 다시 누르세요."
+                )
+
     def start_auto(self, model: str) -> dict:
         if self.auto.get("state") == "running":
             return self.auto
@@ -393,6 +458,7 @@ class App:
             raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
         if model not in auto.MODELS:
             raise ValueError(f"unknown model {model}")
+        self.check_disk(model)
         uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
         if not uv:
             raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행하세요.")
@@ -409,6 +475,9 @@ class App:
         cmd += ["python", "-m", "coverlyric", "auto-job", str(job)]
         self.auto_proc = subprocess.Popen(
             cmd,
+            # hf-xet holds the model in memory until it is complete, so the download bar would
+            # not move; the plain HTTP download writes the cache file as it goes.
+            env={**os.environ, "HF_HUB_DISABLE_XET": "1"},
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -445,6 +514,9 @@ class App:
         result = self.work / "auto-result.json"
         if code == 0 and result.exists():
             data = json.loads(result.read_text(encoding="utf-8"))
+            # Saved here, not by the page, so a page reloaded during the run still gets the times.
+            self.project.lines = [(t, text) for t, text in data["lines"]]
+            self.save()
             self.auto = {"state": "done", **data}
         elif self.auto.get("state") != "stopped":
             self.auto = {"state": "error", "message": "\n".join(tail) or f"exit {code}"}
@@ -566,7 +638,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 elif url.path == "/api/clip":
                     self.json(app.clip)
                 elif url.path == "/media/clip":
-                    self.file(app.work / "preview-clip.mp4")
+                    self.file(app.clip_file)
                 elif url.path == "/api/auto":
                     self.json({**app.auto_progress(), "models": app.models()})
                 elif url.path == "/api/prompt":
@@ -574,6 +646,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json(
                         {"prompt": timing.ai_prompt(own, app.project.title), "lines": len(own)}
                     )
+                elif url.path == "/media/anim":
+                    # Only a file the project lists, for the frame thumbnails on the page.
+                    name = query.get("name", [""])[0]
+                    listed = name in app.project.anim
+                    self.file(app.work / name if listed else app.work / "missing")
                 elif url.path in ("/media/audio", "/media/art"):
                     name = app.project.audio if url.path.endswith("audio") else app.project.art
                     self.file(app.work / name if name else app.work / "missing")

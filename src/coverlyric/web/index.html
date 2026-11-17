@@ -148,6 +148,17 @@
         </div>
       </fieldset>
       <fieldset class="group">
+        <legend>움직이는 그림</legend>
+        <p class="note" id="anim-help">GIF 한 개 또는 그림 여러 장을 넣으면 영상 위에서 순서대로 반복 재생됩니다.</p>
+        <label class="file-button small"><svg class="i"><use href="#i-plus"/></svg>움직이는 그림 추가<input type="file" id="anim-file" accept=".gif,.png,.jpg,.jpeg,.webp" multiple></label>
+        <div id="anim-panel" hidden>
+          <ol class="frames" id="anim-list"></ol>
+          <label id="anim-fps-row" class="fps"><span class="fps-text">1초에 <b id="anim-fps-label">8</b>장</span><input type="range" id="anim_fps" min="1" max="30" step="1"></label>
+          <label class="check"><input type="checkbox" id="anim_above"> 앨범과 가사 위에 보이기</label>
+          <button id="anim-clear" class="quiet"><svg class="i"><use href="#i-stop"/></svg>움직이는 그림 빼기</button>
+        </div>
+      </fieldset>
+      <fieldset class="group">
         <legend>위치와 크기</legend>
         <table class="places">
           <thead><tr><th></th><th>가로</th><th>세로</th><th>크기</th></tr></thead>
@@ -155,6 +166,7 @@
             <tr data-el="album"><th>앨범</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
             <tr data-el="panel"><th>가사</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
             <tr data-el="title"><th>제목</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
+            <tr data-el="anim" hidden><th>움직이는 그림</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.1" max="4"></td></tr>
             <tr data-el="bar"><th>재생 바</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
           </tbody>
         </table>
@@ -165,7 +177,7 @@
 
   <section class="make" id="step-make">
     <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
-    <p class="note">걸리는 시간: 노래 길이의 1~3배 (PC 성능에 따라 다름)</p>
+    <p class="note">걸리는 시간: 보통 노래 길이 이하, 느린 PC는 노래 길이 정도</p>
     <div id="progress" hidden>
       <div class="progress-head">
         <span class="state">영상 만드는 중</span>
@@ -194,8 +206,8 @@
       <span class="transport-label">미리보기 시점</span>
       <input type="range" id="time" min="0" max="60" step="0.1" value="0" aria-label="미리보기 시점">
       <span id="time-label" class="clock">0:00</span>
-      <button id="time-now" class="quiet"><svg class="i"><use href="#i-seek"/></svg>재생 위치로</button>
       <button id="clip-make" class="quiet" title="이 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-film"/></svg><span id="clip-label">10초 미리보기 영상</span></button>
+      <button id="time-now" class="quiet"><svg class="i"><use href="#i-seek"/></svg>재생 위치로</button>
     </div>
     <div class="editor" id="timing-editor">
       <div class="editor-bar">
