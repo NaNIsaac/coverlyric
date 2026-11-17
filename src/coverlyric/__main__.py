@@ -16,8 +16,8 @@ from PIL import Image
 from . import __version__, media, render, timing
 from .project import Project
 
-BASE_MB = 500  # the encoder and the main render process, measured about 450 MB at 1080p
-WORKER_MB = 300  # one worker with its chunks in flight, measured 130 to 210 MB
+BASE_MB = 250  # kept free; encoder and main process measured about 320 MB with one worker
+WORKER_MB = 150  # each extra worker measured about 120 MB in a 60 s 1080p render (issue #3)
 WORKER_ERROR = (
     "작업 프로세스가 비정상 종료되었습니다. 대부분 메모리 부족이 원인입니다. "
     "다른 프로그램을 닫고 다시 만드세요."

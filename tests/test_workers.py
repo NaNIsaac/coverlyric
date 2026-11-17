@@ -7,7 +7,9 @@ from coverlyric import media
 @pytest.mark.parametrize(
     ("cores", "available", "expected"),
     [
-        (12, 1400, 3),  # 8 GB installed but only 1.4 GB free: the free memory decides
+        (12, 890, 4),  # 8 GB installed but only 890 MB free: the free memory decides
+        (12, 1400, 6),
+        (12, 500, 1),
         (4, 3000, 3),  # cores minus one
         (2, 8000, 1),
         (16, 32000, 6),

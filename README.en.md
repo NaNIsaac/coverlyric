@@ -24,7 +24,7 @@ runs on your PC and is used from a page in your browser.
 
 **Minimum:** Windows 10/11 64-bit, 4 GB RAM, 2 CPU cores, 500 MB free disk for the first start;
 automatic timing needs about 0.7 GB more disk once. No GPU is used. Automatic timing uses about
-1 GB of memory, and a render 0.6 to 0.9 GB depending on the free memory
+1 GB of memory, and a render 0.4 to 0.9 GB depending on the free memory
 ([measurements](#memory-and-speed)).
 
 ## Install and start
@@ -151,8 +151,8 @@ uv run pytest
 - Frames are drawn with Pillow and piped to ffmpeg (from the imageio-ffmpeg package), which writes
   an H.264 + AAC mp4. Worker processes draw 8 frames at a time, and only a few such chunks are in
   memory at once.
-- The number of workers follows the memory free when the render starts: 500 MB for the encoder,
-  then one worker per 300 MB, at most the cores minus one and 6, at least 1. The
+- The number of workers follows the memory free when the render starts: 250 MB kept back,
+  then one worker per 150 MB, at most the cores minus one and 6, at least 1. The
   `COVERLYRIC_WORKERS` environment variable sets it by hand.
 - Render start, progress every 10 %, the end and any error (with the exit code and reason) go to
   the terminal window and to `coverlyric.log` in the program folder.
@@ -176,8 +176,17 @@ private memory of the python processes and ffmpeg.
 | Song, 3 min 48 s | 3 | 254 s | 0.75 GB (working set 0.87 GB) |
 | Song, 3 min 48 s | 4 | 249 s | 0.87 GB (working set 1.01 GB) |
 
-A slower CPU takes longer; memory stays about the same. With less than 1.1 GB free the render
-uses one worker (about 0.6 GB at most).
+A slower CPU takes longer; memory stays about the same. With less than 550 MB free the render
+uses one worker.
+
+On a PC with 8 GB RAM and 12 threads, a 60 s part of a 4 min 25 s song (1920x1080, 3000 px cover,
+peak of the whole render):
+
+| Workers | Time | Peak memory |
+|---|---|---|
+| 1 | 311 s | 434 MB |
+| 2 | 203 s | 546 MB |
+| 4 | 143 s | 799 MB |
 
 Automatic timing (same PC, the 3 min 48 s song, model already downloaded): `small` about 120 s,
 1.04 GB at most.
