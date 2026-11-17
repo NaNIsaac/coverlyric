@@ -202,6 +202,21 @@
     </div>
   </section>
 </main>
+<dialog id="crop" class="crop" aria-labelledby="crop-title">
+  <h2 id="crop-title">표지 자르기</h2>
+  <p class="note">네모를 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꾸세요. 네모 안이 표지가 돼요.</p>
+  <div class="crop-stage">
+    <div class="crop-frame" id="crop-frame">
+      <img id="crop-img" alt="고른 사진">
+      <div class="crop-box" id="crop-box" tabindex="0" aria-label="자를 부분"><span class="grip"></span></div>
+    </div>
+  </div>
+  <label class="crop-zoom">확대<input type="range" id="crop-zoom" min="1" max="4" step="0.01" value="1"></label>
+  <div class="crop-buttons">
+    <button id="crop-cancel" class="quiet">취소</button>
+    <button id="crop-ok" class="primary"><svg class="i"><use href="#i-check"/></svg>확인</button>
+  </div>
+</dialog>
 <div id="toast" role="status"></div>
 <script src="/clock.js"></script>
 <script src="/app.js"></script>

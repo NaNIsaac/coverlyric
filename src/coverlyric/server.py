@@ -138,7 +138,7 @@ class App:
             self.project.style = replace(self.project.style, font=str(target))
         else:
             raise ValueError(f"unknown upload kind {kind}")
-        render.scene.cache_clear()
+        render.forget_art()
         self.save()
         return self.state()
 
@@ -152,7 +152,7 @@ class App:
         demo.audio, demo.art = "song.wav", "cover.png"
         demo.duration = media.duration(str(self.work / "song.wav"))
         self.project = demo
-        render.scene.cache_clear()
+        render.forget_art()
         self.save()
         return self.state()
 
@@ -165,21 +165,23 @@ class App:
             if old.is_file():
                 old.unlink()
         self.project = Project(self.work)
-        render.scene.cache_clear()
+        render.forget_art()
         self.save()
         return self.state()
 
-    def preview(self, t: float) -> tuple[bytes, dict]:
+    def preview(self, t: float, width: int = 1280) -> tuple[bytes, dict]:
+        """A JPEG of the frame at time t, as wide as the page shows it (320 to 1280 px)."""
         p = self.project
         if not p.art:
             raise ValueError("앨범 표지가 없습니다. 1단계에서 표지를 넣으세요.")
         song = p.song()
         with self.lock:
             img = render.frame(t, p.preview_lines(), song, p.style)
-        small = img.resize((1280, 720), Image.LANCZOS)
+        width = min(1280, max(320, width))
+        small = img.resize((width, round(width * 9 / 16)), Image.LANCZOS)
         buf = io.BytesIO()
         small.save(buf, "JPEG", quality=88)
-        return buf.getvalue(), render.boxes(p.style)
+        return buf.getvalue(), render.boxes(p.style, t)
 
     def start_render(self) -> dict:
         if self.job.get("state") == "running":
@@ -395,7 +397,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     data = json.loads(self.body() or b"{}")
                     if data:
                         app.update(data)
-                    jpeg, boxes = app.preview(float(query.get("t", ["0"])[0]))
+                    jpeg, boxes = app.preview(
+                        float(query.get("t", ["0"])[0]), int(query.get("w", ["1280"])[0])
+                    )
                     self.send(200, jpeg, "image/jpeg", {"X-Boxes": json.dumps(boxes)})
                 elif url.path == "/api/render":
                     self.json(app.start_render())
