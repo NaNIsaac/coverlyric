@@ -39,6 +39,7 @@ def duration(path: str) -> float:
     run = subprocess.run(
         [ffmpeg(), "-hide_banner", "-i", path],
         capture_output=True,
+        check=False,  # ffmpeg exits 1 when given no output; the banner is all we need
         text=True,
         encoding="utf-8",
         errors="replace",

@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "render-job":
         try:
             run_job(args.job)
-        except Exception as e:  # the page shows this text to the user
+        except Exception as e:  # noqa: BLE001 - any failure is shown to the user on the page
             print(f"error: {e}", flush=True)
             sys.exit(1)
 

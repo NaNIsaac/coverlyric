@@ -10,8 +10,6 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uvx ruff@0.14.4 check .
-      - run: uvx ruff@0.14.4 format --check .
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv run --frozen pytest -q

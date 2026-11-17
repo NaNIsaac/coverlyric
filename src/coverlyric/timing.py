@@ -16,7 +16,8 @@ CUE_TIME = re.compile(
     r"(?:(\d+):)?(\d{1,2}):(\d{1,2})[.,](\d{1,3})\s*-->\s*(?:(\d+):)?(\d{1,2}):(\d{1,2})[.,](\d{1,3})"
 )
 SECTION = re.compile(
-    r"^\s*[\[(](?:verse|chorus|bridge|intro|outro|hook|pre-chorus|inst)[^\])]*[\])]\s*$", re.I
+    r"^\s*[\[(](?:verse|chorus|bridge|intro|outro|hook|pre-chorus|inst)[^\])]*[\])]\s*$",
+    re.IGNORECASE,
 )
 
 

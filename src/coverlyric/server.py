@@ -224,7 +224,7 @@ class App:
 
 def open_folder(path: Path) -> None:
     if sys.platform == "win32":
-        os.startfile(path)  # noqa: S606 - opens Explorer on the user's own output folder
+        os.startfile(path)
     elif sys.platform == "darwin":
         subprocess.Popen(["open", str(path)])
     else:

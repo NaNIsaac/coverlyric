@@ -72,7 +72,10 @@ def test_five_second_clip(demo, tmp_path):
         report=lambda *_: None,
     )
     probe = subprocess.run(
-        [media.ffmpeg(), "-hide_banner", "-i", str(out)], capture_output=True, text=True
+        [media.ffmpeg(), "-hide_banner", "-i", str(out)],
+        capture_output=True,
+        text=True,
+        check=False,
     ).stderr
     assert "Video: h264" in probe and "1920x1080" in probe and "Audio: aac" in probe
     assert media.duration(str(out)) == pytest.approx(5.0, abs=0.1)
