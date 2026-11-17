@@ -100,6 +100,8 @@ are in the **색** group, the rest in **모양**.
   Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장** (frames per second). Turn off
   **앨범과 가사 위에 보이기** to draw it below them.
 - **제목과 가수 보이기**, **재생 바 넣기:** title and progress bar on or off.
+- **시작·끝 페이드** (fade in and out): the video fades in from black over 0.5 s and out to black
+  over the last 1.5 s, with the sound. On by default.
 - **Preview time:** the slider under the preview picks the frame; while the song plays the preview
   follows it.
 
