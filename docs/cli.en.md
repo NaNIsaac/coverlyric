@@ -2,13 +2,7 @@
 
 [한국어](cli.md) · [Back](../README.en.md)
 
-With [uv](https://docs.astral.sh/uv/) installed, run it from the repository folder. To draw one frame
-of the demo song:
-
-<!-- test -->
-```sh
-uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
-```
+With [uv](https://docs.astral.sh/uv/) installed, run it from the repository folder.
 
 ## Commands
 

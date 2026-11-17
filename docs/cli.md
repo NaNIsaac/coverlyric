@@ -2,13 +2,7 @@
 
 [English](cli.en.md) · [처음으로](../README.md)
 
-[uv](https://docs.astral.sh/uv/)가 있으면 저장소 폴더에서 바로 실행할 수 있습니다. 데모 노래의 한
-장면을 그리는 예:
-
-<!-- test -->
-```sh
-uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
-```
+[uv](https://docs.astral.sh/uv/)가 있으면 저장소 폴더에서 바로 실행할 수 있습니다.
 
 ## 명령
 

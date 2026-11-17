@@ -53,6 +53,15 @@
 기록은 프로그램 폴더의 `coverlyric.log` 에 있습니다. 해결되지 않으면 그 파일을
 [이슈](https://github.com/NaNIsaac/coverlyric/issues)에 올려 주세요.
 
+## 명령줄
+
+[uv](https://docs.astral.sh/uv/)가 있으면 저장소 폴더에서 데모 노래의 한 장면을 그릴 수 있습니다:
+
+<!-- test -->
+```sh
+uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
+```
+
 ## 더 보기
 
 [자세한 사용법](docs/guide.md) · [명령줄](docs/cli.md) · 라이선스: 코드 MIT, 글꼴 SIL OFL 1.1

@@ -54,6 +54,15 @@ the video folder). Videos are saved in `만든 영상` in the program folder.
 The log is `coverlyric.log` in the program folder. If the problem stays, attach that file to an
 [issue](https://github.com/NaNIsaac/coverlyric/issues).
 
+## Command line
+
+With [uv](https://docs.astral.sh/uv/), draw one frame of the demo song from the repository folder:
+
+<!-- test -->
+```sh
+uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
+```
+
 ## More
 
 [Full guide](docs/guide.en.md) · [Command line](docs/cli.en.md) · Licence: code MIT, fonts SIL OFL 1.1
