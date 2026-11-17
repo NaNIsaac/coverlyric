@@ -946,6 +946,8 @@ async function pollRender() {
   if (job.state === "done") {
     $("done").hidden = false;
     $("done-name").textContent = job.out.split(/[\\/]/).pop();
+    $("done-note").textContent = job.note || "";
+    $("done-note").hidden = !job.note;
   } else if (job.state === "error") {
     showRenderError(`영상 만들기 실패: ${job.message}${job.log ? `\n기록 파일: ${job.log}` : ""}`);
   }
@@ -976,6 +978,7 @@ async function pollClip() {
     $("boxes").hidden = true;
     label.textContent = "미리보기 닫기";
     video.play().catch(() => {});
+    if (job.note) toast(job.note, 9000);
   } else if (job.state === "error") {
     toast(`미리보기 영상 실패: ${job.message}`, 9000);
   }

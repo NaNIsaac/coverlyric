@@ -6,6 +6,7 @@ import logging
 import sys
 import time
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import replace
 from pathlib import Path
 from typing import ClassVar
 
@@ -30,9 +31,9 @@ def paging_error() -> OSError:
 
 
 def test_steps_halve_the_workers_then_drop_the_shared_turn():
-    assert render.steps(6) == [(6, True), (3, True), (1, True), (1, False)]
-    assert render.steps(2) == [(2, True), (1, True), (1, False)]
-    assert render.steps(1) == [(1, True), (1, False)]
+    assert render.steps(6) == [(6, True, True), (3, True, True), (1, True, True), (1, False, True)]
+    assert render.steps(2) == [(2, True, True), (1, True, True), (1, False, True)]
+    assert render.steps(1, anim=True) == [(1, True, True), (1, False, True), (1, False, False)]
 
 
 @pytest.mark.parametrize(
@@ -54,7 +55,7 @@ def fake_encode(monkeypatch, fails: int, error=None):
     calls, notes = [], []
 
     def encode(out, lines, song, style, workers, span, report, codec, quick, shared):
-        calls.append((workers, shared))
+        calls.append((workers, shared, bool(song.anim)))
         if len(calls) <= fails:
             raise error or paging_error()
 
@@ -67,7 +68,7 @@ def test_a_render_short_of_memory_tries_again_with_less(monkeypatch, tmp_path):
     calls, notes = fake_encode(monkeypatch, fails=3)
     demo = Project.load(DEMO)
     render.render(tmp_path / "out.mp4", (), demo.song(), render.Style(), 6, note=notes.append)
-    assert calls == [(6, True), (3, True), (1, True), (1, False)]
+    assert calls == [(6, True, False), (3, True, False), (1, True, False), (1, False, False)]
     assert (
         len(notes) == 3 and "1 worker" in notes[-1] and "CD turn drawn on each frame" in notes[-1]
     )
@@ -78,7 +79,7 @@ def test_when_nothing_is_left_to_try_the_error_goes_up(monkeypatch, tmp_path):
     demo = Project.load(DEMO)
     with pytest.raises(PagingFileTooSmall) as caught:
         render.render(tmp_path / "out.mp4", (), demo.song(), render.Style(), 2, note=notes.append)
-    assert calls == [(2, True), (1, True), (1, False)]
+    assert calls == [(2, True, False), (1, True, False), (1, False, False)]
     message = cli.failure(caught.value)
     assert message == cli.MEMORY_ERROR
     assert "paging" not in message.lower() and "1455" not in message
@@ -89,7 +90,7 @@ def test_other_errors_are_not_tried_again(monkeypatch, tmp_path):
     demo = Project.load(DEMO)
     with pytest.raises(ValueError):
         render.render(tmp_path / "out.mp4", (), demo.song(), render.Style(), 4)
-    assert calls == [(4, True)]
+    assert calls == [(4, True, False)]
 
 
 def test_workers_follow_the_commit_left(monkeypatch):
@@ -182,3 +183,59 @@ def test_the_log_says_which_step_was_taken(tmp_path, caplog):
     with caplog.at_level(logging.INFO, logger="coverlyric"):
         app.watch(proc, tmp_path / "never.mp4")
     assert "render memory short (OSError): again with 1 worker(s)" in caplog.text
+
+
+def test_the_moving_picture_is_kept_without_shared_memory(monkeypatch, tmp_path):
+    calls, notes = fake_encode(monkeypatch, fails=2)
+    song = replace(Project.load(DEMO).song(), anim=("a.gif",))
+    said = render.render(tmp_path / "out.mp4", (), song, render.Style(), 2, note=notes.append)
+    assert calls == [(2, True, True), (1, True, True), (1, False, True)]
+    assert said == ""
+    assert "moving picture loaded in the worker" in notes[-1]
+
+
+def test_the_moving_picture_goes_last_and_the_user_is_told(monkeypatch, tmp_path):
+    calls, notes = fake_encode(monkeypatch, fails=3)
+    song = replace(Project.load(DEMO).song(), anim=("a.gif",))
+    said = render.render(tmp_path / "out.mp4", (), song, render.Style(), 2, note=notes.append)
+    assert calls[-1] == (1, False, False)
+    assert said == render.ANIM_DROPPED
+    assert "without the moving picture" in notes[-1]
+
+
+def watched(app, method, script, *args):
+    proc = server.subprocess.Popen(
+        [sys.executable, "-I", "-X", "utf8", "-c", script],
+        stdout=server.subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    return proc, lambda: method(proc, *args)
+
+
+def test_the_done_line_carries_the_notice(tmp_path, caplog):
+    app = server.App(tmp_path)
+    out = tmp_path / "song.mp4"
+    out.write_bytes(b"video")
+    proc, run = watched(app, app.watch, f"print('notice {render.ANIM_DROPPED}')", out)
+    app.proc = proc
+    app.job = {"state": "running", "started": time.time()}
+    with caplog.at_level(logging.INFO, logger="coverlyric"):
+        run()
+    assert app.job["state"] == "done" and app.job["note"] == render.ANIM_DROPPED
+    assert render.ANIM_DROPPED in caplog.text
+
+
+def test_a_failed_clip_shows_words_not_the_traceback(tmp_path):
+    app = server.App(tmp_path)
+    script = (
+        "print('Traceback (most recent call last):'); "
+        "print('OSError: [WinError 1455] The paging file is too small'); "
+        f"print('error: {cli.MEMORY_ERROR}'); import sys; sys.exit(1)"
+    )
+    proc, run = watched(app, app.watch_clip, script, tmp_path / "clip.mp4", 0.0)
+    app.clip_proc = proc
+    app.clip = {"state": "running"}
+    run()
+    assert app.clip["state"] == "error"
+    assert app.clip["message"].startswith(cli.MEMORY_ERROR) and "1455" not in app.clip["message"]

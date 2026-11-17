@@ -1290,41 +1290,55 @@ def render(
     report=print,
     quick: bool = False,
     note=print,
-) -> None:
+) -> str:
     """Write the mp4. As chunks finish, `report(done_seconds, total_seconds, frames_done,
     frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by.
     `quick` makes a small clip at half the frame rate to look at in the page.
-    When memory runs out, the render starts again with less (`steps`), and `note` says how (#12)."""
+    When memory runs out, the render starts again with less (`steps`), and `note` says how (#12).
+    Returns what the user should know about the video: ANIM_DROPPED, or "" when it is as asked."""
     codec = "libx264" if quick else media.encoder()
-    tries = steps(workers)
-    for k, (count, shared) in enumerate(tries):
+    tries = steps(workers, bool(song.anim))
+    for k, (count, shared, moving) in enumerate(tries):
+        part = song if moving else replace(song, anim=())
         try:
             try:
-                encode(out, lines, song, style, count, span, report, codec, quick, shared)
+                encode(out, lines, part, style, count, span, report, codec, quick, shared)
             except RuntimeError:
                 if codec == "libx264":
                     raise
                 # A graphics driver can pass the short test and still fail on a whole song.
                 codec = "libx264"
-                encode(out, lines, song, style, count, span, report, codec, quick, shared)
-            return
+                encode(out, lines, part, style, count, span, report, codec, quick, shared)
+            return "" if moving or not song.anim else ANIM_DROPPED
         except Exception as e:
             if k + 1 == len(tries) or not out_of_memory(e):
                 raise
-            count, shared = tries[k + 1]
+            count, shared, moving = tries[k + 1]
+            how = (
+                "without the moving picture"
+                if not moving
+                else "the CD turn drawn on each frame, any moving picture loaded in the worker"
+                if not shared
+                else ""
+            )
             note(
                 f"memory short ({type(e).__name__}: {e}): again with {count} worker(s)"
-                + ("" if shared else ", the CD turn drawn on each frame")
+                + (f", {how}" if how else "")
             )
 
 
-def steps(workers: int) -> list[tuple[int, bool]]:
-    """The tries when memory runs short: (workers, shared CD turn and moving picture), halving the
-    workers down to one, then one without the shared pictures."""
+ANIM_DROPPED = "메모리가 부족해 움직이는 그림 없이 만들었습니다."
+
+
+def steps(workers: int, anim: bool = False) -> list[tuple[int, bool, bool]]:
+    """The tries when memory runs short, as (workers, shared blocks, moving picture): the workers
+    halved down to one; then one worker without shared blocks, which draws the CD turn on each frame
+    and loads the moving picture itself; last, when there is one, without the moving picture."""
     counts = [max(1, workers)]
     while counts[-1] > 1:
         counts.append(counts[-1] // 2)
-    return [(n, True) for n in counts] + [(1, False)]
+    tries = [(n, True, True) for n in counts] + [(1, False, True)]
+    return tries + [(1, False, False)] if anim else tries
 
 
 # Windows: ERROR_NOT_ENOUGH_MEMORY, ERROR_COMMITMENT_LIMIT (the paging file is too small).

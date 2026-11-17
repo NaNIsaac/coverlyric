@@ -98,12 +98,16 @@ def run_job(path: Path) -> None:
     lines = project.preview_lines() if clip else tuple(timing.ready(project.lines))
     try:
         if clip:
-            render.render(part, lines, song, project.style, count, tuple(clip), report, True, say)
+            notice = render.render(
+                part, lines, song, project.style, count, tuple(clip), report, True, say
+            )
         else:
-            render.render(part, lines, song, project.style, count, report=report, note=say)
+            notice = render.render(part, lines, song, project.style, count, report=report, note=say)
         out = place(part, out)
     finally:
         part.unlink(missing_ok=True)
+    if notice:
+        print(f"notice {notice}", flush=True)
     print(f"out {out}", flush=True)
     if clip:
         return
