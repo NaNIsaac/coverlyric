@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import math
 import os
 import re
@@ -17,6 +18,7 @@ import webbrowser
 from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
@@ -42,8 +44,24 @@ TYPES = {
     ".flac": "audio/flac",
     ".ogg": "audio/ogg",
 }
+LOG = logging.getLogger("coverlyric")
 AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+
+def start_log(home: Path) -> Path:
+    """Render events go to the terminal window and to a small rotating log file in the program
+    folder, so a failed render can be read afterwards."""
+    path = home / "coverlyric.log"
+    LOG.setLevel(logging.INFO)
+    if not LOG.handlers:
+        file = RotatingFileHandler(path, maxBytes=256_000, backupCount=1, encoding="utf-8")
+        file.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%Y-%m-%d %H:%M:%S"))
+        terminal = logging.StreamHandler(sys.stdout)
+        terminal.setFormatter(logging.Formatter("%(asctime)s %(message)s", "%H:%M:%S"))
+        LOG.addHandler(file)
+        LOG.addHandler(terminal)
+    return path
 
 
 def safe_name(name: str) -> str:
@@ -62,6 +80,7 @@ class App:
         self.lock = threading.Lock()
         self.project = Project.load(self.file) if self.file.exists() else Project(self.work)
         self.job: dict = {"state": "idle"}
+        self.log = home / "coverlyric.log"
         self.proc: subprocess.Popen | None = None
 
     def save(self) -> None:
@@ -185,25 +204,55 @@ class App:
             **media.below_normal(),
         )
         self.job = {"state": "running", "done": 0.0, "total": p.duration, "started": time.time()}
+        LOG.info("render started: %s (%.1f s)", out.name, p.duration)
         threading.Thread(target=self.watch, args=(self.proc, out), daemon=True).start()
         return self.job
 
     def watch(self, proc: subprocess.Popen, out: Path) -> None:
-        tail = []
+        """Follow the render child: progress into the job, every tenth into the log, and any other
+        output (a traceback, ffmpeg's message) kept for the error."""
+        tail: list[str] = []
+        said = ""
+        logged = 0
         for raw in proc.stdout:
-            if m := re.match(r"progress ([\d.]+) ([\d.]+)", raw):
-                self.job["done"], self.job["total"] = float(m[1]), float(m[2])
-            else:
-                tail = (tail + [raw.rstrip()])[-8:]
+            line = raw.rstrip()
+            if m := re.match(r"progress ([\d.]+) ([\d.]+)", line):
+                done, total = float(m[1]), float(m[2])
+                self.job["done"], self.job["total"] = done, total
+                if total and done / total >= (logged + 1) / 10:
+                    logged = int(done / total * 10)
+                    LOG.info("render %d%% (%.0f of %.0f s)", logged * 10, done, total)
+            elif line.startswith("start "):
+                LOG.info("render %s", line)
+            elif line.startswith("error: "):
+                said = line[7:]
+            elif line:
+                tail = (tail + [line])[-40:]
         code = proc.wait()
-        if code == 0:
+        if code == 0 and out.exists():
+            spent = time.time() - self.job.get("started", time.time())
+            LOG.info("render done in %.0f s: %s", spent, out)
             self.job = {"state": "done", "out": str(out), "folder": str(self.output)}
-        elif self.job.get("state") != "stopped":
-            self.job = {"state": "error", "message": "\n".join(tail) or f"exit {code}"}
+            return
+        if self.job.get("state") == "stopped":
+            LOG.info("render stopped by the user")
+            return
+        if code == 0:
+            said = said or "영상 파일이 만들어지지 않았습니다."
+        reason = said or (tail[-1] if tail else "") or "렌더링 프로세스가 갑자기 종료되었습니다."
+        for line in tail:
+            LOG.info("  %s", line)
+        LOG.error("render failed (exit code %s): %s", code, reason)
+        self.job = {
+            "state": "error",
+            "message": f"{reason} (종료 코드 {code})",
+            "log": str(self.log),
+        }
 
     def stop_render(self) -> dict:
         if self.proc and self.proc.poll() is None:
             self.job = {"state": "stopped"}
+            LOG.info("render stop requested")
             self.proc.kill()
         return self.job
 
@@ -366,6 +415,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
 
 
 def serve(home: Path, port: int = 0, browser: bool = True) -> None:
+    start_log(home)
     app = App(home)
     ref: list = []
     server = ThreadingHTTPServer(("127.0.0.1", port), handler(app, ref))

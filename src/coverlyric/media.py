@@ -51,8 +51,8 @@ def duration(path: str) -> float:
     raise ValueError(f"not an audio file ffmpeg can read: {path}")
 
 
-def memory_gb() -> float:
-    """Installed memory in GB, or 0.0 when it cannot be read."""
+def memory_mb() -> tuple[float, float]:
+    """Installed and currently available memory in MB, or (0.0, 0.0) when they cannot be read."""
     if sys.platform == "win32":
 
         class Status(ctypes.Structure):
@@ -60,14 +60,19 @@ def memory_gb() -> float:
                 ("length", ctypes.c_ulong),
                 ("load", ctypes.c_ulong),
                 ("total", ctypes.c_ulonglong),
-                ("rest", ctypes.c_ulonglong * 6),
+                ("available", ctypes.c_ulonglong),
+                ("rest", ctypes.c_ulonglong * 5),
             ]
 
         status = Status(length=ctypes.sizeof(Status))
         if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-            return status.total / 2**30
-        return 0.0
+            return status.total / 2**20, status.available / 2**20
+        return 0.0, 0.0
     try:
-        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**30
+        page = os.sysconf("SC_PAGE_SIZE")
+        return (
+            page * os.sysconf("SC_PHYS_PAGES") / 2**20,
+            page * os.sysconf("SC_AVPHYS_PAGES") / 2**20,
+        )
     except (ValueError, OSError, AttributeError):
-        return 0.0
+        return 0.0, 0.0

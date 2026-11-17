@@ -351,30 +351,46 @@ function stopTap() {
 }
 
 async function pollRender() {
+  let job;
   try {
-    const job = await (await api("/api/render")).json();
-    if (job.state === "running") {
-      $("progress").hidden = false;
-      $("done").hidden = true;
-      $("make").disabled = true;
-      const share = job.total ? job.done / job.total : 0;
-      $("progress-bar").value = share;
-      const left = job.eta != null ? ` · 남은 시간 약 ${Math.max(1, Math.round(job.eta / 60))}분` : " · 시간을 재는 중";
-      $("progress-text").textContent = `${Math.round(share * 100)}%${left}`;
-      setTimeout(pollRender, 1000);
-      return;
-    }
-    $("progress").hidden = true;
-    $("make").disabled = false;
-    if (job.state === "done") {
-      $("done").hidden = false;
-      $("done-name").textContent = job.out.split(/[\\/]/).pop();
-    } else if (job.state === "error") {
-      toast(`영상을 만들지 못했어요: ${job.message}`, 9000);
-    }
+    job = await (await api("/api/render")).json();
+    pollRender.failed = 0;
   } catch (e) {
-    toast(e.message);
+    // One lost request must not end the watch: the render keeps running in its own process.
+    pollRender.failed = (pollRender.failed || 0) + 1;
+    if (pollRender.failed === 5) {
+      showRenderError("프로그램에 연결할 수 없습니다. 터미널 창이 열려 있는지 확인하세요.");
+    }
+    setTimeout(pollRender, 2000);
+    return;
   }
+  if (job.state === "running") {
+    $("progress").hidden = false;
+    $("done").hidden = true;
+    $("make-error").hidden = true;
+    $("make").disabled = true;
+    const share = job.total ? job.done / job.total : 0;
+    $("progress-bar").value = share;
+    const left = job.eta != null ? ` · 남은 시간 약 ${Math.max(1, Math.round(job.eta / 60))}분` : " · 남은 시간 계산 중";
+    $("progress-text").textContent = `${Math.round(share * 100)}%${left}`;
+    setTimeout(pollRender, 1000);
+    return;
+  }
+  $("progress").hidden = true;
+  $("make").disabled = false;
+  if (job.state === "done") {
+    $("done").hidden = false;
+    $("done-name").textContent = job.out.split(/[\\/]/).pop();
+  } else if (job.state === "error") {
+    showRenderError(`영상 만들기 실패: ${job.message}${job.log ? `\n기록 파일: ${job.log}` : ""}`);
+  }
+}
+
+function showRenderError(message) {
+  const el = $("make-error");
+  el.textContent = message;
+  el.hidden = false;
+  toast(message.split("\n")[0], 9000);
 }
 
 function bind() {

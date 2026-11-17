@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import subprocess
+import tempfile
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, fields, replace
@@ -625,7 +626,8 @@ def render(
     chunks = [(s, min(total, s + CHUNK), lines, song, style) for s in range(begin, total, CHUNK)]
     ahead = workers + 1
     with (
-        subprocess.Popen(cmd, stdin=subprocess.PIPE, **media.quiet()) as ff,
+        tempfile.TemporaryFile() as errors,
+        subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=errors, **media.quiet()) as ff,
         ProcessPoolExecutor(workers) as pool,
     ):
         # Only a few chunks are in flight, so memory stays flat however long the song is, even
@@ -635,10 +637,19 @@ def render(
             frames = waiting.popleft().result()
             if k + ahead < len(chunks):
                 waiting.append(pool.submit(render_chunk, chunks[k + ahead]))
-            for raw in frames:
-                ff.stdin.write(raw)
+            try:
+                for raw in frames:
+                    ff.stdin.write(raw)
+            except OSError:
+                break
             del frames
             report((chunks[k][1] - begin) / FPS, (total - begin) / FPS)
-        ff.stdin.close()
-    if ff.returncode:
-        raise RuntimeError(f"ffmpeg exit {ff.returncode}")
+        try:
+            ff.stdin.close()
+        except OSError:
+            pass
+        ff.wait()
+        if ff.returncode:
+            errors.seek(0)
+            said = errors.read().decode("utf-8", "replace").strip().splitlines()[-3:]
+            raise RuntimeError(f"ffmpeg 오류 (종료 코드 {ff.returncode}): " + " / ".join(said))

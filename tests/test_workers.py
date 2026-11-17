@@ -5,19 +5,20 @@ from coverlyric import media
 
 
 @pytest.mark.parametrize(
-    ("cores", "gb", "expected"),
+    ("cores", "available", "expected"),
     [
-        (4, 3.8, 2),  # a 4 GB PC reports a little under 4 GB
-        (2, 4.0, 1),  # two cores: one is left for the encoder
-        (16, 32.0, 6),
-        (8, 1.5, 1),
+        (12, 1400, 3),  # 8 GB installed but only 1.4 GB free: the free memory decides
+        (4, 3000, 3),  # cores minus one
+        (2, 8000, 1),
+        (16, 32000, 6),
+        (8, 300, 1),  # less than the encoder needs: still one worker
         (8, 0.0, 6),  # memory unknown: cores decide
     ],
 )
-def test_workers_follow_cores_and_memory(monkeypatch, cores, gb, expected):
+def test_workers_follow_cores_and_free_memory(monkeypatch, cores, available, expected):
     monkeypatch.delenv("COVERLYRIC_WORKERS", raising=False)
     monkeypatch.setattr(cli.os, "cpu_count", lambda: cores)
-    monkeypatch.setattr(media, "memory_gb", lambda: gb)
+    monkeypatch.setattr(media, "memory_mb", lambda: (8000.0, available))
     assert cli.workers() == expected
 
 
@@ -27,4 +28,5 @@ def test_workers_can_be_set(monkeypatch):
 
 
 def test_memory_is_read():
-    assert media.memory_gb() > 0
+    total, available = media.memory_mb()
+    assert total > available > 0

@@ -367,3 +367,4 @@ progress::-moz-progress-bar { background: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+#make-error { white-space: pre-line; }

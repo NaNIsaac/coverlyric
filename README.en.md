@@ -65,6 +65,8 @@ file.
 
 ## Limits
 
+- A failed render shows its reason and what to do under the make button. Render start, progress, the end and any error are also written to the terminal window and to `coverlyric.log` in the program folder.
+- The number of render workers follows the free memory when the render starts (about 300 MB each, after 500 MB for the encoder), so a PC with little free memory renders with one worker.
 - The chat-AI way sends the song to that AI service. The other two ways keep everything local.
 - A render takes about one to two times the song's length on a recent laptop.
 - Automatic timing on the computer itself is not in this version.
