@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import subprocess
+from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, fields, replace
 from functools import lru_cache
@@ -22,6 +23,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 from . import fonts, media
 
 W, H, FPS = 1920, 1080, 30
+CHUNK = 8  # frames a worker renders at a time; one frame is 6 MB of raw pixels
 SS = 2  # the lyric panel and title are drawn at twice the size and scaled down
 DIM_WEIGHT, NOW_WEIGHT = 350, 600
 DIM_SIZE, NOW_SIZE = 34, 44
@@ -623,6 +625,10 @@ def render(
         "1:a",
         "-c:v",
         "libx264",
+        "-threads",
+        "2",
+        "-rc-lookahead",
+        "10",
         "-preset",
         "medium",
         "-crf",
@@ -633,20 +639,26 @@ def render(
         "aac",
         "-b:a",
         "192k",
-        "-shortest",
         "-movflags",
         "+faststart",
         str(out),
     ]
-    step = FPS * 2
-    chunks = [(s, min(total, s + step), lines, song, style) for s in range(begin, total, step)]
+    chunks = [(s, min(total, s + CHUNK), lines, song, style) for s in range(begin, total, CHUNK)]
+    ahead = workers + 1
     with (
         subprocess.Popen(cmd, stdin=subprocess.PIPE, **media.quiet()) as ff,
         ProcessPoolExecutor(workers) as pool,
     ):
-        for k, frames in enumerate(pool.map(render_chunk, chunks)):
+        # Only a few chunks are in flight, so memory stays flat however long the song is, even
+        # when the encoder is slower than the workers.
+        waiting = deque(pool.submit(render_chunk, c) for c in chunks[:ahead])
+        for k in range(len(chunks)):
+            frames = waiting.popleft().result()
+            if k + ahead < len(chunks):
+                waiting.append(pool.submit(render_chunk, chunks[k + ahead]))
             for raw in frames:
                 ff.stdin.write(raw)
+            del frames
             report((chunks[k][1] - begin) / FPS, (total - begin) / FPS)
         ff.stdin.close()
     if ff.returncode:

@@ -11,12 +11,19 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import __version__, render, timing
+from . import __version__, media, render, timing
 from .project import Project
 
 
 def workers() -> int:
-    return max(1, min(6, (os.cpu_count() or 2) - 1))
+    """Render processes: one core is left for the encoder and the page, and each worker plus its
+    share of the encoder needs about 2 GB of installed memory to leave room for everything else (a
+    4 GB PC gets 2 workers and stays near 700 MB in all)."""
+    if given := os.environ.get("COVERLYRIC_WORKERS"):
+        return max(1, int(given))
+    gb = media.memory_gb()
+    by_memory = round(gb) // 2 if gb else 6  # a 4 GB PC reports a little under 4
+    return max(1, min(6, (os.cpu_count() or 2) - 1, by_memory))
 
 
 def run_job(path: Path) -> None:
