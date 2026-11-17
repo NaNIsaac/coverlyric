@@ -247,8 +247,9 @@ class App:
         self.save()
         return self.state()
 
-    def preview(self, t: float, width: int = 1280) -> tuple[bytes, dict]:
-        """A JPEG of the frame at time t, as wide as the page shows it (320 to 1280 px)."""
+    def preview(self, t: float, width: int = 1280) -> tuple[bytes, dict, list]:
+        """A JPEG of the frame at time t, as wide as the page shows it (320 to 1280 px), the boxes
+        the page can drag, and how each lyric line fits the panel."""
         p = self.project
         if not p.art:
             raise ValueError("앨범 표지가 없습니다. 1단계에서 표지를 넣으세요.")
@@ -259,7 +260,8 @@ class App:
         small = img.resize((width, round(width * 9 / 16)), Image.LANCZOS)
         buf = io.BytesIO()
         small.save(buf, "JPEG", quality=88)
-        return buf.getvalue(), render.boxes(p.style, t, song)
+        fits = render.line_fits(tuple(p.lines), p.style)
+        return buf.getvalue(), render.boxes(p.style, t, song), fits
 
     def band_from_cover(self) -> str:
         """The cover's own colour as #rrggbb for the lyric band, kept dark enough that the white line on
@@ -734,10 +736,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     data = json.loads(self.body() or b"{}")
                     if data:
                         app.update(data)
-                    jpeg, boxes = app.preview(
+                    jpeg, boxes, fits = app.preview(
                         float(query.get("t", ["0"])[0]), int(query.get("w", ["1280"])[0])
                     )
-                    self.send(200, jpeg, "image/jpeg", {"X-Boxes": json.dumps(boxes)})
+                    headers = {"X-Boxes": json.dumps(boxes), "X-Fit": json.dumps(fits)}
+                    self.send(200, jpeg, "image/jpeg", headers)
                 elif url.path == "/api/render":
                     self.json(app.start_render())
                 elif url.path == "/api/auto":

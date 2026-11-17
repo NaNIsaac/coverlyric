@@ -132,3 +132,15 @@ def test_band_from_cover_is_the_cover_colour_kept_readable(base):
     assert len(band) == 7 and band.startswith("#")
     rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
     assert max(rgb) <= round(server.BAND_VALUE * 255)
+
+
+def test_the_preview_says_which_lines_are_too_wide(base):
+    state = json.loads(call(f"{base}/api/demo", b"")[0])
+    lines = state["lines"]
+    lines[1][1] = (
+        "오늘도 나는 같은 자리에서 너를 기다리고 또 기다리다가 잠이 들어 꿈에서라도 만나길"
+    )
+    _, headers = call(f"{base}/api/preview?t=7", {"lines": lines})
+    fits = json.loads(headers["X-Fit"])
+    assert len(fits) == len(lines)
+    assert fits[0] == [1.0, 1] and fits[1][1] == 2
