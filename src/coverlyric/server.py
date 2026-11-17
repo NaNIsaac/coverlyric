@@ -105,7 +105,12 @@ class App:
                 (None if t is None else round(float(t), 3), str(text)) for t, text in data["lines"]
             ]
         if "style" in data:
-            p.style = Style.from_dict(data["style"])
+            style = Style.from_dict(data["style"])
+            if not fonts.allowed(style.font, self.work):
+                raise ValueError(
+                    "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣으세요."
+                )
+            p.style = style
         if "anim" in data:
             # Reorder or remove the moving picture's files; new ones come through upload.
             kept = [str(name) for name in data["anim"] if str(name) in p.anim]
@@ -427,6 +432,24 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
         def json(self, data, code: int = 200) -> None:
             self.send(code, json.dumps(data, ensure_ascii=False).encode(), "application/json")
 
+        def trusted(self) -> bool:
+            """Only the page this server sent may use it. Another site in the same browser
+            reaches 127.0.0.1 too: a DNS-rebinding page names its own host, a cross-site
+            request carries its own Origin, and a form or no-cors fetch can only send simple
+            content types, so a POST must use JSON or the upload name header, which the
+            browser does not send cross-site without asking this server first."""
+            port = self.server.server_address[1]
+            own = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if self.headers.get("Host") not in own:
+                return False
+            origin = self.headers.get("Origin")
+            if origin is not None and origin not in {f"http://{h}" for h in own}:
+                return False
+            if self.command == "POST":
+                ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                return ctype == "application/json" or "X-Name" in self.headers
+            return True
+
         def body(self) -> bytes:
             return self.rfile.read(int(self.headers.get("Content-Length") or 0))
 
@@ -458,6 +481,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 self.wfile.write(f.read(end - start + 1))
 
         def do_GET(self) -> None:
+            if not self.trusted():
+                self.send(403, b"forbidden", "text/plain")
+                return
             url = urlparse(self.path)
             query = parse_qs(url.query)
             try:
@@ -496,6 +522,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 self.json({"error": str(e)}, 400)
 
         def do_POST(self) -> None:
+            if not self.trusted():
+                self.send(403, b"forbidden", "text/plain")
+                return
             url = urlparse(self.path)
             query = parse_qs(url.query)
             try:
