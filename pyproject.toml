@@ -12,6 +12,10 @@ dependencies = [
     "pillow>=11.0",
 ]
 
+[project.optional-dependencies]
+# Automatic timing on the computer; installed by the page the first time it is used.
+auto = ["faster-whisper==1.2.1", "av==15.1.0"]
+
 [project.scripts]
 coverlyric = "coverlyric.__main__:main"
 

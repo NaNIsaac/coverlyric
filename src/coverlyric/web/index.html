@@ -34,7 +34,7 @@
 <header>
   <h1><svg class="i mark"><use href="#i-disc"/></svg>coverlyric <span class="note">가사 영상 만들기</span></h1>
   <div class="top-buttons">
-    <button id="demo" class="quiet"><svg class="i"><use href="#i-play"/></svg>데모로 해보기</button>
+    <button id="demo" class="quiet"><svg class="i"><use href="#i-play"/></svg>데모 불러오기</button>
     <button id="new" class="quiet"><svg class="i"><use href="#i-file-plus"/></svg>새로 시작</button>
     <button id="quit" class="quiet"><svg class="i"><use href="#i-power"/></svg>끝내기</button>
   </div>
@@ -46,81 +46,80 @@
       <summary><svg class="i"><use href="#i-song"/></svg>노래와 표지<span class="num">1단계</span></summary>
       <div class="pick">
         <label class="file-button"><svg class="i"><use href="#i-song"/></svg>노래 파일 고르기<input type="file" id="audio-file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*"></label>
-        <span id="audio-name" class="note">아직 없어요</span>
+        <span id="audio-name" class="note">없음</span>
       </div>
       <div class="pick">
         <label class="file-button"><svg class="i"><use href="#i-image"/></svg>앨범 표지 고르기<input type="file" id="art-file" accept=".png,.jpg,.jpeg,.webp,.bmp,image/*"></label>
-        <span id="art-name" class="note">정사각형 그림이 좋아요</span>
+        <span id="art-name" class="note">정사각형 권장</span>
       </div>
       <label class="field">노래 제목<input type="text" id="title" placeholder="예: 비 오는 밤"></label>
-      <label class="field"><span>가수 <span class="note">(비워 두면 안 나와요)</span></span><input type="text" id="artist"></label>
+      <label class="field"><span>가수 <span class="note">(비우면 표시 안 함)</span></span><input type="text" id="artist"></label>
     </details>
 
     <details class="step" id="step-lyrics">
       <summary><svg class="i"><use href="#i-lines"/></svg>가사<span class="num">2단계</span></summary>
-      <p class="help">가사를 붙여 넣으세요. 한 줄이 화면의 한 줄이 돼요. [후렴] 같은 표시는 지워져요.</p>
+      <p class="help">가사를 붙여 넣으세요. 한 줄이 화면의 한 줄이 됩니다. [후렴] 같은 표시는 빠집니다.</p>
       <textarea id="lyrics-text" rows="9" placeholder="여기에 가사를 붙여 넣기"></textarea>
       <button id="lyrics-apply"><svg class="i"><use href="#i-check"/></svg>가사 넣기</button>
     </details>
 
     <details class="step" id="step-timing">
-      <summary><svg class="i"><use href="#i-clock"/></svg>타이밍 <span class="note">(각 줄이 언제 나올지)</span><span class="num">3단계</span></summary>
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="tap">직접 맞추기</button>
-        <button class="tab" data-tab="ai">채팅 AI에게 맡기기</button>
-        <button class="tab" data-tab="file">자막 파일 넣기</button>
-        <button class="tab" data-tab="auto" disabled title="다음 버전에서 나와요">자동 (준비 중)</button>
-      </div>
-
-      <div class="tab-body" data-body="tap">
-        <ol class="help">
-          <li><b>처음부터 맞추기</b>를 누르면 노래가 처음부터 나와요.</li>
-          <li>각 줄을 부르기 시작할 때 <kbd>스페이스바</kbd>나 <b>지금!</b>을 누르세요.</li>
-          <li>틀린 줄은 아래 목록에서 −0.1 / +0.1 로 고치고 ▶ 로 들어 보세요.</li>
-        </ol>
-        <div class="row">
-          <button id="tap-start"><svg class="i"><use href="#i-play"/></svg>처음부터 맞추기</button>
-          <button id="tap-now" class="big" disabled><svg class="i"><use href="#i-tap"/></svg>지금!</button>
-          <button id="tap-stop" class="quiet" disabled><svg class="i"><use href="#i-stop"/></svg>멈추기</button>
-        </div>
-        <p id="tap-next" class="note"></p>
-      </div>
-
-      <div class="tab-body" data-body="ai" hidden>
-        <ol class="help">
-          <li>먼저 2단계에서 가사를 넣으세요.</li>
-          <li><b>프롬프트 복사</b>를 누르고, 쓰고 있는 채팅 AI에 노래 파일과 함께 붙여 넣으세요.</li>
-          <li>AI가 준 답(SRT)을 아래 칸에 붙여 넣고 <b>답 넣기</b>를 누르세요.</li>
-        </ol>
-        <p class="warn">노래 파일이 그 AI 회사로 보내져요. 괜찮을 때만 쓰세요.</p>
-        <textarea id="prompt" rows="7" readonly></textarea>
-        <button id="prompt-copy">프롬프트 복사</button>
-        <textarea id="answer" rows="6" placeholder="AI의 답을 여기에 붙여 넣기"></textarea>
-        <button id="answer-apply">답 넣기</button>
-      </div>
-
-      <div class="tab-body" data-body="file" hidden>
-        <p class="help">SRT, LRC, VTT 자막 파일이 있으면 넣으세요. 줄과 시간이 아래 목록에 들어와요.</p>
-        <label class="file-button">자막 파일 고르기<input type="file" id="timing-file" accept=".srt,.lrc,.vtt,.txt"></label>
+      <summary><svg class="i"><use href="#i-clock"/></svg>타이밍 <span class="note">(각 줄의 시작 시간)</span><span class="num">3단계</span></summary>
+      <p class="help">맞추는 방법을 고르세요. 결과는 오른쪽 아래 목록에 들어갑니다.</p>
+      <div class="methods" role="radiogroup" aria-label="맞추는 방법">
+        <button class="tab method" data-tab="auto" role="radio">
+          <span class="method-title">자동 맞추기 <span class="badge">추천</span></span>
+          <span class="method-line">이 PC에서 노래를 듣고 맞춤. 4분 노래에 약 2~5분, 첫 사용 시 내려받기 (디스크 약 0.7 GB).</span>
+        </button>
+        <button class="tab method" data-tab="tap" role="radio">
+          <span class="method-title">재생하며 직접 맞추기</span>
+          <span class="method-line">노래를 들으며 줄이 시작될 때 스페이스바를 누름.</span>
+        </button>
+        <button class="tab method" data-tab="file" role="radio">
+          <span class="method-title">자막 파일 불러오기</span>
+          <span class="method-line">SRT, LRC, VTT 파일 사용.</span>
+        </button>
       </div>
 
       <div class="tab-body" data-body="auto" hidden>
-        <p class="help">컴퓨터 안에서 노래를 듣고 자동으로 맞추는 기능은 다음 버전에서 나와요.</p>
+        <p class="help">PC가 노래를 듣고 가사 줄마다 시작 시간을 찾습니다. 노래 파일은 PC 밖으로 나가지 않습니다.
+          찾지 못한 줄과 다르게 들린 줄은 목록에 점선으로 표시되니 그 줄만 ▶ 로 듣고 고치세요.</p>
+        <input type="radio" name="model" value="small" checked hidden>
+        <p class="note"><span id="auto-size"></span> 오래 걸리면 취소하고 다른 방법을 쓰세요.</p>
+        <div class="row">
+          <button id="auto-start" class="big"><svg class="i"><use href="#i-play"/></svg>자동으로 맞추기</button>
+          <button id="auto-stop" class="quiet" hidden><svg class="i"><use href="#i-stop"/></svg>취소</button>
+        </div>
+        <div id="auto-progress" hidden>
+          <progress id="auto-bar" max="1" value="0"></progress>
+          <p id="auto-text" class="note"></p>
+        </div>
       </div>
 
-      <audio id="player" controls preload="auto"></audio>
-      <p id="check" class="note"></p>
-      <div id="lines" class="lines"></div>
-      <div class="row">
-        <button id="line-add" class="quiet"><svg class="i"><use href="#i-plus"/></svg>줄 추가</button>
-        <a id="save-lrc" class="button quiet" href="/api/export?fmt=lrc"><svg class="i"><use href="#i-save"/></svg>LRC로 저장</a>
-        <a id="save-srt" class="button quiet" href="/api/export?fmt=srt"><svg class="i"><use href="#i-save"/></svg>SRT로 저장</a>
+      <div class="tab-body" data-body="tap" hidden>
+        <p class="help">노래가 처음부터 재생됩니다. 줄이 시작될 때 <kbd>Space</kbd>를 누르세요.</p>
+        <button id="tap-start" class="big"><svg class="i"><use href="#i-play"/></svg>재생하며 맞추기</button>
+      </div>
+
+      <div class="tab-body" data-body="file" hidden>
+        <p class="help">줄과 시간이 오른쪽 아래 목록에 들어갑니다.</p>
+        <label class="file-button"><svg class="i"><use href="#i-open"/></svg>자막 파일 고르기<input type="file" id="timing-file" accept=".srt,.lrc,.vtt,.txt"></label>
+        <div class="chat-ai">
+          <p class="note">자막 파일이 없으면 채팅 AI에게 만들게 할 수 있습니다. 노래 파일이 해당 AI 서비스로 전송됩니다.</p>
+          <button id="prompt-copy" class="quiet"><svg class="i"><use href="#i-copy"/></svg>채팅 AI용 프롬프트 복사</button>
+          <textarea id="prompt" rows="5" readonly hidden></textarea>
+          <details class="paste">
+            <summary>받은 자막을 붙여 넣기</summary>
+            <textarea id="answer" rows="5" placeholder="채팅 AI의 답(SRT)을 여기에 붙여 넣기"></textarea>
+            <button id="answer-apply">넣기</button>
+          </details>
+        </div>
       </div>
     </details>
 
     <details class="step" id="step-look">
       <summary><svg class="i"><use href="#i-sliders"/></svg>모양<span class="num">4단계</span></summary>
-      <p class="help">오른쪽 그림에서 앨범, 가사, 제목을 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꿀 수 있어요.</p>
+      <p class="help">오른쪽 그림에서 앨범, 가사, 제목을 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꿉니다.</p>
       <fieldset class="group">
         <legend>앨범</legend>
         <div class="seg">
@@ -165,7 +164,7 @@
 
   <section class="make" id="step-make">
     <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
-    <p class="note">노래 길이의 1~2배쯤 걸려요. 그동안 다른 일을 해도 돼요.</p>
+    <p class="note">걸리는 시간: 노래 길이의 1~3배 (PC 성능에 따라 다름)</p>
     <div id="progress" hidden>
       <div class="progress-head">
         <span class="state">영상 만드는 중</span>
@@ -174,8 +173,9 @@
       <progress id="progress-bar" max="1" value="0"></progress>
       <button id="make-stop" class="quiet"><svg class="i"><use href="#i-stop"/></svg>그만 만들기</button>
     </div>
+    <p id="make-error" class="warn" role="alert" hidden></p>
     <div id="done" hidden>
-      <p class="done-line"><svg class="i"><use href="#i-check"/></svg>다 만들었어요! <span id="done-name"></span></p>
+      <p class="done-line"><svg class="i"><use href="#i-check"/></svg>완료: <span id="done-name"></span></p>
       <button id="open-folder"><svg class="i"><use href="#i-folder"/></svg>영상 폴더 열기</button>
     </div>
   </section>
@@ -185,7 +185,7 @@
       <div id="stage">
         <img id="still" alt="미리보기">
         <div id="boxes"></div>
-        <p id="stage-empty">노래와 표지를 넣으면 여기에 미리보기가 나와요.</p>
+        <p id="stage-empty">노래와 표지를 넣으면 미리보기가 표시됩니다.</p>
       </div>
     </div>
     <div class="transport">
@@ -194,9 +194,42 @@
       <span id="time-label" class="clock">0:00</span>
       <button id="time-now" class="quiet"><svg class="i"><use href="#i-seek"/></svg>재생 위치로</button>
     </div>
+    <div class="editor" id="timing-editor">
+      <div class="editor-bar">
+        <audio id="player" controls preload="auto"></audio>
+        <p id="check" class="note"></p>
+        <button id="line-add" class="quiet"><svg class="i"><use href="#i-plus"/></svg>줄 추가</button>
+        <a id="save-lrc" class="button quiet" href="/api/export?fmt=lrc"><svg class="i"><use href="#i-save"/></svg>LRC로 저장</a>
+        <a id="save-srt" class="button quiet" href="/api/export?fmt=srt"><svg class="i"><use href="#i-save"/></svg>SRT로 저장</a>
+      </div>
+      <div class="tap-bar" id="tap-bar" hidden>
+        <div class="tap-next"><span class="note">다음 줄</span><strong id="tap-next"></strong></div>
+        <button id="tap-now" class="big"><svg class="i"><use href="#i-tap"/></svg>지금 <kbd>Space</kbd></button>
+        <button id="tap-undo" class="quiet"><svg class="i"><use href="#i-reset"/></svg>되돌리기 <kbd>Backspace</kbd></button>
+        <button id="tap-stop" class="quiet"><svg class="i"><use href="#i-stop"/></svg>멈추기</button>
+      </div>
+      <div class="lines-head" aria-hidden="true"><span></span><span>시작</span><span>가사</span><span>조정</span><span></span></div>
+      <div id="lines" class="lines"></div>
+    </div>
   </section>
 </main>
+<dialog id="crop" class="crop" aria-labelledby="crop-title">
+  <h2 id="crop-title">표지 자르기</h2>
+  <p class="note">네모를 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꾸세요. 네모 안이 표지가 됩니다.</p>
+  <div class="crop-stage">
+    <div class="crop-frame" id="crop-frame">
+      <img id="crop-img" alt="고른 사진">
+      <div class="crop-box" id="crop-box" tabindex="0" aria-label="자를 부분"><span class="grip"></span></div>
+    </div>
+  </div>
+  <label class="crop-zoom">확대<input type="range" id="crop-zoom" min="1" max="4" step="0.01" value="1"></label>
+  <div class="crop-buttons">
+    <button id="crop-cancel" class="quiet">취소</button>
+    <button id="crop-ok" class="primary"><svg class="i"><use href="#i-check"/></svg>확인</button>
+  </div>
+</dialog>
 <div id="toast" role="status"></div>
+<script src="/clock.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

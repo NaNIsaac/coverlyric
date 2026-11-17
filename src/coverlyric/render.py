@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import subprocess
+import tempfile
 import time
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
@@ -153,11 +154,19 @@ def geometry(style: Style) -> Geometry:
     )
 
 
-def boxes(style: Style) -> dict[str, tuple[int, ...]]:
-    """The frame area of each movable element, for the drag handles on the preview."""
+def disc_centre_x(g: Geometry, t: float) -> float:
+    """Where the case CD's centre is at time t: inside the case until SLIDE, then sliding out."""
+    inside = (g.case[0] + g.case[2]) // 2
+    return inside + (g.disc_x - inside) * ease((t - SLIDE[0]) / (SLIDE[1] - SLIDE[0]))
+
+
+def boxes(style: Style, t: float = SLIDE[1]) -> dict[str, tuple[int, ...]]:
+    """The frame area of each movable element at time t, for the drag handles on the preview."""
     g = geometry(style)
     if style.layout == "case":
-        right = max(g.case[2], g.disc_x + g.disc_r) if style.show_cd else g.case[2]
+        right = (
+            max(g.case[2], round(disc_centre_x(g, t)) + g.disc_r) if style.show_cd else g.case[2]
+        )
         album = (g.case[0], g.case[1], right, g.case[3])
     else:
         cx, cy = g.round_c
@@ -225,7 +234,9 @@ def tracked(
         x += w + gap
 
 
-def square(path: str) -> Image.Image:
+@lru_cache(maxsize=2)
+def square(path: str, art_stamp: float = 0.0) -> Image.Image:
+    """The centre square of the cover. Cached and shared: callers must not draw on it."""
     art = Image.open(path).convert("RGB")
     side = min(art.size)
     return art.crop(
@@ -250,9 +261,11 @@ def circle_mask(size: int, inner: float = 0.0, outer: float = 1.0) -> Image.Imag
     return mask.resize((size, size), Image.LANCZOS)
 
 
-def background(art: Image.Image, song: Song, style: Style) -> Image.Image:
-    g = geometry(style)
-    face = fonts.resolve(style.font)
+@lru_cache(maxsize=2)
+def backdrop(path: str, art_stamp: float, blur: int, dim: float) -> Image.Image:
+    """The cover filling the frame, blurred and darkened. It does not depend on where anything is placed,
+    so moving the album or the lyrics on the preview does not redo it. Shared: callers copy it."""
+    art = square(path, art_stamp)
     scale = max(W / art.width, H / art.height)
     bg = art.resize((math.ceil(art.width * scale), math.ceil(art.height * scale)), Image.LANCZOS)
     bg = bg.crop(
@@ -263,9 +276,15 @@ def background(art: Image.Image, song: Song, style: Style) -> Image.Image:
             (bg.height - H) // 2 + H,
         )
     )
-    if style.blur > 0:
-        bg = bg.filter(ImageFilter.GaussianBlur(style.blur))
-    bg = Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), style.dim).convert("RGBA")
+    if blur > 0:
+        bg = bg.filter(ImageFilter.GaussianBlur(blur))
+    return Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), dim).convert("RGBA")
+
+
+def background(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
+    g = geometry(style)
+    face = fonts.resolve(style.font)
+    bg = backdrop(song.art, art_stamp, style.blur, style.dim).copy()
     cx, top, s = g.title
     if not style.show_title:
         return Image.alpha_composite(bg, panel_layer(g, style))
@@ -407,8 +426,8 @@ def scene(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
     """The still layers: (background, the case CD's print or None, case or None)."""
     g = geometry(style)
     s = style.album_scale
-    art = square(song.art)
-    bg = background(art, song, style)
+    art = square(song.art, art_stamp)
+    bg = background(song, style, art_stamp)
     if style.layout == "case":
         x0, y0, x1, y1 = g.case
         drop = (x0 + round(8 * s), y0 + round(16 * s), x1 + round(8 * s), y1 + round(22 * s))
@@ -564,6 +583,12 @@ def progress_bar(t: float, song: Song, style: Style) -> Image.Image:
     return layer.resize((x1 - x0, y1 - y0), Image.LANCZOS)
 
 
+def forget_art() -> None:
+    """Drop every cached layer made from the cover, after a new cover is saved under the same name."""
+    for cached in (square, backdrop, scene):
+        cached.cache_clear()
+
+
 def stamp(path: str) -> float:
     try:
         return Path(path).stat().st_mtime
@@ -653,10 +678,10 @@ class Painter:
     def state(self, t: float) -> tuple:
         disc = None
         if self.disc is not None:
-            g = self.g
-            inside = (g.case[0] + g.case[2]) // 2
-            x = inside + (g.disc_x - inside) * ease((t - SLIDE[0]) / (SLIDE[1] - SLIDE[0]))
-            disc = (round(x), 360 * t / self.style.spin if self.style.spin > 0 else 0.0)
+            disc = (
+                round(disc_centre_x(self.g, t)),
+                360 * t / self.style.spin if self.style.spin > 0 else 0.0,
+            )
         # The bar's fill grows by a fraction of a pixel each frame, so with it no two frames match.
         bar = t if self.style.bar else None
         return disc, panel_position(t, self.lines, self.style), bar
@@ -840,7 +865,8 @@ def encode(
     started = time.monotonic()
     try:
         with (
-            subprocess.Popen(cmd, stdin=subprocess.PIPE, **media.quiet()) as ff,
+            tempfile.TemporaryFile() as errors,
+            subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=errors, **media.quiet()) as ff,
             ProcessPoolExecutor(workers) as pool,
         ):
 
@@ -866,10 +892,13 @@ def encode(
                 ff.stdin.close()
             except OSError:
                 pass
+            ff.wait()
+            if ff.returncode:
+                errors.seek(0)
+                said = errors.read().decode("utf-8", "replace").strip().splitlines()[-3:]
+                raise RuntimeError(f"ffmpeg 오류 (종료 코드 {ff.returncode}): " + " / ".join(said))
     finally:
         for memory in (turns, frames):
             if memory:
                 memory.close()
                 memory.unlink()
-    if ff.returncode:
-        raise RuntimeError(f"ffmpeg exit {ff.returncode}")
