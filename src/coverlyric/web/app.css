@@ -279,8 +279,8 @@ input[type="range"] { width: 100%; margin: 4px 0; }
 }
 .make .note { margin: 6px 0 0; font-size: 12px; }
 .output-options:empty { display: none; }
-.make-row { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
-#clip-make { height: 44px; padding: 0 12px; white-space: nowrap; }
+.make-row { display: flex; flex-direction: column; gap: 6px; }
+#clip-make { width: 100%; height: 34px; justify-content: center; white-space: nowrap; }
 .output-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 button.primary {
   width: 100%;

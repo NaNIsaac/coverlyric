@@ -81,7 +81,7 @@ stays at the bottom whatever the group. A red dot marks a group that still lacks
    background blur and darkness are in the 색 (colour) group. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
    webp) that loop over the video: reorder them with ↑ ↓, set the frames per second, choose above
    or under the album and lyrics, and drag it on the preview.
-5. **Render:** **10초 미리보기** beside it first makes a small 10 s clip from the preview time and
+5. **Render:** **10초 미리보기** above it first makes a small 10 s clip from the preview time and
    plays it in place of the still (**미리보기 닫기** closes it). Press **이대로 영상 만들기**. While it renders, the page shows how far into the song
    the video is made (for example 0:04 / 0:18), the lyric line at that point, the percent and the
    time left. It usually takes less than the song's length, depending on the PC.
