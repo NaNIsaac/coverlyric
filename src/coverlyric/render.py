@@ -12,10 +12,12 @@ from __future__ import annotations
 import math
 import subprocess
 import tempfile
+import time
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, fields, replace
 from functools import lru_cache
+from multiprocessing import shared_memory
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +26,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 from . import fonts, media
 
 W, H, FPS = 1920, 1080, 30
-CHUNK = 8  # frames a worker renders at a time; one frame is 6 MB of raw pixels
+CHUNK = 4  # frames a worker draws at a time
+FRAME = W * H * 4  # one RGBA frame, 8.3 MB
 SS = 2  # the lyric panel and title are drawn at twice the size and scaled down
 DIM_WEIGHT, NOW_WEIGHT = 350, 600
 DIM_SIZE, NOW_SIZE = 34, 44
@@ -343,25 +346,39 @@ def disc_print(art: Image.Image, radius: int) -> Image.Image:
     return face
 
 
-def printed_disc(face: Image.Image, radius: int, turn: float = 0.0) -> Image.Image:
-    """A CD: silver, the print from disc_print turned by `turn` degrees clockwise, a clear inner ring, a
-    centre hole and a thin silver rim."""
-    size = radius * 2
-    disc = silver(radius).copy()
-    disc.alpha_composite(face.rotate(-turn, Image.BICUBIC))
-    d = ImageDraw.Draw(disc)
-    for frac, colour, width in (
-        (0.36, (225, 228, 235, 160), 2),
-        (0.33, (120, 124, 132, 120), 1),
-        (0.17, (235, 238, 244, 140), 2),
-    ):
-        r = radius * frac
-        d.ellipse((radius - r, radius - r, radius + r, radius + r), outline=colour, width=width)
-    rim = Image.new("RGBA", (size, size), (206, 210, 218, 255))
-    rim.putalpha(circle_mask(size, 0.982, 1.0))
-    disc.alpha_composite(rim)
-    disc.putalpha(ImageChops.multiply(disc.getchannel("A"), circle_mask(size, HOLE, 1.0)))
-    return disc
+class Disc:
+    """A CD: silver, the print from disc_print turned clockwise, a clear inner ring, a centre hole and a
+    thin silver rim. Only the print turns, so everything else is drawn once; the rings replace the
+    pixels under them, as ImageDraw does, through a mask of exactly those pixels."""
+
+    def __init__(self, face: Image.Image, radius: int):
+        size = radius * 2
+        self.face = face
+        self.silver = silver(radius)
+        self.rings = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        self.ring_mask = Image.new("L", (size, size), 0)
+        rings, mask = ImageDraw.Draw(self.rings), ImageDraw.Draw(self.ring_mask)
+        for frac, colour, width in (
+            (0.36, (225, 228, 235, 160), 2),
+            (0.33, (120, 124, 132, 120), 1),
+            (0.17, (235, 238, 244, 140), 2),
+        ):
+            r = radius * frac
+            box = (radius - r, radius - r, radius + r, radius + r)
+            rings.ellipse(box, outline=colour, width=width)
+            mask.ellipse(box, outline=255, width=width)
+        self.rim = Image.new("RGBA", (size, size), (206, 210, 218, 255))
+        self.rim.putalpha(circle_mask(size, 0.982, 1.0))
+        self.hole = circle_mask(size, HOLE, 1.0)
+
+    def at(self, turn: float) -> Image.Image:
+        """The disc turned by `turn` degrees clockwise."""
+        disc = self.silver.copy()
+        disc.alpha_composite(self.face.rotate(-turn, Image.BICUBIC))
+        disc.paste(self.rings, (0, 0), self.ring_mask)
+        disc.alpha_composite(self.rim)
+        disc.putalpha(ImageChops.multiply(disc.getchannel("A"), self.hole))
+        return disc
 
 
 def jewel_case(art: Image.Image, g: Geometry, s: float) -> Image.Image:
@@ -469,7 +486,21 @@ def position(t: float, times: tuple[float, ...], intro: float) -> float:
     return pos
 
 
+def panel_position(t: float, lines: tuple[tuple[float, str], ...], style: Style) -> float:
+    """The lyric list's row at time t; the panel is drawn from this alone."""
+    g = geometry(style)
+    intro = -((g.panel[3] - g.panel[1]) / 2 / g.row) - 0.1  # every line below the panel
+    return position(t, tuple(s for s, _ in lines), intro)
+
+
 def lyric_panel(t: float, lines: tuple[tuple[float, str], ...], style: Style) -> Image.Image:
+    return panel_at(panel_position(t, lines, style), lines, style)
+
+
+# Between two moves the list stands still for seconds and the panel is the same picture, so the
+# last few are kept; 840x720 RGBA is 2.4 MB each.
+@lru_cache(maxsize=4)
+def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> Image.Image:
     g = geometry(style)
     k_scale = style.panel_scale
     x0, y0, x1, y1 = g.panel
@@ -477,8 +508,6 @@ def lyric_panel(t: float, lines: tuple[tuple[float, str], ...], style: Style) ->
     layer = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     row = g.row
-    intro = -((y1 - y0) / 2 / row) - 0.1  # every line below the panel
-    pos = position(t, tuple(s for s, _ in lines), intro)
     mid = ph / 2
     face = fonts.resolve(style.font)
 
@@ -510,7 +539,9 @@ def lyric_panel(t: float, lines: tuple[tuple[float, str], ...], style: Style) ->
         size = round((DIM_SIZE + (NOW_SIZE - DIM_SIZE) * near) * k_scale * SS * 2) / 2
         weight = round((DIM_WEIGHT + (NOW_WEIGHT - DIM_WEIGHT) * near) / 25) * 25
         tracked(d, (pw / 2, y), text, font(face, size, weight), (255, 255, 255, alpha))
-    return layer.resize((x1 - x0, y1 - y0), Image.LANCZOS)
+    # Averaging each 2x2 block takes 8 ms where LANCZOS took 37 ms, and this runs on every frame of a
+    # move; the panel differs from LANCZOS by about one level of 255 on average (PSNR about 47 dB).
+    return layer.reduce(SS)
 
 
 def clock(seconds: float) -> str:
@@ -565,28 +596,185 @@ def stamp(path: str) -> float:
         return 0.0
 
 
-def frame(t: float, lines: tuple[tuple[float, str], ...], song: Song, style: Style) -> Image.Image:
-    bg, disc, case = scene(song, style, stamp(song.art))
-    img = bg.copy()
+TURNS_MB = 192  # one turn of the CD shared by the workers; a bigger CD is drawn for every frame
+
+
+def turn_set(style: Style) -> tuple[tuple[int, int, int, int], int] | None:
+    """The frame box of the CD once it is out of the case, and the frames one turn takes, when one
+    turn is a whole number of frames and its pictures fit in TURNS_MB."""
+    if style.layout != "case" or not style.show_cd or style.spin <= 0:
+        return None
+    period = style.spin * FPS
+    if abs(period - round(period)) > 1e-6:
+        return None
     g = geometry(style)
-    if case is not None and not style.show_cd:
-        img.alpha_composite(case)
-    elif case is not None:
+    cy, r = (g.case[1] + g.case[3]) // 2, g.disc_r
+    box = (max(0, g.disc_x - r), max(0, cy - r), min(W, g.disc_x + r), min(H, cy + r))
+    if box[2] <= box[0] or box[3] <= box[1]:
+        return None
+    if (box[2] - box[0]) * (box[3] - box[1]) * 3 * round(period) > TURNS_MB * 2**20:
+        return None
+    return box, round(period)
+
+
+def turns_bytes(box: tuple[int, ...], period: int) -> int:
+    return (box[2] - box[0]) * (box[3] - box[1]) * 3 * period + period
+
+
+class Turns:
+    """The frame inside the CD's box for each frame of one turn, in memory the workers share. The
+    worker that first needs a picture draws it and marks it done; the others copy it."""
+
+    def __init__(self, name: str, box: tuple[int, ...], period: int):
+        self.memory = shared_memory.SharedMemory(name=name)
+        self.box, self.period = box, period
+        self.size = (box[2] - box[0], box[3] - box[1])
+        self.entry = self.size[0] * self.size[1] * 3
+
+    def get(self, n: int, draw) -> Image.Image:
+        # No view into the memory outlives this call, so the worker can close it at exit.
+        k = n % self.period
+        buf, done = self.memory.buf, self.period * self.entry + k
+        with buf[k * self.entry : (k + 1) * self.entry] as view:
+            if not buf[done]:
+                # Two workers may draw the same picture at once; they write the same bytes.
+                view[:] = draw().tobytes()
+                buf[done] = 1
+            return Image.frombytes("RGB", self.size, view)
+
+
+class Painter:
+    """The frames of one song and style. A frame is a function of three things: where the CD is and
+    how far it has turned, the lyric list's row, and the playback bar. Everything else is drawn once
+    here, and a frame whose three things equal the previous frame's is that frame again."""
+
+    def __init__(
+        self,
+        lines: tuple[tuple[float, str], ...],
+        song: Song,
+        style: Style,
+        shared: str | None = None,
+    ):
+        self.lines, self.song, self.style = lines, song, style
+        self.g = g = geometry(style)
+        bg, face, case = scene(song, style, stamp(song.art))
+        self.disc = self.case = self.turns = None
+        if case is not None:
+            box = case.getbbox() or (0, 0, 1, 1)
+            self.case, self.case_at = case.crop(box), box[:2]
+            if style.show_cd:
+                self.disc = Disc(face, g.disc_r)
+            else:
+                bg = bg.copy()
+                place(bg, self.case, *self.case_at)
+        self.bg = bg
+        if shared and self.disc is not None and (turning := turn_set(style)):
+            self.turns = Turns(shared, *turning)
+            # Outside the CD's box a turning frame is the background and the case, always.
+            self.still = bg.copy()
+            place(self.still, self.case, *self.case_at)
+        self.last: tuple = (None, b"")
+
+    def state(self, t: float) -> tuple:
+        disc = None
+        if self.disc is not None:
+            disc = (
+                round(disc_centre_x(self.g, t)),
+                360 * t / self.style.spin if self.style.spin > 0 else 0.0,
+            )
+        # The bar's fill grows by a fraction of a pixel each frame, so with it no two frames match.
+        bar = t if self.style.bar else None
+        return disc, panel_position(t, self.lines, self.style), bar
+
+    def image(self, t: float, state: tuple | None = None) -> Image.Image:
+        """The frame at t, RGBA."""
+        disc, pos, bar = state or self.state(t)
+        g = self.g
+        if disc is not None and self.turns is not None and disc[0] == g.disc_x:
+            img = self.still.copy()
+            box = self.turns.box
+            img.paste(self.turns.get(round(t * FPS), lambda: self.cd_box(*disc, box)), box[:2])
+        elif disc is not None:
+            img = self.bg.copy()
+            self.draw_cd(img, *disc, (0, 0))
+        else:
+            img = self.bg.copy()
+        place(img, panel_at(pos, self.lines, self.style), *g.panel[:2])
+        if bar is not None:
+            place(img, progress_bar(t, self.song, self.style), *g.bar[:2])
+        return img
+
+    def draw_cd(self, img: Image.Image, x: int, turn: float, origin: tuple[int, int]) -> None:
+        """The CD at x, turned, and the case over it, into img whose top left is `origin` of the frame."""
+        g = self.g
         cy = (g.case[1] + g.case[3]) // 2
-        x = disc_centre_x(g, t)
-        turn = 360 * t / style.spin if style.spin > 0 else 0.0
-        turned = printed_disc(disc, g.disc_r, turn)
-        place(img, turned, round(x) - g.disc_r, cy - g.disc_r)
-        img.alpha_composite(case)
-    place(img, lyric_panel(t, lines, style), *g.panel[:2])
-    if style.bar:
-        place(img, progress_bar(t, song, style), *g.bar[:2])
-    return img.convert("RGB")
+        place(img, self.disc.at(turn), x - g.disc_r - origin[0], cy - g.disc_r - origin[1])
+        place(img, self.case, self.case_at[0] - origin[0], self.case_at[1] - origin[1])
+
+    def cd_box(self, x: int, turn: float, box: tuple[int, ...]) -> Image.Image:
+        """The frame inside box with the CD at x, turned: background, CD, case."""
+        region = self.bg.crop(box)
+        self.draw_cd(region, x, turn, box[:2])
+        return region.convert("RGB")
+
+    def raw(self, t: float) -> bytes:
+        """The frame at t as RGBA bytes for ffmpeg."""
+        state = self.state(t)
+        if state == self.last[0]:
+            return self.last[1]
+        raw = self.image(t, state).tobytes()
+        self.last = (state, raw)
+        return raw
 
 
-def render_chunk(args) -> list[bytes]:
-    start, stop, lines, song, style = args
-    return [frame(n / FPS, lines, song, style).tobytes() for n in range(start, stop)]
+_painters: dict = {}
+
+
+def painter(
+    lines: tuple[tuple[float, str], ...], song: Song, style: Style, shared: str | None = None
+) -> Painter:
+    """The painter for these inputs, kept while scene() still returns the same layers (the page
+    clears scene's cache when a file is replaced)."""
+    layers = scene(song, style, stamp(song.art))
+    key = (lines, song, style, shared)
+    found = _painters.get(key)
+    if found is None or found[0] is not layers:
+        if len(_painters) >= 2:
+            _painters.pop(next(iter(_painters)))
+        panel_at.cache_clear()  # a font file replaced under the same name
+        found = _painters[key] = (layers, Painter(lines, song, style, shared))
+    return found[1]
+
+
+def frame(t: float, lines: tuple[tuple[float, str], ...], song: Song, style: Style) -> Image.Image:
+    return painter(lines, song, style).image(t).convert("RGB")
+
+
+_attached: dict[str, shared_memory.SharedMemory] = {}
+
+
+def attached(name: str) -> shared_memory.SharedMemory:
+    if name not in _attached:
+        _attached[name] = shared_memory.SharedMemory(name=name)
+    return _attached[name]
+
+
+def render_chunk(args) -> list[int]:
+    """Draw frames start..stop into the chunk's slots of the shared frame memory and say which slot
+    holds each frame. Pickling 8 MB frames back to the main process cost more than drawing them."""
+    start, stop, lines, song, style, turns, frames, first = args
+    p = painter(lines, song, style, turns)
+    buf = attached(frames).buf
+    slots, slot, last = [], first - 1, None
+    for n in range(start, stop):
+        raw = p.raw(n / FPS)
+        if raw is not last:
+            slot += 1
+            with buf[slot * FRAME : (slot + 1) * FRAME] as view:
+                view[:] = raw
+            last = raw
+        slots.append(slot)
+    return slots
 
 
 def render(
@@ -598,7 +786,28 @@ def render(
     span: tuple[float, float] | None = None,
     report=print,
 ) -> None:
-    """Write the mp4. `report(done_seconds, total_seconds)` is called as chunks finish."""
+    """Write the mp4. As chunks finish, `report(done_seconds, total_seconds, frames_done,
+    frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by."""
+    codec = media.encoder()
+    try:
+        encode(out, lines, song, style, workers, span, report, codec)
+    except RuntimeError:
+        if codec == "libx264":
+            raise
+        # A graphics driver can pass the short test and still fail on a whole song.
+        encode(out, lines, song, style, workers, span, report, "libx264")
+
+
+def encode(
+    out: Path,
+    lines: tuple[tuple[float, str], ...],
+    song: Song,
+    style: Style,
+    workers: int,
+    span: tuple[float, float] | None,
+    report,
+    codec: str,
+) -> None:
     first, last = (0.0, song.duration) if span is None else span
     begin, total = round(first * FPS), math.ceil(last * FPS)
     cmd = [
@@ -609,7 +818,7 @@ def render(
         "-f",
         "rawvideo",
         "-pix_fmt",
-        "rgb24",
+        "rgba",
         "-s",
         f"{W}x{H}",
         "-r",
@@ -627,15 +836,8 @@ def render(
         "-map",
         "1:a",
         "-c:v",
-        "libx264",
-        "-threads",
-        "2",
-        "-rc-lookahead",
-        "10",
-        "-preset",
-        "medium",
-        "-crf",
-        "18",
+        codec,
+        *media.ENCODERS[codec],
         "-pix_fmt",
         "yuv420p",
         "-c:a",
@@ -646,33 +848,57 @@ def render(
         "+faststart",
         str(out),
     ]
-    chunks = [(s, min(total, s + CHUNK), lines, song, style) for s in range(begin, total, CHUNK)]
+    turning = turn_set(style)
+    turns = None
+    if turning:
+        size, period = turns_bytes(*turning), turning[1]
+        turns = shared_memory.SharedMemory(create=True, size=size)
+        turns.buf[size - period : size] = bytes(period)  # no picture drawn yet
+    # Only `ahead` chunks are in flight, each with its own slots, so memory stays flat however long
+    # the song is; a chunk's slots are free again once the main process has written them out.
     ahead = workers + 1
-    with (
-        tempfile.TemporaryFile() as errors,
-        subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=errors, **media.quiet()) as ff,
-        ProcessPoolExecutor(workers) as pool,
-    ):
-        # Only a few chunks are in flight, so memory stays flat however long the song is, even
-        # when the encoder is slower than the workers.
-        waiting = deque(pool.submit(render_chunk, c) for c in chunks[:ahead])
-        for k in range(len(chunks)):
-            frames = waiting.popleft().result()
-            if k + ahead < len(chunks):
-                waiting.append(pool.submit(render_chunk, chunks[k + ahead]))
+    frames = shared_memory.SharedMemory(create=True, size=ahead * CHUNK * FRAME)
+    chunks = [
+        (s, min(total, s + CHUNK), lines, song, style, turns and turns.name, frames.name, 0)
+        for s in range(begin, total, CHUNK)
+    ]
+    started = time.monotonic()
+    try:
+        with (
+            tempfile.TemporaryFile() as errors,
+            subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=errors, **media.quiet()) as ff,
+            ProcessPoolExecutor(workers) as pool,
+        ):
+
+            def submit(k: int):
+                return pool.submit(render_chunk, (*chunks[k][:-1], (k % ahead) * CHUNK))
+
+            waiting = deque(submit(k) for k in range(min(ahead, len(chunks))))
+            for k in range(len(chunks)):
+                slots = waiting.popleft().result()
+                try:
+                    for slot in slots:
+                        with frames.buf[slot * FRAME : (slot + 1) * FRAME] as view:
+                            ff.stdin.write(view)
+                except OSError:
+                    break  # ffmpeg stopped; its exit code says so below
+                if k + ahead < len(chunks):
+                    waiting.append(submit(k + ahead))
+                done = chunks[k][1] - begin
+                spent = time.monotonic() - started
+                left = (total - begin - done) * spent / done if k >= 2 else None
+                report(done / FPS, (total - begin) / FPS, done, total - begin, left)
             try:
-                for raw in frames:
-                    ff.stdin.write(raw)
+                ff.stdin.close()
             except OSError:
-                break
-            del frames
-            report((chunks[k][1] - begin) / FPS, (total - begin) / FPS)
-        try:
-            ff.stdin.close()
-        except OSError:
-            pass
-        ff.wait()
-        if ff.returncode:
-            errors.seek(0)
-            said = errors.read().decode("utf-8", "replace").strip().splitlines()[-3:]
-            raise RuntimeError(f"ffmpeg 오류 (종료 코드 {ff.returncode}): " + " / ".join(said))
+                pass
+            ff.wait()
+            if ff.returncode:
+                errors.seek(0)
+                said = errors.read().decode("utf-8", "replace").strip().splitlines()[-3:]
+                raise RuntimeError(f"ffmpeg 오류 (종료 코드 {ff.returncode}): " + " / ".join(said))
+    finally:
+        for memory in (turns, frames):
+            if memory:
+                memory.close()
+                memory.unlink()

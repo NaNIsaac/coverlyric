@@ -35,6 +35,57 @@ def below_normal() -> dict:
     return {"preexec_fn": lambda: os.nice(5)}
 
 
+# Each encoder at about the look of libx264 at crf 18. The hardware ones leave the CPU to the frames.
+ENCODERS = {
+    "h264_nvenc": ["-preset", "p5", "-tune", "hq", "-rc", "vbr", "-cq", "19", "-b:v", "0"],
+    "h264_qsv": ["-preset", "medium", "-global_quality", "19"],
+    "h264_amf": ["-quality", "quality", "-rc", "cqp", "-qp_i", "18", "-qp_p", "20"],
+    "libx264": ["-preset", "veryfast", "-crf", "18", "-threads", "2"],
+}
+
+
+def works(name: str) -> bool:
+    """Whether ffmpeg can encode with `name` on this PC: a hardware encoder is listed in every build
+    but needs the graphics card and its driver."""
+    run = subprocess.run(
+        [
+            ffmpeg(),
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=size=640x360:rate=30:duration=0.2",
+            "-c:v",
+            name,
+            *ENCODERS[name],
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        check=False,
+        timeout=60,
+        **quiet(),
+    )
+    return run.returncode == 0
+
+
+@lru_cache(maxsize=1)
+def encoder() -> str:
+    """The first hardware H.264 encoder that works here, else libx264; COVERLYRIC_ENCODER picks one."""
+    if (given := os.environ.get("COVERLYRIC_ENCODER")) in ENCODERS:
+        return given
+    for name in ("h264_nvenc", "h264_qsv", "h264_amf"):
+        try:
+            if works(name):
+                return name
+        except subprocess.TimeoutExpired:
+            continue
+    return "libx264"
+
+
 def duration(path: str) -> float:
     """Length of an audio file in seconds, read from ffmpeg's banner (imageio-ffmpeg ships no ffprobe)."""
     run = subprocess.run(
