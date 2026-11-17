@@ -67,9 +67,9 @@
       <summary><svg class="i"><use href="#i-clock"/></svg>타이밍 <span class="note">(각 줄의 시작 시간)</span><span class="num">3단계</span></summary>
       <p class="help">맞추는 방법을 고르세요. 결과는 오른쪽 아래 목록에 들어갑니다.</p>
       <div class="methods" role="radiogroup" aria-label="맞추는 방법">
-        <button class="tab method" data-tab="auto" role="radio" disabled>
-          <span class="method-title">자동 맞추기 <span class="badge">추천</span> <span class="badge soon">곧 추가</span></span>
-          <span class="method-line">이 PC에서 노래를 듣고 맞춤. 4분 노래에 약 2~5분, 첫 사용 시 약 470 MB 내려받기.</span>
+        <button class="tab method" data-tab="auto" role="radio">
+          <span class="method-title">자동 맞추기 <span class="badge">추천</span></span>
+          <span class="method-line">이 PC에서 노래를 듣고 맞춤. 4분 노래에 약 2~5분, 첫 사용 시 내려받기 (디스크 약 0.7 GB).</span>
         </button>
         <button class="tab method" data-tab="tap" role="radio">
           <span class="method-title">재생하며 직접 맞추기</span>
@@ -82,7 +82,18 @@
       </div>
 
       <div class="tab-body" data-body="auto" hidden>
-        <p class="help">내 PC에서 노래를 듣고 자동으로 맞추는 기능은 다음 버전에서 지원합니다.</p>
+        <p class="help">PC가 노래를 듣고 가사 줄마다 시작 시간을 찾습니다. 노래 파일은 PC 밖으로 나가지 않습니다.
+          찾지 못한 줄과 다르게 들린 줄은 목록에 점선으로 표시되니 그 줄만 ▶ 로 듣고 고치세요.</p>
+        <input type="radio" name="model" value="small" checked hidden>
+        <p class="note"><span id="auto-size"></span> 오래 걸리면 취소하고 다른 방법을 쓰세요.</p>
+        <div class="row">
+          <button id="auto-start" class="big"><svg class="i"><use href="#i-play"/></svg>자동으로 맞추기</button>
+          <button id="auto-stop" class="quiet" hidden><svg class="i"><use href="#i-stop"/></svg>취소</button>
+        </div>
+        <div id="auto-progress" hidden>
+          <progress id="auto-bar" max="1" value="0"></progress>
+          <p id="auto-text" class="note"></p>
+        </div>
       </div>
 
       <div class="tab-body" data-body="tap" hidden>

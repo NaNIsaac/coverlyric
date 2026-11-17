@@ -13,6 +13,7 @@ const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 
 
 let state = null;
 let diff = [];
+let notes = {};
 let tapIndex = -1;
 let tapUndo = [];
 let syncTimer = null;
@@ -298,6 +299,7 @@ function drawLines() {
     row.className = "line";
     if (i === tapIndex) row.classList.add("next");
     if (diff[i] != null) row.classList.add("differs");
+    if (notes[i]) row.classList.add("doubt");
     row.innerHTML = `
       <span class="n">${i + 1}</span>
       <input class="t" type="text" value="${clockTenth(t)}" placeholder="0:00.0" aria-label="${i + 1}번째 줄 시작">
@@ -309,6 +311,12 @@ function drawLines() {
       </span>
       <button class="quiet" data-a="del" title="이 줄 지우기">✕</button>`;
     row.querySelector(".x").value = text;
+    if (notes[i]) {
+      const doubt = document.createElement("div");
+      doubt.className = "mine";
+      doubt.textContent = notes[i];
+      row.appendChild(doubt);
+    }
     if (diff[i] != null) {
       const mine = document.createElement("div");
       mine.className = "mine";
@@ -353,6 +361,7 @@ function drawLines() {
       } else if (a === "del") {
         state.lines.splice(i, 1);
         diff.splice(i, 1);
+        notes = {};
         drawLines();
         scheduleSync();
       }
@@ -416,6 +425,7 @@ async function importText(name, text) {
   const data = await res.json();
   state.lines = data.lines;
   diff = data.diff;
+  notes = {};
   tapIndex = -1;
   drawLines();
   scheduleSync();
@@ -430,12 +440,114 @@ async function importText(name, text) {
   }
 }
 
+const PHASES = {
+  install: "필요한 프로그램 설치 중 (처음 한 번)",
+  download: "듣기 모델 내려받는 중 (처음 한 번)",
+  load: "듣기 모델 여는 중",
+  listen: "노래 듣는 중",
+  align: "가사 맞추는 중",
+};
+
+function size(mb) {
+  return mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+}
+
+function timeLeft(seconds) {
+  if (seconds == null) return "";
+  return seconds < 60 ? ` · 남은 시간 약 ${Math.max(1, Math.round(seconds))}초` : ` · 남은 시간 약 ${Math.round(seconds / 60)}분`;
+}
+
+async function loadModels() {
+  const data = await (await api("/api/auto")).json();
+  const m = data.models.small;
+  $("auto-size").textContent = m.ready ? "듣기 모델 준비됨." : `첫 사용 시 듣기 모델 ${size(m.size_mb)} 내려받기.`;
+  return data;
+}
+
+// Times found so far are shown in the list while the song is heard; the list before the run is
+// kept so that cancel or an error puts it back.
+function showPartial(found) {
+  const rows = [];
+  pollAuto.before.forEach(([, text], i) => { if (text) rows.push(i); });
+  state.lines = pollAuto.before.map(([, text]) => [null, text]);
+  for (const [k, t] of found) if (rows[k] != null) state.lines[rows[k]][0] = t;
+  drawLines();
+}
+
+function restoreLines() {
+  if (!pollAuto.before) return;
+  state.lines = pollAuto.before;
+  pollAuto.before = null;
+  drawLines();
+}
+
+function showAutoRunning(running) {
+  $("auto-progress").hidden = !running;
+  $("auto-stop").hidden = !running;
+  $("auto-start").disabled = running;
+}
+
+async function pollAuto() {
+  try {
+    const job = await (await api("/api/auto")).json();
+    const running = job.state === "running";
+    showAutoRunning(running);
+    if (running) {
+      pollAuto.waiting = true;
+      if (!pollAuto.before) pollAuto.before = state.lines.map((row) => [...row]);
+      const bar = $("auto-bar");
+      const measured = (job.phase === "download" || job.phase === "listen") && job.total > 0;
+      const share = measured ? Math.min(1, job.done / job.total) : 0;
+      if (measured) bar.value = share; else bar.removeAttribute("value");
+      let line = PHASES[job.phase] || "준비 중";
+      if (job.phase === "download" && measured) line += ` ${size(job.done)} / ${size(job.total)}`;
+      if (job.phase === "listen" && measured) line += ` ${clock(job.done).replace(/\.\d+$/, "")} / ${clock(job.total).replace(/\.\d+$/, "")}`;
+      if (measured) line += ` · ${Math.round(share * 100)}%`;
+      line += timeLeft(job.eta);
+      if (job.phase === "install" && job.detail) line += ` · ${job.detail}`;
+      $("auto-text").textContent = line;
+      if (job.partial && pollAuto.before) showPartial(job.partial);
+      setTimeout(pollAuto, 1000);
+      return;
+    }
+    if (job.state === "done" && pollAuto.waiting) {
+      pollAuto.waiting = false;
+      pollAuto.before = null;
+      state.lines = job.lines;
+      diff = [];
+      notes = {};
+      const lyricIndex = [];
+      job.lines.forEach(([, text], i) => { if (text) lyricIndex.push(i); });
+      for (const n of job.notes) {
+        const at = lyricIndex[n.line];
+        notes[at] = n.kind === "unplaced"
+          ? "찾지 못한 줄: 앞뒤 줄 사이 시간으로 넣었습니다. 듣고 고치세요."
+          : n.kind === "doubtful" ? "앞 줄과 1초 안으로 붙어 있습니다. 듣고 고치세요."
+          : `다르게 들림: ${n.heard}`;
+      }
+      drawLines();
+      scheduleSync();
+      const sung = lyricIndex.length;
+      const bad = job.notes.filter((n) => n.kind !== "differs").length;
+      toast(`${sung}줄 중 ${sung - bad}줄의 시간을 찾았습니다.${bad ? ` 확인이 필요한 줄 ${bad}개를 표시했습니다.` : ""}`, 8000);
+      loadModels();
+    } else if (job.state === "error" && pollAuto.waiting) {
+      pollAuto.waiting = false;
+      restoreLines();
+      toast(`자동 맞추기 실패: ${job.message}`, 10000);
+    }
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
 function setTab(name) {
   for (const b of document.querySelectorAll(".tab")) {
     b.classList.toggle("active", b.dataset.tab === name);
     b.setAttribute("aria-checked", String(b.dataset.tab === name));
   }
   for (const body of document.querySelectorAll(".tab-body")) body.hidden = body.dataset.body !== name;
+  if (name === "auto") loadModels().catch((e) => toast(e.message));
 }
 
 function tapNextLabel() {
@@ -616,6 +728,28 @@ function bind() {
     e.target.value = "";
   });
 
+  $("auto-start").addEventListener("click", async () => {
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 1단계에서 넣으세요."); return; }
+    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 2단계에서 가사를 넣으세요."); return; }
+    if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 새로 찾은 시간으로 바뀝니다. 계속하시겠습니까?")) return;
+    const model = document.querySelector('input[name="model"]:checked').value;
+    try {
+      await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
+      await api("/api/auto", { method: "POST", body: JSON.stringify({ model }) });
+      pollAuto.before = state.lines.map((row) => [...row]);
+      pollAuto.waiting = true;
+      pollAuto();
+    } catch (e) {
+      toast(e.message, 6000);
+    }
+  });
+  $("auto-stop").addEventListener("click", async () => {
+    pollAuto.waiting = false;
+    await api("/api/auto/stop", { method: "POST" });
+    restoreLines();
+    showAutoRunning(false);
+  });
+
   $("line-add").addEventListener("click", () => {
     state.lines.push([null, ""]);
     drawLines();
@@ -709,6 +843,7 @@ async function boot() {
   $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
   fillAll();
   pollRender();
+  pollAuto();
   const params = new URLSearchParams(location.search);
   if (params.get("t")) showAt(Number(params.get("t")));
   setTab(document.querySelector(".tab:not(:disabled)").dataset.tab);

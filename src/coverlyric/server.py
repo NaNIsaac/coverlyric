@@ -24,12 +24,13 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import fonts, media, render, timing
+from . import auto, fonts, media, render, timing
 from .project import Project
 from .render import Style
 
 WEB = Path(__file__).parent / "web"
 DEMO = Path(__file__).parent / "demo"
+PROJECT = Path(__file__).resolve().parents[2]  # the folder with pyproject.toml, for uv run
 TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -81,6 +82,8 @@ class App:
         self.project = Project.load(self.file) if self.file.exists() else Project(self.work)
         self.job: dict = {"state": "idle"}
         self.log = home / "coverlyric.log"
+        self.auto: dict = {"state": "idle"}
+        self.auto_proc: subprocess.Popen | None = None
         self.proc: subprocess.Popen | None = None
 
     def save(self) -> None:
@@ -269,6 +272,90 @@ class App:
             job["eta"] = math.ceil(spent / job["done"] * (job["total"] - job["done"]))
         return job
 
+    def models(self) -> dict:
+        return {
+            name: {"size_mb": size, "ready": auto.has_model(name)}
+            for name, (_, size) in auto.MODELS.items()
+        }
+
+    def start_auto(self, model: str) -> dict:
+        if self.auto.get("state") == "running":
+            return self.auto
+        if self.job.get("state") == "running":
+            raise ValueError("영상을 만드는 중입니다. 완료된 뒤 다시 하세요.")
+        p = self.project
+        if not p.audio:
+            raise ValueError("노래 파일이 없습니다. 1단계에서 넣으세요.")
+        lyrics = [text for _, text in p.lines if text]
+        if not lyrics:
+            raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
+        if model not in auto.MODELS:
+            raise ValueError(f"unknown model {model}")
+        uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
+        if not uv:
+            raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행하세요.")
+        job = self.work / "auto-job.json"
+        (self.work / "auto-result.json").unlink(missing_ok=True)
+        job.write_text(
+            json.dumps(
+                {"audio": p.path(p.audio), "lyrics": lyrics, "model": model},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
+        cmd += ["python", "-m", "coverlyric", "auto-job", str(job)]
+        self.auto_proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **media.below_normal(),
+        )
+        self.auto = {"state": "running", "phase": "install", "done": 0.0, "total": p.duration}
+        self.auto["started"] = self.auto["phase_started"] = time.time()
+        threading.Thread(target=self.watch_auto, args=(self.auto_proc,), daemon=True).start()
+        return self.auto
+
+    def watch_auto(self, proc: subprocess.Popen) -> None:
+        tail = []
+        for raw in proc.stdout:
+            if m := re.match(r"phase (\w+) ([\d.]+) ([\d.]+)", raw):
+                if m[1] != self.auto.get("phase"):
+                    self.auto["phase_started"] = time.time()
+                    self.auto.pop("eta", None)
+                self.auto["phase"] = m[1]
+                self.auto["done"], self.auto["total"] = float(m[2]), float(m[3])
+            elif raw.startswith("lines "):
+                self.auto["partial"] = json.loads(raw[6:])
+            else:
+                tail = (tail + [raw.rstrip()])[-8:]
+                if self.auto.get("phase") == "install" and raw.strip():
+                    self.auto["detail"] = raw.strip()[:80]
+        code = proc.wait()
+        result = self.work / "auto-result.json"
+        if code == 0 and result.exists():
+            data = json.loads(result.read_text(encoding="utf-8"))
+            self.auto = {"state": "done", **data}
+        elif self.auto.get("state") != "stopped":
+            self.auto = {"state": "error", "message": "\n".join(tail) or f"exit {code}"}
+
+    def stop_auto(self) -> dict:
+        if self.auto_proc and self.auto_proc.poll() is None:
+            self.auto = {"state": "stopped"}
+            self.auto_proc.kill()
+        return self.auto
+
+    def auto_progress(self) -> dict:
+        job = dict(self.auto)
+        measured = job.get("phase") in ("download", "listen")
+        if job.get("state") == "running" and measured and job.get("done") and job.get("total"):
+            spent = time.time() - job["phase_started"]
+            job["eta"] = max(0, math.ceil(spent / job["done"] * (job["total"] - job["done"])))
+        return job
+
     def export(self, fmt: str) -> tuple[str, str]:
         p = self.project
         name = safe_name(p.title)
@@ -348,6 +435,8 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json(fonts.choices())
                 elif url.path == "/api/render":
                     self.json(app.progress())
+                elif url.path == "/api/auto":
+                    self.json({**app.auto_progress(), "models": app.models()})
                 elif url.path == "/api/prompt":
                     own = [text for _, text in app.project.lines if text]
                     self.json(
@@ -403,6 +492,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.send(200, jpeg, "image/jpeg", {"X-Boxes": json.dumps(boxes)})
                 elif url.path == "/api/render":
                     self.json(app.start_render())
+                elif url.path == "/api/auto":
+                    data = json.loads(self.body() or b"{}")
+                    self.json(app.start_auto(str(data.get("model", "medium"))))
+                elif url.path == "/api/auto/stop":
+                    self.json(app.stop_auto())
                 elif url.path == "/api/render/stop":
                     self.json(app.stop_render())
                 elif url.path == "/api/demo":
@@ -414,6 +508,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json({"ok": True})
                 elif url.path == "/api/quit":
                     app.stop_render()
+                    app.stop_auto()
                     self.json({"ok": True})
                     threading.Thread(target=server_ref[0].shutdown, daemon=True).start()
                 else:

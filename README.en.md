@@ -22,8 +22,10 @@ runs on your PC and is used from a page in your browser.
 - The cover: png, jpg, webp (square recommended)
 - The lyrics as text
 
-**Minimum:** Windows 10/11 64-bit, 4 GB RAM, 2 CPU cores, 500 MB free disk for the first start. No
-GPU is used. A render uses at most about 0.75 GB of memory ([measurements](#memory-and-speed)).
+**Minimum:** Windows 10/11 64-bit, 4 GB RAM, 2 CPU cores, 500 MB free disk for the first start;
+automatic timing needs about 0.7 GB more disk once. No GPU is used. Automatic timing uses about
+1 GB of memory, and a render 0.6 to 0.9 GB depending on the free memory
+([measurements](#memory-and-speed)).
 
 ## Install and start
 
@@ -51,9 +53,19 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
 
    | Way | Time | Song sent anywhere |
    |---|---|---|
-   | Automatic, on this PC (recommended, coming soon) | about 2 to 5 min for a 4-min song | no |
+   | Automatic, on this PC (recommended) | about 2 to 5 min for a 4-min song | no |
    | Play and tap: <kbd>Space</kbd> as each line starts, <kbd>Backspace</kbd> undoes | song length | no |
    | Import an SRT, LRC or VTT file | at once | no |
+
+   Automatic timing listens to the song on the CPU with faster-whisper `small` and places your own
+   lyrics on the heard words. The first use installs it and downloads the 464 MB model (about
+   0.7 GB of disk). A progress bar shows the phase, percent and time left, found lines fill the
+   list as it goes, and **취소** (cancel) puts the old list back. Lines it could not place, lines
+   less than 1 s after the previous one, and lines heard differently are marked with a dashed
+   border and a note, so only those need checking. On a 12-thread PC a 3 min 48 s song with 63
+   lines took about 2 min and 1.04 GB; 59 lines were within 1 s and 38 within 0.3 s.
+
+   ![Automatic timing](docs/screenshots/3-auto.png)
 
    Imported lines are checked against your lyrics, and lines that differ are marked. Without a
    subtitle file, a ready prompt can be copied into a chat AI and its SRT pasted back; that sends
@@ -79,6 +91,7 @@ work is saved and reopens where you left off.
 | "프로그램이 오류로 끝났습니다" (ended with an error) | Read the error in the terminal window; if it persists, post it as an [issue](https://github.com/NaNIsaac/coverlyric/issues). |
 | The browser does not open | Paste the `http://127.0.0.1:...` address from the terminal window into the browser. |
 | Letters show as boxes | The font has no Korean; pick another font. |
+| "자동 맞추기 실패" (automatic timing failed) | Read the reason shown. If install or download failed, check the internet connection and press it again; play-and-tap works meanwhile. |
 | "영상 만들기 실패" (render failed) | The reason and what to do show under the make button. A stopped worker means too little memory: close other programs and render again. The log is `coverlyric.log` in the program folder. |
 
 # Developers and advanced use
@@ -143,6 +156,10 @@ uv run pytest
   `COVERLYRIC_WORKERS` environment variable sets it by hand.
 - Render start, progress every 10 %, the end and any error (with the exit code and reason) go to
   the terminal window and to `coverlyric.log` in the program folder.
+- Automatic timing installs the optional `auto` extra (faster-whisper) on first use with
+  `uv run --extra auto`, transcribes the song on the CPU in a separate process, and matches your
+  lyrics letter by letter to the word times. The text on screen is always your lyrics; the
+  transcription only gives times.
 
 ## Memory and speed
 
@@ -154,11 +171,16 @@ private memory of the python processes and ffmpeg.
 | Demo, 18 s | 1 | 50 s | 0.50 GB |
 | Demo, 18 s | 2 | 29 s | 0.61 GB |
 | Demo, 18 s | 3 | 21 s | 0.67 GB |
+| Song, 3 min 48 s | 1 | 710 s | 0.56 GB (working set 0.56 GB) |
 | Song, 3 min 48 s | 2 | 363 s | 0.67 GB (working set 0.73 GB) |
 | Song, 3 min 48 s | 3 | 254 s | 0.75 GB (working set 0.87 GB) |
+| Song, 3 min 48 s | 4 | 249 s | 0.87 GB (working set 1.01 GB) |
 
 A slower CPU takes longer; memory stays about the same. With less than 1.1 GB free the render
-uses one worker (about 0.5 GB at most).
+uses one worker (about 0.6 GB at most).
+
+Automatic timing (same PC, the 3 min 48 s song, model already downloaded): `small` about 120 s,
+1.04 GB at most.
 
 ## Licence
 

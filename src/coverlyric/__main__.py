@@ -75,6 +75,28 @@ def run_job(path: Path) -> None:
     )
 
 
+def run_auto(path: Path) -> None:
+    """Called by the page in a child process: listen to the song, place the lyrics, write the result
+    next to the job file and print progress lines."""
+    from . import auto
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+
+    def report(phase: str, done: float, total: float) -> None:
+        print(f"phase {phase} {done:.1f} {total:.1f}", flush=True)
+
+    def heard(words: list[dict], until: float) -> None:
+        print(f"lines {json.dumps(auto.found(data['lyrics'], words, until))}", flush=True)
+
+    words = auto.transcribe(data["audio"], data["model"], report=report, heard=heard)
+    report("align", 0.0, 0.0)
+    lines, notes = auto.align(data["lyrics"], words)
+    result = {"lines": [list(line) for line in lines], "notes": notes, "heard": len(words)}
+    path.with_name("auto-result.json").write_text(
+        json.dumps(result, ensure_ascii=False), encoding="utf-8"
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="coverlyric", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
@@ -93,6 +115,8 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--out", type=Path, required=True)
     job = sub.add_parser("render-job")
     job.add_argument("job", type=Path)
+    auto_job = sub.add_parser("auto-job")
+    auto_job.add_argument("job", type=Path)
     args = parser.parse_args(argv)
     # A pipe or file gets the locale code page on Windows (cp1252 on many PCs), which cannot
     # write Korean; the page reads the job pipes as UTF-8.
@@ -123,6 +147,12 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "still":
         project = Project.load(args.project)
         render.frame(args.at, project.preview_lines(), project.song(), project.style).save(args.out)
+    elif args.command == "auto-job":
+        try:
+            run_auto(args.job)
+        except Exception as e:  # noqa: BLE001 - any failure is shown to the user on the page
+            print(f"error: {e}", flush=True)
+            sys.exit(1)
     elif args.command == "render-job":
         try:
             run_job(args.job)
