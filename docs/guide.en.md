@@ -96,7 +96,9 @@ are in the **색** group, the rest in **모양**.
 - **Album:** **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
   **CD 돌기** hide or stop the CD.
 - **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
-- **띠 색:** colour of the band behind the current line and of the progress bar.
+- **띠 색:** colour of the band behind the current line and of the progress bar. **표지 색으로**
+  beside it takes the cover's most telling colour, darkened a little if needed so the white line stays
+  readable.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
 - **배경 색감** (background tone): **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백**
   (black and white) or **표지 색** (tinted with the cover's most telling colour).
