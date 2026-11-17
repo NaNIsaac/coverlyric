@@ -55,6 +55,8 @@ the preview, where they can be edited.
 - With the song and lyrics in, click **자동 맞추기** → **자동으로 맞추기**. The bar shows the phase,
   the percentage and the time left, and the list fills in as lines are found.
 - A 4-minute song takes about 2-5 minutes. The first run downloads the listening model (464 MB).
+- When memory runs short it tries again with a smaller model (base, then tiny) and says so under the
+  bar. A smaller model places lines less exactly, so check the result once more.
 - The song is processed on this PC only.
 - Lines to check get a dashed border and a note: lines not found (given a time between their
   neighbours), lines within 1 second of the line before, and lines heard differently from the lyrics.
@@ -168,7 +170,9 @@ Files in `만든 영상`:
 | The browser does not open | Paste the `http://127.0.0.1:...` address from the terminal window into the browser. |
 | Letters show as boxes | The font has no Korean; pick another. |
 | "N번째 줄에 시간이 없습니다" (line N has no time) | Give that line a time in the list or remove it with ✕. |
-| "자동 맞추기 실패" (auto timing failed) | Read the reason shown. For an install or download failure, check the connection and try again. |
+| "메모리가 부족해 자동 맞추기를 하지 못했습니다" (not enough memory for auto timing) | Close other programs and try again; tap-along timing works meanwhile. |
+| "자동 맞추기를 하지 못했습니다" (auto timing failed) | Check the internet connection and try again. The details are in `coverlyric.log`. |
+| "노래 파일을 읽을 수 없습니다", "그림 파일을 읽을 수 없습니다" (file cannot be read) | Pick another file. The song and cover already in place stay. |
 | "영상 만들기 실패" (video failed) | Read the reason under the button. If a worker process ended, memory ran out: close other programs and make it again. |
 | Sound and lyrics drift apart | Move that line with −0.1 / +0.1 and make it again. |
 

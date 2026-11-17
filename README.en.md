@@ -49,6 +49,8 @@ the video folder). Videos are saved in `만든 영상` in the program folder.
 - **"디스크 공간 부족"** (not enough disk space): free space on the drive it names and start again.
 - **"내려받기 실패"** or **"설치 실패"** (download or install failed): check the internet connection
   and start again.
+- **"메모리가 부족해 자동 맞추기를 하지 못했습니다"** (not enough memory for auto timing): close other
+  programs and try again; tap-along timing works meanwhile.
 - **"영상 만들기 실패"** (video failed): close other programs and make it again.
 
 The log is `coverlyric.log` in the program folder. If the problem stays, attach that file to an
