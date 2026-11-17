@@ -334,7 +334,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
             try:
                 if url.path == "/":
                     self.file(WEB / "index.html")
-                elif url.path in ("/app.js", "/app.css"):
+                elif url.path in ("/app.js", "/clock.js", "/app.css"):
                     self.file(WEB / url.path[1:])
                 elif url.path == "/api/state":
                     self.json(app.state())
