@@ -353,6 +353,9 @@ function fillLook() {
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
   $("show_cd").disabled = s.layout !== "case";
+  $("floor").value = s.floor;
+  $("reflection").checked = s.reflection;
+  $("reflection").disabled = s.layout !== "case";
   $("band").value = s.band;
   $("blur").value = s.blur;
   $("dim").value = s.dim;
@@ -1135,6 +1138,8 @@ function bind() {
     r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
   }
   $("spin").addEventListener("change", (e) => { state.style.spin = e.target.checked ? 7 : 0; scheduleSync(0); });
+  $("floor").addEventListener("input", (e) => { state.style.floor = Number(e.target.value); scheduleSync(); });
+  $("reflection").addEventListener("change", (e) => { state.style.reflection = e.target.checked; scheduleSync(0); });
   $("show_cd").addEventListener("change", (e) => { state.style.show_cd = e.target.checked; fillLook(); scheduleSync(0); });
   $("font").addEventListener("change", (e) => { state.style.font = e.target.value; scheduleSync(0); });
   $("band").addEventListener("input", (e) => { state.style.band = e.target.value; scheduleSync(); });

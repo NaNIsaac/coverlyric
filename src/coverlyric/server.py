@@ -52,14 +52,18 @@ TYPES = {
 LOG = logging.getLogger("coverlyric")
 
 
-def luminance(rgb) -> float:
-    """Relative luminance (WCAG) of an RGB colour given as 0-1 floats or 0-255 ints."""
-    scale = 255 if max(rgb) > 1 else 1
+def luminance(rgb: tuple[int, int, int]) -> float:
+    """Relative luminance (WCAG) of an RGB colour in 0-255 ints."""
     lin = [
-        (c / scale / 12.92) if c / scale <= 0.04045 else ((c / scale + 0.055) / 1.055) ** 2.4
-        for c in rgb
+        c / 255 / 12.92 if c / 255 <= 0.04045 else ((c / 255 + 0.055) / 1.055) ** 2.4 for c in rgb
     ]
     return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def contrast(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
+    """WCAG contrast ratio of two 0-255 colours, 1 to 21."""
+    la, lb = sorted((luminance(a), luminance(b)))
+    return (lb + 0.05) / (la + 0.05)
 
 
 AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
@@ -274,19 +278,32 @@ class App:
         return buf.getvalue(), render.boxes(p.style, t, song), fits
 
     def band_from_cover(self) -> str:
-        """The cover's own colour as #rrggbb for the lyric band, darkened until the white line on it is at
-        least as readable as on the default band."""
+        """The cover's own colour as #rrggbb for the lyric band, made darker (light lyrics) or lighter
+        (dark lyrics) until the lyric colour on it reads at least as well as white on the default band."""
         p = self.project
         if not p.art:
             raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣으세요.")
         song = p.song()
         with self.lock:
-            rgb = render.cover_colour(song.art, render.stamp(song.art))
-        hue, sat, val = colorsys.rgb_to_hsv(*(c / 255 for c in rgb))
-        limit = luminance(render.hex_rgb(render.Style().band))
-        while val > 0.05 and luminance(colorsys.hsv_to_rgb(hue, sat, val)) > limit:
-            val *= 0.97
-        r, g, b = (round(c * 255) for c in colorsys.hsv_to_rgb(hue, sat, val))
+            cover = render.cover_colour(song.art, render.stamp(song.art))
+        ink = render.hex_rgb(p.style.lyric_colour)
+        need = contrast(render.hex_rgb(render.Style().band), (255, 255, 255))
+        light_ink = luminance(ink) > 0.4
+        hue, sat, val = colorsys.rgb_to_hsv(*(c / 255 for c in cover))
+
+        def rgb() -> tuple[int, int, int]:
+            return tuple(round(c * 255) for c in colorsys.hsv_to_rgb(hue, sat, val))
+
+        for _ in range(300):
+            if contrast(rgb(), ink) >= need:
+                break
+            if light_ink:
+                val *= 0.97
+            elif val < 1:
+                val = min(1.0, val + 0.02)
+            else:
+                sat *= 0.95
+        r, g, b = rgb()
         return f"#{r:02x}{g:02x}{b:02x}"
 
     def start_render(self) -> dict:
