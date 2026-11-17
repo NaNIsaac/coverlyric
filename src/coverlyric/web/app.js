@@ -449,6 +449,25 @@ function bind() {
     }
   });
 
+  $("prompt-copy").addEventListener("click", async () => {
+    try {
+      await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
+      const data = await (await api("/api/prompt")).json();
+      if (!data.lines) { toast("먼저 2단계에서 가사를 넣어 주세요."); return; }
+      $("prompt").value = data.prompt;
+      await navigator.clipboard.writeText(data.prompt);
+      toast("복사했어요. 채팅 AI에 노래 파일과 함께 붙여 넣으세요.", 5000);
+    } catch (e) {
+      $("prompt").hidden = false;
+      $("prompt").select();
+      toast("Ctrl+C 를 눌러 복사하세요.");
+    }
+  });
+  $("answer-apply").addEventListener("click", async () => {
+    const text = $("answer").value;
+    if (!text.trim()) { toast("받은 자막을 먼저 붙여 넣어 주세요."); return; }
+    try { await importText("answer.srt", text); } catch (e) { toast(e.message); }
+  });
   $("timing-file").addEventListener("change", async (e) => {
     const f = e.target.files[0];
     if (!f) return;
