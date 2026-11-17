@@ -51,7 +51,9 @@ the video folder). Videos are saved in `만든 영상` in the program folder.
   and start again.
 - **"메모리가 부족해 자동 맞추기를 하지 못했습니다"** (not enough memory for auto timing): close other
   programs and try again; tap-along timing works meanwhile.
-- **"영상 만들기 실패"** (video failed): close other programs and make it again.
+- **"메모리가 부족해 영상을 만들지 못했습니다"** (not enough memory to make the video): close other
+  programs and make it again; 720p uses less memory.
+- **"영상 만들기 실패"** (video failed): read the reason shown under the button.
 
 The log is `coverlyric.log` in the program folder. If the problem stays, attach that file to an
 [issue](https://github.com/NaNIsaac/coverlyric/issues).

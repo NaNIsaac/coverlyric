@@ -173,7 +173,9 @@ Files in `만든 영상`:
 | "메모리가 부족해 자동 맞추기를 하지 못했습니다" (not enough memory for auto timing) | Close other programs and try again; tap-along timing works meanwhile. |
 | "자동 맞추기를 하지 못했습니다" (auto timing failed) | Check the internet connection and try again. The details are in `coverlyric.log`. |
 | "노래 파일을 읽을 수 없습니다", "그림 파일을 읽을 수 없습니다" (file cannot be read) | Pick another file. The song and cover already in place stay. |
-| "영상 만들기 실패" (video failed) | Read the reason under the button. If a worker process ended, memory ran out: close other programs and make it again. |
+| "메모리가 부족해 영상을 만들지 못했습니다" (not enough memory to make the video) | Close other programs and make it again; 720p uses less memory. |
+| "메모리가 부족해 움직이는 그림 없이 만들었습니다" (made without the moving picture) | The video is made. To keep the moving picture, close other programs and make it again. |
+| "영상 만들기 실패" (video failed) | Read the reason under the button. |
 | Sound and lyrics drift apart | Move that line with −0.1 / +0.1 and make it again. |
 
 The log is `coverlyric.log` in the program folder.
