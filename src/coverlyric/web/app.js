@@ -329,7 +329,7 @@ async function addAnim(files) {
     }
     fillLook();
     scheduleSync(0);
-    toast("넣었어요. 미리보기에서 끌어 옮기고 모서리로 크기를 바꿀 수 있어요.", 5000);
+    toast("넣었습니다. 미리보기에서 끌어 옮기고, 모서리를 끌어 크기를 바꿉니다.", 5000);
   } catch (e) {
     toast(e.message, 6000);
     fillLook();
@@ -883,7 +883,7 @@ function bind() {
       return;
     }
     const minutes = Math.max(1, Math.round((state.duration || 60) / 60));
-    if (!confirm(`미리보기 모양 그대로 영상을 만드시겠습니까?\n예상 시간: ${minutes}~${minutes * 3}분`)) return;
+    if (!confirm(`미리보기 모양 그대로 영상을 만드시겠습니까?\n예상 시간: 약 ${minutes}분 이하`)) return;
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       await api("/api/render", { method: "POST" });
