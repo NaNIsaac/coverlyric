@@ -25,7 +25,9 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from . import anim, fonts, media
 
-W, H, FPS = 1920, 1080, 30
+# 24 fps: the slow turn of the disc and the eased lyric list look the same as at 30, with a fifth
+# fewer frames to draw and encode.
+W, H, FPS = 1920, 1080, 24
 CHUNK = 4  # frames a worker draws at a time
 FRAME = W * H * 4  # one RGBA frame, 8.3 MB
 SS = 2  # the lyric panel and title are drawn at twice the size and scaled down

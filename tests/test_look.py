@@ -134,4 +134,7 @@ def test_a_still_frame_is_not_drawn_again(demo):
     p = render.Painter(lines, song, style)
     # Between 7.0 s and 9.0 s no line starts and the CD stands still: one picture.
     first = p.raw(7.0)
-    assert all(p.raw(n / render.FPS) is first for n in range(211, 270))
+    assert all(
+        p.raw(n / render.FPS) is first
+        for n in range(round(7 * render.FPS) + 1, round(9 * render.FPS))
+    )
