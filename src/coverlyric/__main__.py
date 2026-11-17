@@ -42,6 +42,21 @@ def failure(e: BaseException) -> str:
     return str(e) or type(e).__name__
 
 
+def place(part: Path, out: Path) -> Path:
+    """Move the finished part file to `out`, or to `out (2)` and on when a player holds the old
+    video open, which on Windows blocks replacing it."""
+    for n in range(1, 100):
+        target = out if n == 1 else out.with_name(f"{out.stem} ({n}){out.suffix}")
+        try:
+            part.replace(target)
+        except PermissionError:
+            continue
+        return target
+    raise PermissionError(
+        f"{out.name} 파일을 쓸 수 없습니다. 영상을 연 프로그램을 닫고 다시 만드세요."
+    )
+
+
 def run_job(path: Path) -> None:
     """Called by the page in a child process: render the job, print progress lines, write the thumbnail
     and the timing files next to the video."""
@@ -64,8 +79,12 @@ def run_job(path: Path) -> None:
         f"song {song.duration:.1f} s, out {out.name}",
         flush=True,
     )
-    render.render(part, lines, song, project.style, count, report=report)
-    part.replace(out)
+    try:
+        render.render(part, lines, song, project.style, count, report=report)
+        out = place(part, out)
+    finally:
+        part.unlink(missing_ok=True)
+    print(f"out {out}", flush=True)
     first = next((t for t, text in lines if text), 0.0)
     still = render.frame(min(song.duration, first + 0.6), lines, song, project.style)
     still.resize((1280, 720), Image.LANCZOS).save(out.with_suffix(".png"))

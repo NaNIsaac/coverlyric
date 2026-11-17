@@ -79,3 +79,58 @@ def test_a_child_that_dies_without_a_word_still_gives_a_reason(tmp_path):
 def test_an_empty_memory_error_gets_words():
     assert cli.failure(MemoryError()) == cli.WORKER_ERROR
     assert cli.failure(ValueError("")) == "ValueError"
+
+
+def write_job(app, tmp_path, out):
+    job = tmp_path / "job.json"
+    data = app.project.to_dict()
+    data["audio"], data["art"] = app.project.path("song.wav"), app.project.path("cover.png")
+    data["out"] = str(out)
+    job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return job
+
+
+def test_a_failed_render_leaves_no_part_file(tmp_path, monkeypatch):
+    def half(part, *args, **kwargs):
+        part.write_bytes(b"half a video")
+        raise RuntimeError("ffmpeg 오류")
+
+    monkeypatch.setattr(render, "render", half)
+    app = server.App(tmp_path)
+    app.demo()
+    job = write_job(app, tmp_path, tmp_path / "out.mp4")
+    with pytest.raises(SystemExit):
+        cli.main(["render-job", str(job)])
+    assert not list(tmp_path.glob("*.making.mp4"))
+
+
+def test_a_stopped_render_leaves_no_part_file(tmp_path):
+    app = server.App(tmp_path)
+    out = app.output / "song.mp4"
+    part = out.with_name("song.making.mp4")
+    part.write_bytes(b"half a video")
+    proc = server.subprocess.Popen(
+        [sys.executable, "-I", "-c", "import time; time.sleep(0.3)"],
+        stdout=server.subprocess.PIPE,
+        text=True,
+    )
+    app.proc = proc
+    app.job = {"state": "stopped"}
+    app.watch(proc, out)
+    assert not part.exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="an open file blocks a rename only on Windows")
+def test_an_old_video_open_in_a_player_gets_a_new_name(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(render, "render", lambda part, *a, **k: part.write_bytes(b"new video"))
+    app = server.App(tmp_path)
+    app.demo()
+    out = tmp_path / "song.mp4"
+    out.write_bytes(b"old video")
+    job = write_job(app, tmp_path, out)
+    with out.open("rb"):  # a player holding the old file
+        cli.main(["render-job", str(job)])
+    again = tmp_path / "song (2).mp4"
+    assert again.read_bytes() == b"new video" and out.read_bytes() == b"old video"
+    assert f"out {again}" in capsys.readouterr().out
+    assert again.with_suffix(".srt").exists()

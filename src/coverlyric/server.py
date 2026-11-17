@@ -254,6 +254,7 @@ class App:
     def watch(self, proc: subprocess.Popen, out: Path) -> None:
         """Follow the render child: progress into the job, every tenth into the log, and any other
         output (a traceback, ffmpeg's message) kept for the error."""
+        part = out.with_name(out.stem + ".making.mp4")
         tail: list[str] = []
         said = ""
         logged = 0
@@ -267,6 +268,8 @@ class App:
                 if total and done / total >= (logged + 1) / 10:
                     logged = int(done / total * 10)
                     LOG.info("render %d%% (%.0f of %.0f s)", logged * 10, done, total)
+            elif line.startswith("out "):
+                out = Path(line[4:])  # another name when the old video was held open
             elif line.startswith("start "):
                 LOG.info("render %s", line)
             elif line.startswith("error: "):
@@ -274,6 +277,8 @@ class App:
             elif line:
                 tail = (tail + [line])[-40:]
         code = proc.wait()
+        # A stopped or crashed child cannot remove its own part file.
+        part.unlink(missing_ok=True)
         if self.proc is not proc:  # stopped and replaced by a newer render
             return
         if code == 0 and out.exists():
