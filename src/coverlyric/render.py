@@ -63,8 +63,9 @@ OUTLINE_WIDTH = 0.06  # of the font size
 SHADOW_DROP, SHADOW_ALPHA = 0.05, 0.7  # offset as a share of the font size, and strength
 TITLE_Y, ARTIST_Y, TITLE_BOX = 100, 162, 240
 BAR = (110, 1000, 1850, 1040)
-# The album's tilt: at most this many degrees, seen from this many pixels away, a mild perspective.
-TILT_MAX, TILT_DISTANCE = 25.0, 1800
+# The album's tilt: at most this many degrees, seen from this many pixels away, close enough that
+# 20 degrees already reads as turned.
+TILT_MAX, TILT_DISTANCE = 40.0, 1150
 
 
 @dataclass(frozen=True)
@@ -193,18 +194,20 @@ def geometry(style: Style) -> Geometry:
 class Tilt:
     """The album turned about the upright line through its centre and seen from a fixed distance.
     A flat drawing of `region` (frame pixels) is warped into `box`; a plane seen in perspective is a
-    homography, so the four corners fix it."""
+    homography, so the four corners fix it. The view is scaled so the nearest edge keeps its flat
+    size: the album only shrinks, never grows past its flat place, the lyrics or the CD's turn box."""
 
     region: tuple[int, int, int, int]
     box: tuple[int, int, int, int]
     centre: tuple[float, float]
     cos: float
     sin: float
+    near: float  # TILT_DISTANCE plus the nearest edge's depth: that edge is drawn at scale 1
     coeffs: tuple[float, ...]  # Pillow's PERSPECTIVE data: box pixel -> region pixel
 
     def point(self, x: float, y: float) -> tuple[float, float]:
         u, v = x - self.centre[0], y - self.centre[1]
-        k = TILT_DISTANCE / (TILT_DISTANCE + u * self.sin)
+        k = self.near / (TILT_DISTANCE + u * self.sin)
         return self.centre[0] + u * self.cos * k, self.centre[1] + v * k
 
     def bounds(self, box: tuple[int, ...]) -> tuple[int, int, int, int]:
@@ -269,7 +272,9 @@ def tilt_of(style: Style) -> Tilt | None:
         centre, region = (cx, cy), (cx - r, cy - r, cx + r, cy + r)
     region = (region[0] - 2, region[1] - 2, region[2] + 2, region[3] + 2)
     rad = math.radians(angle)
-    flat = Tilt(region, region, centre, math.cos(rad), math.sin(rad), ())
+    sin = math.sin(rad)
+    near = TILT_DISTANCE + min((region[0] - centre[0]) * sin, (region[2] - centre[0]) * sin)
+    flat = Tilt(region, region, centre, math.cos(rad), sin, near, ())
     box = flat.bounds(region)
     corners = [(x, y) for x in (region[0], region[2]) for y in (region[1], region[3])]
     rows, rhs = [], []

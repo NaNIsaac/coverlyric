@@ -51,7 +51,7 @@ def test_positive_tilt_turns_the_right_edge_away():
     def height(x):
         return t.point(x, y1)[1] - t.point(x, y0)[1]
 
-    assert height(x1) < y1 - y0 < height(x0)
+    assert height(x1) < height(x0) <= y1 - y0
     flat, tilted = (
         render.boxes(render.Style())["album"],
         render.boxes(render.Style(tilt=20))["album"],
@@ -91,3 +91,21 @@ def test_shared_turn_pictures_carry_the_tilt(demo):
         p.turns.memory.close()
         memory.close()
         memory.unlink()
+
+
+@pytest.mark.parametrize("layout", ["case", "disc"])
+@pytest.mark.parametrize("tilt", [-40, -20, 20, 40])
+def test_the_tilted_album_stays_in_its_flat_place(layout, tilt):
+    """Turned, the album only shrinks: it never reaches the lyrics, and the CD keeps a turn box."""
+    style = render.Style(layout=layout, tilt=tilt)
+    t = render.tilt_of(style)
+    x0, y0, x1, y1 = t.region
+    bx0, by0, bx1, by1 = t.box
+    assert x0 - 1 <= bx0 and y0 - 1 <= by0 and bx1 <= x1 + 1 and by1 <= y1 + 1
+    assert render.boxes(style)["album"][2] < render.geometry(style).panel[0]
+    if layout == "case":
+        flat_box = render.turn_set(render.Style())[0]
+        box = render.turn_set(style)[0]
+        assert (box[2] - box[0]) * (box[3] - box[1]) <= (flat_box[2] - flat_box[0] + 4) * (
+            flat_box[3] - flat_box[1] + 4
+        )
