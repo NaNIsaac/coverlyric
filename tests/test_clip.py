@@ -3,11 +3,14 @@
 import re
 import subprocess
 import time
+from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
 import pytest
+from PIL import Image
 
-from coverlyric import media, render, server
+from coverlyric import anim, media, render, server
 from coverlyric.project import Project
 
 DEMO = Path(render.__file__).parent / "demo" / "demo.json"
@@ -57,7 +60,7 @@ def test_the_page_gets_a_clip_from_the_preview_time(tmp_path):
     assert started["state"] == "running" and started["total"] == pytest.approx(server.CLIP_S)
     job = wait(app)
     assert job["state"] == "done" and job["url"].startswith("/media/clip?v=")
-    clip = app.work / "preview-clip.mp4"
+    clip = app.clip_file
     assert media.duration(str(clip)) == pytest.approx(server.CLIP_S, abs=0.1)
     # Near the end of the song the clip is what is left, from at most a second before the end.
     app.start_clip(17.5)
@@ -72,3 +75,36 @@ def test_a_clip_waits_for_a_running_render(tmp_path):
     app.job = {"state": "running"}
     with pytest.raises(ValueError):
         app.start_clip(0.0)
+
+
+def test_a_quick_clip_keeps_the_moving_picture(tmp_path):
+    demo = Project.load(DEMO)
+    picture = tmp_path / "green.png"
+    Image.new("RGBA", (40, 40), (0, 255, 0, 255)).save(picture)
+    song = replace(demo.song(), anim=(str(picture),))
+    out = tmp_path / "anim.mp4"
+    render.render(
+        out, demo.preview_lines(), song, render.Style(), 2, (5.0, 6.0), lambda *_: None, True
+    )
+    raw = subprocess.run(
+        [
+            media.ffmpeg(),
+            "-v",
+            "error",
+            "-i",
+            str(out),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-",
+        ],
+        capture_output=True,
+        check=True,
+    ).stdout
+    frame = np.frombuffer(raw, np.uint8).reshape(render.QUICK_SIZE[1], render.QUICK_SIZE[0], 3)
+    x, y = (c * render.QUICK_SIZE[0] // render.W for c in anim.CENTRE)
+    r, g, b = frame[y, x].astype(int)
+    assert g > 200 and r < 60 and b < 60

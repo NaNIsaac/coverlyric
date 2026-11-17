@@ -74,8 +74,10 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
 4. **Look:** the cover sits in a clear CD case with the disc half out and turning (both
    switchable), or as a round cover. Drag the album, the lyrics, the title and the playback bar on
    the preview to move them, and drag a corner to resize. Pick the font, band colour, background
-   blur and darkness.
-5. **Render:** press **이대로 영상 만들기**. It takes one to three times the song's length,
+   blur and darkness. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
+   webp) that loop over the video: reorder them with ↑ ↓, set the frames per second, choose above
+   or under the album and lyrics, and drag it on the preview.
+5. **Render:** press **이대로 영상 만들기**. It usually takes less than the song's length,
    depending on the PC.
 
 The `만든 영상` folder then holds the mp4 (1920x1080, 30 fps, H.264 + AAC), a 1280x720 thumbnail,
@@ -167,34 +169,23 @@ uv run pytest
 
 ## Memory and speed
 
-Measured on a PC with a 12-thread CPU and 32 GB RAM, before the render speed-up (2026-11-18). Memory is the peak of the summed
-private memory of the python processes and ffmpeg.
+Measured on a PC with a 12-thread CPU and 32 GB RAM (2026-11-18, encoder fixed to libx264). Memory
+is the peak of the summed private memory of the python processes and ffmpeg.
 
 | Song | Workers | Time | Peak memory |
 |---|---|---|---|
-| Demo, 18 s | 1 | 50 s | 0.50 GB |
-| Demo, 18 s | 2 | 29 s | 0.61 GB |
-| Demo, 18 s | 3 | 21 s | 0.67 GB |
-| Song, 3 min 48 s | 1 | 710 s | 0.56 GB (working set 0.56 GB) |
-| Song, 3 min 48 s | 2 | 363 s | 0.67 GB (working set 0.73 GB) |
-| Song, 3 min 48 s | 3 | 254 s | 0.75 GB (working set 0.87 GB) |
-| Song, 3 min 48 s | 4 | 249 s | 0.87 GB (working set 1.01 GB) |
+| Demo, 18 s | 1 | 14.2 s | 416 MB |
+| Demo, 18 s | 2 | 9.0 s | 518 MB |
+| Demo, 18 s | 4 | 7.0 s | 775 MB |
+| 60 s part of a song | 1 | 28.9 s | 428 MB |
+| 60 s part of a song | 2 | 20.3 s | 552 MB |
+| 60 s part of a song | 4 | 16.9 s | 861 MB |
 
-A slower CPU takes longer; memory stays about the same. With less than 550 MB free the render
-uses one worker.
+A slower CPU takes longer; memory stays about the same. On a PC with 8 GB RAM and 12 threads, a
+60 s part took about 73 s with 2 workers and about 60 s with 4. With less than 550 MB free the
+render uses one worker.
 
-On a PC with 8 GB RAM and 12 threads, a 60 s part of a 4 min 25 s song (1920x1080, 3000 px cover,
-peak of the whole render):
-
-| Workers | Time before | Peak memory before | Time after the speed-up |
-|---|---|---|---|
-| By free memory (1 before) | 311 s | 434 MB | 64.7 s |
-| 2 | 203 s | 546 MB | 72.7 s |
-| 4 | 143 s | 799 MB | 60.4 s |
-
-After the speed-up the lowest free memory during a render was 466 to 557 MB, with no failure.
-
-Automatic timing (same PC, the 3 min 48 s song, model already downloaded): `small` about 120 s,
+Automatic timing (the 32 GB PC, a 3 min 48 s song, model already downloaded): `small` about 120 s,
 1.04 GB at most.
 
 ## Licence

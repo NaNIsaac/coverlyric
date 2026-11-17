@@ -1,9 +1,12 @@
+import io
 import json
 import threading
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
 import pytest
+from PIL import Image
 
 from coverlyric import server
 
@@ -58,3 +61,16 @@ def test_audio_is_served_with_ranges(base):
     req = urllib.request.Request(f"{base}/media/audio", headers={"Range": "bytes=0-99"})
     with urllib.request.urlopen(req) as res:
         assert res.status == 206 and len(res.read()) == 100
+
+
+def test_anim_frames_are_served_only_when_listed(base, tmp_path):
+    call(f"{base}/api/demo", b"")
+    buf = io.BytesIO()
+    Image.new("RGBA", (8, 8), (255, 0, 0, 255)).save(buf, "PNG")
+    state = json.loads(call(f"{base}/api/upload?kind=anim", buf.getvalue(), {"X-Name": "a.png"})[0])
+    name = state["anim"][0]
+    png, _ = call(f"{base}/media/anim?name={urllib.parse.quote(name)}")
+    assert png[:4] == b"\x89PNG"
+    for other in ("project.json", "../작업 중/project.json", "anim/missing.png"):
+        with pytest.raises(urllib.error.HTTPError):
+            call(f"{base}/media/anim?name={urllib.parse.quote(other)}")
