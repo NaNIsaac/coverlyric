@@ -21,6 +21,7 @@ class Project:
     duration: float = 0.0
     lines: list[timing.Line] = field(default_factory=list)
     style: Style = field(default_factory=Style)
+    anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
 
     @classmethod
     def load(cls, path: Path) -> Project:
@@ -39,6 +40,7 @@ class Project:
             duration=float(data.get("duration", 0.0)),
             lines=lines,
             style=Style.from_dict(data.get("style", {})),
+            anim=[str(name) for name in data.get("anim", [])],
         )
 
     def to_dict(self) -> dict:
@@ -50,6 +52,7 @@ class Project:
             "duration": self.duration,
             "lines": [list(line) for line in self.lines],
             "style": self.style.to_dict(),
+            "anim": list(self.anim),
         }
 
     def save(self, path: Path) -> None:
@@ -68,6 +71,7 @@ class Project:
             title=self.title,
             artist=self.artist,
             duration=duration,
+            anim=tuple(self.path(name) for name in self.anim),
         )
 
     def preview_lines(self) -> tuple[tuple[float, str], ...]:

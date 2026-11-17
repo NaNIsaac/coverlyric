@@ -25,7 +25,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import auto, fonts, media, render, timing
+from . import anim, auto, fonts, media, render, timing
 from .project import Project
 from .render import Style
 
@@ -136,7 +136,19 @@ class App:
                     "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣으세요."
                 )
             p.style = style
+        if "anim" in data:
+            # Reorder or remove the moving picture's files; new ones come through upload.
+            kept = [str(name) for name in data["anim"] if str(name) in p.anim]
+            self.drop_anim(set(p.anim) - set(kept))
+            p.anim = kept
         self.save()
+
+    def drop_anim(self, names: set[str]) -> None:
+        folder = (self.work / "anim").resolve()
+        for name in names:
+            path = (self.work / name).resolve()
+            if path.parent == folder:  # never a file outside the project's anim folder
+                path.unlink(missing_ok=True)
 
     def upload(self, kind: str, name: str, body: bytes) -> dict:
         suffix = Path(name).suffix.lower()
@@ -169,6 +181,27 @@ class App:
             target = folder / safe_name(Path(name).name)
             target.write_bytes(body)
             self.project.style = replace(self.project.style, font=str(target))
+        elif kind == "anim":
+            # A GIF is the whole moving picture; images are its frames, added one by one in order.
+            if suffix not in anim.SUFFIXES:
+                raise ValueError("움직이는 그림은 gif, png, jpg, webp 파일만 넣을 수 있습니다.")
+            try:
+                Image.open(io.BytesIO(body)).verify()
+            except (OSError, SyntaxError) as e:
+                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고르세요.") from e
+            p = self.project
+            if suffix == ".gif" or any(name.lower().endswith(".gif") for name in p.anim):
+                self.drop_anim(set(p.anim))
+                p.anim = []
+            folder = self.work / "anim"
+            folder.mkdir(exist_ok=True)
+            stem, n = safe_name(Path(name).stem), 1
+            target = folder / f"{stem}{suffix}"
+            while target.exists():
+                n += 1
+                target = folder / f"{stem}-{n}{suffix}"
+            target.write_bytes(body)
+            p.anim.append(f"anim/{target.name}")
         else:
             raise ValueError(f"unknown upload kind {kind}")
         render.forget_art()
@@ -178,6 +211,7 @@ class App:
     def demo(self) -> dict:
         for old in [*self.work.glob("song.*"), *self.work.glob("cover.*")]:
             old.unlink()
+        self.drop_anim(set(self.project.anim))
         shutil.copy(DEMO / "tone.wav", self.work / "song.wav")
         shutil.copy(DEMO / "cover.png", self.work / "cover.png")
         demo = Project.load(DEMO / "demo.json")
@@ -194,6 +228,7 @@ class App:
             raise ValueError(
                 "영상을 만드는 중에는 새로 시작할 수 없습니다. 완료되거나 멈춘 뒤 다시 하세요."
             )
+        self.drop_anim(set(self.project.anim))
         for old in self.work.iterdir():
             if old.is_file():
                 old.unlink()
@@ -214,7 +249,7 @@ class App:
         small = img.resize((width, round(width * 9 / 16)), Image.LANCZOS)
         buf = io.BytesIO()
         small.save(buf, "JPEG", quality=88)
-        return buf.getvalue(), render.boxes(p.style, t)
+        return buf.getvalue(), render.boxes(p.style, t, song)
 
     def start_render(self) -> dict:
         if self.job.get("state") == "running":
@@ -233,6 +268,7 @@ class App:
         job = self.work / "job.json"
         data = p.to_dict()
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
+        data["anim"] = [p.path(name) for name in p.anim]
         data["out"] = str(out)
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         cmd = [sys.executable, "-m", "coverlyric", "render-job", str(job)]

@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
-from . import fonts, media
+from . import anim, fonts, media
 
 W, H, FPS = 1920, 1080, 30
 CHUNK = 4  # frames a worker draws at a time
@@ -76,6 +76,11 @@ class Style:
     bar_x: int = 0
     bar_y: int = 0
     bar_scale: float = 1.0
+    anim_x: int = 0
+    anim_y: int = 0
+    anim_scale: float = 1.0
+    anim_fps: float = 8.0  # frames per second of an image list; a GIF keeps its own delays
+    anim_above: bool = True  # over everything, or under the album and the lyrics
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -99,6 +104,7 @@ class Song:
     title: str
     artist: str = ""
     duration: float = 0.0
+    anim: tuple[str, ...] = ()  # the moving picture: one GIF or images in order
 
 
 def band_rgb(style: Style) -> tuple[int, int, int]:
@@ -160,8 +166,11 @@ def disc_centre_x(g: Geometry, t: float) -> float:
     return inside + (g.disc_x - inside) * ease((t - SLIDE[0]) / (SLIDE[1] - SLIDE[0]))
 
 
-def boxes(style: Style, t: float = SLIDE[1]) -> dict[str, tuple[int, ...]]:
-    """The frame area of each movable element at time t, for the drag handles on the preview."""
+def boxes(
+    style: Style, t: float = SLIDE[1], song: Song | None = None
+) -> dict[str, tuple[int, ...]]:
+    """The frame area of each movable element at time t, for the drag handles on the preview; the
+    moving picture's needs the song, which names its files."""
     g = geometry(style)
     if style.layout == "case":
         right = (
@@ -183,7 +192,17 @@ def boxes(style: Style, t: float = SLIDE[1]) -> dict[str, tuple[int, ...]]:
         out["title"] = title
     if style.bar:
         out["bar"] = g.bar
+    if (
+        song is not None
+        and song.anim
+        and (found := anim.at(song.anim, style.anim_fps, style.anim_scale))
+    ):
+        out["anim"] = anim.box(found[0].size, style.anim_x, style.anim_y)
     return out
+
+
+def overlaps(a: tuple[int, ...], b: tuple[int, ...]) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
 def place(dst: Image.Image, src: Image.Image, x: int, y: int) -> None:
@@ -433,8 +452,18 @@ def scene(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
         drop = (x0 + round(8 * s), y0 + round(16 * s), x1 + round(8 * s), y1 + round(22 * s))
         bg = Image.alpha_composite(bg, shadow(drop, round(18 * s), 140))
         return bg, disc_print(art, g.disc_r), jewel_case(art, g, s)
+    under, disc = round_album(song, style, art_stamp)
+    bg = under.copy()
+    place(bg, disc, g.round_c[0] - g.round_r, g.round_c[1] - g.round_r)
+    return bg, None, None
+
+
+@lru_cache(maxsize=2)
+def round_album(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
+    """The round layout's background with the disc's shadow, and the disc."""
+    g, s = geometry(style), style.album_scale
     r = g.round_r
-    disc = art.resize((r * 2, r * 2), Image.LANCZOS).convert("RGBA")
+    disc = square(song.art, art_stamp).resize((r * 2, r * 2), Image.LANCZOS).convert("RGBA")
     disc.putalpha(circle_mask(r * 2))
     cx, cy = g.round_c
     drop = (
@@ -443,9 +472,10 @@ def scene(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
         cx + r + round(6 * s),
         cy + r + round(16 * s),
     )
-    bg = Image.alpha_composite(bg, shadow(drop, round(14 * s), 120, True))
-    place(bg, disc, cx - r, cy - r)
-    return bg, None, None
+    bg = Image.alpha_composite(
+        background(song, style, art_stamp), shadow(drop, round(14 * s), 120, True)
+    )
+    return bg, disc
 
 
 def ease(u: float) -> float:
@@ -585,7 +615,7 @@ def progress_bar(t: float, song: Song, style: Style) -> Image.Image:
 
 def forget_art() -> None:
     """Drop every cached layer made from the cover, after a new cover is saved under the same name."""
-    for cached in (square, backdrop, scene):
+    for cached in (square, backdrop, scene, round_album):
         cached.cache_clear()
 
 
@@ -654,21 +684,39 @@ class Painter:
         song: Song,
         style: Style,
         shared: str | None = None,
+        moving: tuple[str, anim.Timing] | None = None,
     ):
         self.lines, self.song, self.style = lines, song, style
         self.g = g = geometry(style)
-        bg, face, case = scene(song, style, stamp(song.art))
-        self.disc = self.case = self.turns = None
+        stamped = stamp(song.art)
+        bg, face, case = scene(song, style, stamped)
+        self.disc = self.case = self.turns = self.over = None
+        self.timing = self.pictures = None
+        if moving:
+            self.timing, self.pictures = moving[1], anim.Shared(*moving)
+        elif song.anim and (found := anim.at(song.anim, style.anim_fps, style.anim_scale)):
+            self.timing, self.pictures = found
+        if self.timing:
+            self.anim_box = anim.box(self.timing.size, style.anim_x, style.anim_y)
+        # A picture under the album that overlaps it must be drawn before the album, so the album
+        # cannot stay in the background or come from the shared turn.
+        under = self.timing is not None and not style.anim_above
+        tucked = under and overlaps(self.anim_box, boxes(style)["album"])
         if case is not None:
             box = case.getbbox() or (0, 0, 1, 1)
             self.case, self.case_at = case.crop(box), box[:2]
             if style.show_cd:
                 self.disc = Disc(face, g.disc_r)
+            elif tucked:
+                self.over = (self.case, *self.case_at)
             else:
                 bg = bg.copy()
                 place(bg, self.case, *self.case_at)
+        elif tucked:
+            bg, disc = round_album(song, style, stamped)
+            self.over = (disc, g.round_c[0] - g.round_r, g.round_c[1] - g.round_r)
         self.bg = bg
-        if shared and self.disc is not None and (turning := turn_set(style)):
+        if shared and self.disc is not None and not tucked and (turning := turn_set(style)):
             self.turns = Turns(shared, *turning)
             # Outside the CD's box a turning frame is the background and the case, always.
             self.still = bg.copy()
@@ -684,24 +732,31 @@ class Painter:
             )
         # The bar's fill grows by a fraction of a pixel each frame, so with it no two frames match.
         bar = t if self.style.bar else None
-        return disc, panel_position(t, self.lines, self.style), bar
+        picture = self.timing.index(t) if self.timing else None
+        return disc, panel_position(t, self.lines, self.style), bar, picture
 
     def image(self, t: float, state: tuple | None = None) -> Image.Image:
         """The frame at t, RGBA."""
-        disc, pos, bar = state or self.state(t)
+        disc, pos, bar, picture = state or self.state(t)
         g = self.g
         if disc is not None and self.turns is not None and disc[0] == g.disc_x:
             img = self.still.copy()
             box = self.turns.box
             img.paste(self.turns.get(round(t * FPS), lambda: self.cd_box(*disc, box)), box[:2])
-        elif disc is not None:
-            img = self.bg.copy()
-            self.draw_cd(img, *disc, (0, 0))
+            disc = None  # drawn
         else:
             img = self.bg.copy()
+        if picture is not None and not self.style.anim_above:
+            place(img, self.pictures[picture], *self.anim_box[:2])
+        if disc is not None:
+            self.draw_cd(img, *disc, (0, 0))
+        elif self.over:
+            place(img, *self.over)
         place(img, panel_at(pos, self.lines, self.style), *g.panel[:2])
         if bar is not None:
             place(img, progress_bar(t, self.song, self.style), *g.bar[:2])
+        if picture is not None and self.style.anim_above:
+            place(img, self.pictures[picture], *self.anim_box[:2])
         return img
 
     def draw_cd(self, img: Image.Image, x: int, turn: float, origin: tuple[int, int]) -> None:
@@ -731,18 +786,22 @@ _painters: dict = {}
 
 
 def painter(
-    lines: tuple[tuple[float, str], ...], song: Song, style: Style, shared: str | None = None
+    lines: tuple[tuple[float, str], ...],
+    song: Song,
+    style: Style,
+    shared: str | None = None,
+    moving: tuple[str, anim.Timing] | None = None,
 ) -> Painter:
     """The painter for these inputs, kept while scene() still returns the same layers (the page
-    clears scene's cache when a file is replaced)."""
+    clears scene's cache when a file is replaced) and the moving picture's files are unchanged."""
     layers = scene(song, style, stamp(song.art))
-    key = (lines, song, style, shared)
+    key = (lines, song, style, shared, moving, anim.stamps(song.anim))
     found = _painters.get(key)
     if found is None or found[0] is not layers:
         if len(_painters) >= 2:
             _painters.pop(next(iter(_painters)))
         panel_at.cache_clear()  # a font file replaced under the same name
-        found = _painters[key] = (layers, Painter(lines, song, style, shared))
+        found = _painters[key] = (layers, Painter(lines, song, style, shared, moving))
     return found[1]
 
 
@@ -762,8 +821,8 @@ def attached(name: str) -> shared_memory.SharedMemory:
 def render_chunk(args) -> list[int]:
     """Draw frames start..stop into the chunk's slots of the shared frame memory and say which slot
     holds each frame. Pickling 8 MB frames back to the main process cost more than drawing them."""
-    start, stop, lines, song, style, turns, frames, first = args
-    p = painter(lines, song, style, turns)
+    start, stop, lines, song, style, turns, moving, frames, first = args
+    p = painter(lines, song, style, turns, moving)
     buf = attached(frames).buf
     slots, slot, last = [], first - 1, None
     for n in range(start, stop):
@@ -854,12 +913,22 @@ def encode(
         size, period = turns_bytes(*turning), turning[1]
         turns = shared_memory.SharedMemory(create=True, size=size)
         turns.buf[size - period : size] = bytes(period)  # no picture drawn yet
+    pictures = moving = None
+    if song.anim:
+        # Uncached: the parent keeps only the shared copy.
+        found = anim.frames.__wrapped__(
+            song.anim, anim.stamps(song.anim), style.anim_fps, style.anim_scale
+        )
+        if found:
+            pictures = anim.share(*found)
+            moving = (pictures.name, found[0])
+            del found
     # Only `ahead` chunks are in flight, each with its own slots, so memory stays flat however long
     # the song is; a chunk's slots are free again once the main process has written them out.
     ahead = workers + 1
     frames = shared_memory.SharedMemory(create=True, size=ahead * CHUNK * FRAME)
     chunks = [
-        (s, min(total, s + CHUNK), lines, song, style, turns and turns.name, frames.name, 0)
+        (s, min(total, s + CHUNK), lines, song, style, turns and turns.name, moving, frames.name, 0)
         for s in range(begin, total, CHUNK)
     ]
     started = time.monotonic()
@@ -898,7 +967,7 @@ def encode(
                 said = errors.read().decode("utf-8", "replace").strip().splitlines()[-3:]
                 raise RuntimeError(f"ffmpeg 오류 (종료 코드 {ff.returncode}): " + " / ".join(said))
     finally:
-        for memory in (turns, frames):
+        for memory in (turns, pictures, frames):
             if memory:
                 memory.close()
                 memory.unlink()
