@@ -7,6 +7,7 @@ import sys
 import time
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -113,8 +114,8 @@ def test_room_for_shared_blocks(monkeypatch):
 class Recording:
     """SharedMemory that records the sizes made here and can refuse one size as Windows does."""
 
-    made: list[int] = []
-    refuse: int | None = None
+    made: ClassVar[list[int]] = []
+    refuse: ClassVar[int | None] = None
 
     def __new__(cls, name=None, create=False, size=0):
         if create:
