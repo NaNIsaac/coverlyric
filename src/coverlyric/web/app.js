@@ -18,6 +18,7 @@ let syncTimer = null;
 let syncing = false;
 let again = false;
 let lastBoxes = {};
+let dragging = false;
 
 function toast(text, ms = 3500) {
   const t = $("toast");
@@ -54,7 +55,7 @@ function payload() {
   return { title: state.title, artist: state.artist, lines: state.lines, style: state.style };
 }
 
-function scheduleSync(delay = 250) {
+function scheduleSync(delay = 150) {
   clearTimeout(syncTimer);
   syncTimer = setTimeout(sync, delay);
 }
@@ -71,7 +72,11 @@ async function sync() {
       $("boxes").innerHTML = "";
     } else {
       const t = Number($("time").value);
-      const res = await api(`/api/preview?t=${t}`, { method: "POST", body: JSON.stringify(payload()) });
+      const w = Math.round($("stage").clientWidth * (window.devicePixelRatio || 1));
+      const res = await api(`/api/preview?t=${t}&w=${w}`, { method: "POST", body: JSON.stringify(payload()) });
+      // A change made while this still was drawn makes it stale: skip it and fetch again. During a drag
+      // the release fetches anyway, and redrawing the boxes would drop the one under the pointer.
+      if (again || dragging) return;
       const blob = await res.blob();
       const old = $("still").src;
       $("still").src = URL.createObjectURL(blob);
@@ -120,6 +125,8 @@ function startDrag(ev, el, name, box) {
   const s = state.style;
   const start = { x: s[`${name}_x`], y: s[`${name}_y`], scale: s[`${name}_scale`] };
   const w0 = box[2] - box[0];
+  dragging = true;
+  el.appendChild(snapshot(box));
   el.classList.add("dragging");
   el.setPointerCapture(ev.pointerId);
   const move = (e) => {
@@ -139,6 +146,7 @@ function startDrag(ev, el, name, box) {
     fillPlaces();
   };
   const up = () => {
+    dragging = false;
     el.classList.remove("dragging");
     el.removeEventListener("pointermove", move);
     el.removeEventListener("pointerup", up);
@@ -146,6 +154,109 @@ function startDrag(ev, el, name, box) {
   };
   el.addEventListener("pointermove", move);
   el.addEventListener("pointerup", up);
+}
+
+// The element's part of the last still, so it moves and grows with the pointer before the new still arrives.
+function snapshot(box) {
+  const still = $("still");
+  const k = still.naturalWidth / FRAME_W;
+  const canvas = document.createElement("canvas");
+  canvas.className = "ghost";
+  canvas.width = Math.max(1, Math.round((box[2] - box[0]) * k));
+  canvas.height = Math.max(1, Math.round((box[3] - box[1]) * k));
+  canvas.getContext("2d").drawImage(still, box[0] * k, box[1] * k, canvas.width, canvas.height,
+    0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+const crop = { file: null, w: 0, h: 0, x: 0, y: 0, side: 0 };
+
+function openCrop(file) {
+  if (!file) return;
+  const img = $("crop-img");
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    crop.file = file;
+    crop.w = img.naturalWidth;
+    crop.h = img.naturalHeight;
+    crop.side = Math.min(crop.w, crop.h);
+    crop.x = (crop.w - crop.side) / 2;
+    crop.y = (crop.h - crop.side) / 2;
+    $("crop-zoom").value = 1;
+    $("crop").showModal();
+    placeCrop();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("이 그림은 열 수 없어요. png나 jpg를 골라 주세요."); };
+  const old = img.src;
+  img.src = url;
+  if (old.startsWith("blob:")) URL.revokeObjectURL(old);
+}
+
+function clampCrop() {
+  const most = Math.min(crop.w, crop.h);
+  crop.side = Math.min(most, Math.max(most / 4, crop.side));
+  crop.x = Math.min(crop.w - crop.side, Math.max(0, crop.x));
+  crop.y = Math.min(crop.h - crop.side, Math.max(0, crop.y));
+}
+
+function placeCrop() {
+  clampCrop();
+  const k = $("crop-img").clientWidth / crop.w;
+  const box = $("crop-box").style;
+  box.left = `${crop.x * k}px`;
+  box.top = `${crop.y * k}px`;
+  box.width = box.height = `${crop.side * k}px`;
+  $("crop-zoom").value = Math.min(crop.w, crop.h) / crop.side;
+}
+
+function dragCrop(ev) {
+  ev.preventDefault();
+  const resize = ev.target.classList.contains("grip");
+  const k = crop.w / $("crop-img").clientWidth;
+  const x0 = ev.clientX;
+  const y0 = ev.clientY;
+  const start = { ...crop };
+  const el = $("crop-box");
+  el.setPointerCapture(ev.pointerId);
+  const move = (e) => {
+    const dx = (e.clientX - x0) * k;
+    const dy = (e.clientY - y0) * k;
+    if (resize) {
+      crop.side = start.side + Math.max(dx, dy);
+      crop.side = Math.min(crop.side, crop.w - start.x, crop.h - start.y);
+    } else {
+      crop.x = start.x + dx;
+      crop.y = start.y + dy;
+    }
+    placeCrop();
+  };
+  const up = () => {
+    el.removeEventListener("pointermove", move);
+    el.removeEventListener("pointerup", up);
+  };
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerup", up);
+}
+
+function zoomCrop(zoom) {
+  const cx = crop.x + crop.side / 2;
+  const cy = crop.y + crop.side / 2;
+  crop.side = Math.min(crop.w, crop.h) / zoom;
+  crop.x = cx - crop.side / 2;
+  crop.y = cy - crop.side / 2;
+  placeCrop();
+}
+
+async function finishCrop() {
+  const side = Math.round(crop.side);
+  const out = Math.min(side, 2400);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = out;
+  canvas.getContext("2d").drawImage($("crop-img"), Math.round(crop.x), Math.round(crop.y), side, side, 0, 0, out, out);
+  const blob = await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.95));
+  $("crop").close();
+  const stem = crop.file.name.replace(/\.[^.]+$/, "");
+  await upload("art", new File([blob], `${stem}.jpg`, { type: "image/jpeg" }));
 }
 
 function fillPlaces() {
@@ -379,7 +490,21 @@ async function pollRender() {
 
 function bind() {
   $("audio-file").addEventListener("change", (e) => upload("audio", e.target.files[0]));
-  $("art-file").addEventListener("change", (e) => upload("art", e.target.files[0]));
+  $("art-file").addEventListener("change", (e) => { openCrop(e.target.files[0]); e.target.value = ""; });
+  $("crop-box").addEventListener("pointerdown", dragCrop);
+  $("crop-box").addEventListener("keydown", (e) => {
+    const step = Math.min(crop.w, crop.h) / 50;
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (!moves[e.key]) return;
+    e.preventDefault();
+    crop.x += moves[e.key][0];
+    crop.y += moves[e.key][1];
+    placeCrop();
+  });
+  $("crop-zoom").addEventListener("input", (e) => zoomCrop(Number(e.target.value)));
+  $("crop-cancel").addEventListener("click", () => $("crop").close());
+  $("crop-ok").addEventListener("click", () => finishCrop().catch((e) => toast(e.message)));
+  window.addEventListener("resize", () => { if ($("crop").open) placeCrop(); });
   $("font-file").addEventListener("change", (e) => upload("font", e.target.files[0]));
   $("title").addEventListener("input", (e) => { state.title = e.target.value; scheduleSync(500); });
   $("artist").addEventListener("input", (e) => { state.artist = e.target.value; scheduleSync(500); });

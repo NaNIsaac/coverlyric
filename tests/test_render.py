@@ -37,6 +37,23 @@ def test_moved_and_scaled_boxes():
     assert "bar" in boxes and "bar" not in render.boxes(render.Style())
 
 
+def test_album_box_follows_the_cd_slide():
+    style = render.Style()
+    g = render.geometry(style)
+    assert render.boxes(style, 0.0)["album"][2] == g.case[2]
+    assert render.boxes(style, render.SLIDE[1])["album"][2] == g.disc_x + g.disc_r
+    hidden = render.Style(show_cd=False)
+    assert render.boxes(hidden, render.SLIDE[1])["album"][2] == g.case[2]
+
+
+def test_moving_the_album_reuses_the_backdrop(demo):
+    song = demo.song()
+    render.forget_art()
+    render.frame(5.0, demo.preview_lines(), song, demo.style)
+    render.frame(5.0, demo.preview_lines(), song, render.Style(album_x=60))
+    assert render.backdrop.cache_info().misses == 1
+
+
 @pytest.mark.parametrize(
     "style",
     [

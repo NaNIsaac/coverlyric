@@ -160,7 +160,9 @@ def boxes(style: Style, t: float = SLIDE[1]) -> dict[str, tuple[int, ...]]:
     """The frame area of each movable element at time t, for the drag handles on the preview."""
     g = geometry(style)
     if style.layout == "case":
-        right = max(g.case[2], round(disc_centre_x(g, t)) + g.disc_r) if style.show_cd else g.case[2]
+        right = (
+            max(g.case[2], round(disc_centre_x(g, t)) + g.disc_r) if style.show_cd else g.case[2]
+        )
         album = (g.case[0], g.case[1], right, g.case[3])
     else:
         cx, cy = g.round_c
