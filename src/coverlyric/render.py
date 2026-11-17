@@ -55,6 +55,8 @@ ENTER = 1.2  # seconds the list takes to rise into the empty panel for the first
 VISIBLE = 3.4
 EDGE = 70
 BAND_ALPHA = 165
+OUTLINE_WIDTH = 0.06  # of the font size
+SHADOW_DROP, SHADOW_ALPHA = 0.05, 0.7  # offset as a share of the font size, and strength
 TITLE_Y, ARTIST_Y, TITLE_BOX = 100, 162, 240
 BAR = (110, 1000, 1850, 1040)
 
@@ -66,6 +68,9 @@ class Style:
     layout: str = "case"  # case | disc
     font: str = fonts.DEFAULT
     band: str = "#c49668"
+    lyric_colour: str = "#ffffff"
+    lyric_edge: str = "none"  # none | outline | shadow, for lyrics on a light cover
+    lyric_edge_colour: str = "#000000"
     blur: int = 30
     dim: float = 0.5
     spin: float = 7.0  # seconds per turn of the case's CD; 0 keeps it still
@@ -118,7 +123,11 @@ class Song:
 
 
 def band_rgb(style: Style) -> tuple[int, int, int]:
-    h = style.band.lstrip("#")
+    return hex_rgb(style.band)
+
+
+def hex_rgb(colour: str) -> tuple[int, int, int]:
+    h = colour.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
@@ -253,13 +262,24 @@ def tracked(
     f: ImageFont.FreeTypeFont,
     fill: tuple,
     tracking: float = TRACKING,
+    stroke: float = 0,
+    stroke_fill: tuple | None = None,
 ) -> None:
-    """Text centred on ``centre`` with ``tracking`` em between letters (Pillow has no letter spacing)."""
+    """Text centred on ``centre`` with ``tracking`` em between letters (Pillow has no letter spacing),
+    with an outline ``stroke`` px wide when asked."""
     gap = f.size * tracking
     widths = [f.getlength(ch) for ch in text]
     x = centre[0] - (sum(widths) + gap * (len(text) - 1)) / 2
     for ch, w in zip(text, widths, strict=True):
-        draw.text((x, centre[1]), ch, font=f, fill=fill, anchor="lm")
+        draw.text(
+            (x, centre[1]),
+            ch,
+            font=f,
+            fill=fill,
+            anchor="lm",
+            stroke_width=stroke,
+            stroke_fill=stroke_fill,
+        )
         x += w + gap
 
 
@@ -639,6 +659,7 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
     row = g.row
     mid = ph / 2
     face, now, room, row_px = panel_fit(style)
+    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
 
     def filled(k: int) -> float:
         return 1.0 if 0 <= k < len(lines) and lines[k][1] else 0.0
@@ -671,8 +692,16 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
         f = font(face, size, weight)
         pitch = size * ROW_PITCH
         for n, part in enumerate(rows):
-            dy = (n - (len(rows) - 1) / 2) * pitch
-            tracked(d, (pw / 2, y + dy), part, f, (255, 255, 255, alpha))
+            at = y + (n - (len(rows) - 1) / 2) * pitch
+            if style.lyric_edge == "shadow":
+                # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
+                drop = size * SHADOW_DROP
+                tracked(d, (pw / 2 + drop, at + drop), part, f, (*rim, round(alpha * SHADOW_ALPHA)))
+            if style.lyric_edge == "outline":
+                stroke = max(1, round(size * OUTLINE_WIDTH))
+                tracked(d, (pw / 2, at), part, f, (*ink, alpha), TRACKING, stroke, (*rim, alpha))
+            else:
+                tracked(d, (pw / 2, at), part, f, (*ink, alpha))
     # Averaging each 2x2 block takes 8 ms where LANCZOS took 37 ms, and this runs on every frame of a
     # move; the panel differs from LANCZOS by about one level of 255 on average (PSNR about 47 dB).
     return layer.reduce(SS)
