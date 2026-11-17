@@ -36,8 +36,10 @@ def run_job(path: Path) -> None:
     lines = tuple(timing.ready(project.lines))
     part = out.with_name(out.stem + ".making.mp4")
 
-    def report(done: float, total: float) -> None:
-        print(f"progress {done:.1f} {total:.1f}", flush=True)
+    def report(done: float, total: float, frames: int, frames_total: int, left: float | None):
+        # The page reads the first two numbers; frames and seconds left (-1: not known yet) follow.
+        left_s = -1 if left is None else round(left)
+        print(f"progress {done:.1f} {total:.1f} {frames} {frames_total} {left_s}", flush=True)
 
     render.render(part, lines, song, project.style, workers(), report=report)
     part.replace(out)
@@ -90,7 +92,7 @@ def main(argv: list[str] | None = None) -> None:
             project.style,
             workers(),
             span,
-            report=lambda done, total: print(f"{done:6.1f}s of {total:.1f}s", flush=True),
+            report=lambda done, total, *_: print(f"{done:6.1f}s of {total:.1f}s", flush=True),
         )
     elif args.command == "still":
         project = Project.load(args.project)
