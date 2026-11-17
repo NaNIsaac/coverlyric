@@ -224,6 +224,7 @@ body.timing-open .editor { display: flex; }
 .line.next { background: var(--mark); box-shadow: inset 3px 0 0 var(--accent); }
 .line.differs { outline: 1px solid var(--warn); }
 .line.doubt { outline: 1px dashed var(--warn); }
+.line[data-fit] .x { box-shadow: inset 0 -2px 0 var(--accent); }
 .line .n { color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .line input { padding: 3px 6px; font-size: 14px; }
 .line .t { font-variant-numeric: tabular-nums; }
