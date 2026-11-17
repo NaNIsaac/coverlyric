@@ -45,30 +45,56 @@ function Find-ManagedPython([string]$dir, [version]$least) {
 function Test-VenvPython([string]$venv) {
     $python = Join-Path $venv 'Scripts\python.exe'
     if (-not (Test-Path -LiteralPath $python)) { return $false }
-    & $python --version *> $null
+    try {
+        & $python --version *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false  # not a program Windows can start
+    }
+}
+
+# uv's environments start Python through its own trampoline, which carries the base Python's path,
+# a minor-version junction, inside the executable and does not read pyvenv.cfg (#19).
+function Test-UvTrampoline([string]$venv) {
+    $python = Join-Path $venv 'Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $python)) { return $false }
+    $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($python))
+    return $text.Contains('uv trampoline')
+}
+
+# Makes the environment again with Python's own venv, whose launcher reads home from pyvenv.cfg, so
+# it names the full-version folder and never a junction; uv then installs into it (#19). Only the
+# program's own .venv folder is removed.
+function Reset-Venv([string]$venv, [string]$python) {
+    if ((Split-Path -Leaf $venv) -ne '.venv') { return $false }
+    if (Test-Path -LiteralPath $venv) { Remove-Item -LiteralPath $venv -Recurse -Force }
+    & $python -m venv --without-pip $venv
     return $LASTEXITCODE -eq 0
 }
 
 # Runs the program. When it fails and the environment's Python cannot start, it repairs the
-# environment's home and runs once more. When Python still cannot start, or uv failed before making
-# the environment (it queries every junction in its Python folder, #18), it runs once more with
-# UV_PYTHON naming a full-version Python from `least` (requires-python in pyproject.toml) on. A
-# failure of the program itself is not retried.
+# environment's home and runs once more (#17). When Python still cannot start, the environment is a
+# uv trampoline, or uv failed before making one (it queries every junction in its Python folder), it
+# makes the environment again with a full-version Python from `least` (requires-python in
+# pyproject.toml) on and runs once more with UV_PYTHON naming it (#18, #19). A failure of the
+# program itself is not retried.
 function Start-Program([string]$uv, [string]$venv, [version]$least = '3.12') {
     # Windows PowerShell 5.1 turns a native command's stderr into an error, which the script's 'Stop'
     # would make end the launcher before the repair (#18).
     $ErrorActionPreference = 'Continue'
     & $uv run --frozen --no-dev coverlyric
     $code = $LASTEXITCODE
-    if ($code -ne 0 -and -not (Test-VenvPython $venv) -and (Repair-VenvHome $venv)) {
+    if ($code -eq 0 -or (Test-VenvPython $venv)) { $global:LASTEXITCODE = $code; return }
+    if (-not (Test-UvTrampoline $venv) -and (Repair-VenvHome $venv)) {
         Write-Host 'Python 경로를 고쳐 다시 시작합니다.'
         & $uv run --frozen --no-dev coverlyric
         $code = $LASTEXITCODE
+        if ($code -eq 0 -or (Test-VenvPython $venv)) { $global:LASTEXITCODE = $code; return }
     }
-    if ($code -ne 0 -and -not (Test-VenvPython $venv)) {
-        $python = Find-ManagedPython (& $uv python dir 2>$null | Select-Object -First 1) $least
-        if ($python -and $env:UV_PYTHON -ne $python) {
-            Write-Host 'Python을 직접 지정해 다시 시작합니다.'
+    $python = Find-ManagedPython (& $uv python dir 2>$null | Select-Object -First 1) $least
+    if ($python) {
+        Write-Host 'Python 환경을 다시 만들어 시작합니다.'
+        if (Reset-Venv $venv $python) {
             $env:UV_PYTHON = $python
             & $uv run --frozen --no-dev coverlyric
             $code = $LASTEXITCODE
