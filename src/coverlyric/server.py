@@ -181,17 +181,33 @@ class App:
                 raise ValueError(
                     "지원하지 않는 노래 파일 형식입니다. mp3, wav, m4a, flac, ogg 파일을 고르세요."
                 )
+            # Read the new file under another name first: a file that is not a song must not cost
+            # the song already in the project.
+            trial = self.work / f"upload{suffix}"
+            trial.write_bytes(body)
+            try:
+                length = media.duration(str(trial))
+            except ValueError:
+                trial.unlink()
+                raise ValueError(
+                    "노래 파일을 읽을 수 없습니다. 다른 파일을 고르세요 (mp3, wav, m4a, flac, ogg)."
+                ) from None
             for old in self.work.glob("song.*"):
                 old.unlink()
             target = self.work / f"song{suffix}"
-            target.write_bytes(body)
+            trial.replace(target)
             self.project.audio = target.name
-            self.project.duration = media.duration(str(target))
+            self.project.duration = length
             if not self.project.title:
                 self.project.title = Path(name).stem
         elif kind == "art":
             if suffix not in IMAGES:
                 raise ValueError("지원하지 않는 그림 형식입니다. png, jpg, webp 파일을 고르세요.")
+            try:
+                with Image.open(io.BytesIO(body)) as picture:
+                    picture.load()
+            except (OSError, SyntaxError, Image.DecompressionBombError):
+                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고르세요.") from None
             for old in self.work.glob("cover.*"):
                 old.unlink()
             target = self.work / f"cover{suffix}"
