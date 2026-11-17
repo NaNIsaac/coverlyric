@@ -362,6 +362,7 @@ function fillLook() {
   $("lyric_edge_colour").value = s.lyric_edge_colour;
   $("lyric-edge-colour-row").hidden = s.lyric_edge === "none";
   $("show_title").checked = s.show_title;
+  $("intro").value = String(s.intro);
   $("bar").checked = s.bar;
   $("fade").checked = s.fade;
   $("height").value = String(s.height);
@@ -1159,6 +1160,7 @@ function bind() {
   });
   $("lyric_edge_colour").addEventListener("input", (e) => { state.style.lyric_edge_colour = e.target.value; scheduleSync(); });
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });
+  $("intro").addEventListener("change", (e) => { state.style.intro = Number(e.target.value); scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
   $("fade").addEventListener("change", (e) => { state.style.fade = e.target.checked; scheduleSync(0); });
   $("height").addEventListener("change", (e) => { state.style.height = Number(e.target.value); scheduleSync(0); });

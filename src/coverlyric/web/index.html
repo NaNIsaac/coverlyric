@@ -140,6 +140,15 @@
         <label class="check"><input type="checkbox" id="show_title"> 제목과 가수 보이기</label>
         <label class="check"><input type="checkbox" id="bar"> 재생 바 넣기</label>
         <label class="check" title="시작 0.5초, 끝 1.5초 동안 화면과 소리가 서서히 바뀝니다"><input type="checkbox" id="fade"> 시작·끝 페이드</label>
+        <label class="field" title="영상 처음에 제목과 가수를 크게 보여 준 뒤 평소 화면으로 바뀝니다. 첫 가사가 나오면 끝납니다">시작 제목 화면
+          <select id="intro">
+            <option value="0">없음</option>
+            <option value="2">2초</option>
+            <option value="3">3초</option>
+            <option value="4">4초</option>
+            <option value="5">5초</option>
+          </select>
+        </label>
       </fieldset>
       <fieldset class="group" id="anim-group">
         <legend>움직이는 그림</legend>

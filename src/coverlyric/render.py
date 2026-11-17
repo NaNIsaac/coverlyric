@@ -62,6 +62,7 @@ BAND_ALPHA = 165
 OUTLINE_WIDTH = 0.06  # of the font size
 SHADOW_DROP, SHADOW_ALPHA = 0.05, 0.7  # offset as a share of the font size, and strength
 TITLE_Y, ARTIST_Y, TITLE_BOX = 100, 162, 240
+INTRO_FADE = 0.8  # seconds the opening title card takes to fade into the song's frame
 BAR = (110, 1000, 1850, 1040)
 
 
@@ -103,6 +104,7 @@ class Style:
     anim_above: bool = True  # over everything, or under the album and the lyrics
     tone: str = "none"  # background colour: none | warm | cool | mono | cover (tinted with the cover's colour)
     vignette: float = 0.0  # 0 to 1: how much darker the background gets towards the frame's edges
+    intro: float = 0.0  # seconds of a full-frame title card at the start, ended by the first line
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -500,6 +502,40 @@ def background(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
     return Image.alpha_composite(bg, panel_layer(g, style))
 
 
+@lru_cache(maxsize=2)
+def intro_card(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
+    """The opening card: the background a little darker, the title and the artist large in the middle."""
+    face = fonts.resolve(style.font)
+    bg = backdrop(song.art, art_stamp, style.blur, style.dim, style.tone, style.vignette)
+    card = Image.blend(bg, Image.new("RGBA", (W, H), (0, 0, 0, 255)), 0.3)
+    text = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(text)
+    title = font(face, 104 * SS, 700)
+    while text_width(song.title, title, 0.04) > W * 0.86 * SS and title.size > 40 * SS:
+        title = font(face, title.size * 0.92, 700)
+    y = H / 2 - (30 if song.artist else 0)
+    lettered(d, (W * SS / 2, y * SS), song.title, title, 255, style, 0.04)
+    if song.artist:
+        lettered(
+            d, (W * SS / 2, (y + 96) * SS), song.artist, font(face, 40 * SS, 400), 190, style, 0.2
+        )
+    return Image.alpha_composite(card, text.resize((W, H), Image.LANCZOS))
+
+
+def intro_end(lines: tuple[tuple[float, str], ...], style: Style) -> float:
+    """When the opening card is gone: after style.intro seconds, or at the first line if sooner."""
+    if style.intro <= 0:
+        return 0.0
+    return min(style.intro, lines[0][0]) if lines else style.intro
+
+
+def veil(t: float, end: float) -> float:
+    """How much of the opening card covers the frame at t: 1, then down to 0 over the last INTRO_FADE."""
+    if t >= end:
+        return 0.0
+    return round(min(1.0, (end - t) / INTRO_FADE), 3)
+
+
 def panel_layer(g: Geometry, style: Style) -> Image.Image:
     panel = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(panel).rounded_rectangle(
@@ -894,6 +930,8 @@ class Painter:
             bg, disc = round_album(song, style, stamped)
             self.over = (disc, g.round_c[0] - g.round_r, g.round_c[1] - g.round_r)
         self.bg = bg
+        self.intro = intro_end(lines, style)
+        self.card = intro_card(song, style, stamped) if self.intro > 0 else None
         if shared and self.disc is not None and not tucked and (turning := turn_set(style)):
             self.turns = Turns(shared, *turning)
             # Outside the CD's box a turning frame is the background and the case, always.
@@ -902,6 +940,15 @@ class Painter:
         self.last: tuple = (None, b"")
 
     def state(self, t: float) -> tuple:
+        cover = veil(t, self.intro)
+        if cover == 1:
+            return (
+                None,
+                None,
+                None,
+                None,
+                1.0,
+            )  # the card hides the frame: every such frame is the same
         disc = None
         if self.disc is not None:
             disc = (
@@ -911,11 +958,13 @@ class Painter:
         # The bar's fill grows by a fraction of a pixel each frame, so with it no two frames match.
         bar = t if self.style.bar else None
         picture = self.timing.index(t) if self.timing else None
-        return disc, panel_position(t, self.lines, self.style), bar, picture
+        return disc, panel_position(t, self.lines, self.style), bar, picture, cover
 
     def image(self, t: float, state: tuple | None = None) -> Image.Image:
         """The frame at t, RGBA."""
-        disc, pos, bar, picture = state or self.state(t)
+        disc, pos, bar, picture, cover = state or self.state(t)
+        if cover == 1:
+            return self.card.copy()
         g = self.g
         if disc is not None and self.turns is not None and disc[0] == g.disc_x:
             img = self.still.copy()
@@ -938,6 +987,8 @@ class Painter:
             place(img, progress_bar(t, self.song, self.style), *g.bar[:2])
         if picture is not None and self.style.anim_above:
             place(img, self.pictures[picture], *self.anim_box[:2])
+        if cover > 0:
+            img = Image.blend(img, self.card, cover)
         return img
 
     def draw_cd(self, img: Image.Image, x: int, turn: float, origin: tuple[int, int]) -> None:

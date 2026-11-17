@@ -180,3 +180,29 @@ def test_vignette_darkens_the_edges_and_leaves_the_middle(demo):
     assert dark[corner][..., :3].mean() < 0.3 * plain[corner][..., :3].mean()
     none = render.backdrop(song.art, 0.0, 30, 0.0, "none", 0.0)
     assert ImageChops.difference(none, render.backdrop(song.art, 0.0, 30, 0.0)).getbbox() is None
+
+
+def test_opening_card_covers_the_start_and_fades_into_the_song(demo):
+    from dataclasses import replace
+
+    song, lines = demo.song(), ((4.0, "first"), (8.0, "second"))
+    plain = render.Painter(lines, song, render.Style())
+    p = render.Painter(lines, song, replace(render.Style(), intro=3.0))
+    card = render.intro_card(song, p.style)
+    assert ImageChops.difference(p.image(0.5), card).getbbox(alpha_only=False) is None
+    assert p.raw(0.5) == p.raw(1.0)  # the held card is one frame
+    middle = np.asarray(p.image(3.0 - render.INTRO_FADE / 2)).astype(int)
+    a, b = (
+        np.asarray(card).astype(int),
+        np.asarray(plain.image(3.0 - render.INTRO_FADE / 2)).astype(int),
+    )
+    assert np.abs(middle - (a + b) / 2).max() <= 2
+    after = ImageChops.difference(p.image(3.5), plain.image(3.5))
+    assert after.getbbox(alpha_only=False) is None
+
+
+def test_opening_card_ends_at_the_first_line():
+    style = render.Style(intro=5.0)
+    assert render.intro_end(((2.5, "a"),), style) == 2.5
+    assert render.intro_end((), style) == 5.0
+    assert render.intro_end(((2.5, "a"),), render.Style()) == 0.0
