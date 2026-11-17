@@ -55,8 +55,9 @@ the preview, where they can be edited.
 - With the song and lyrics in, click **자동 맞추기** → **자동으로 맞추기**. The bar shows the phase,
   the percentage and the time left, and the list fills in as lines are found.
 - A 4-minute song takes about 2-5 minutes. The first run downloads the listening model (464 MB).
-- When memory runs short it tries again with a smaller model (base, then tiny) and says so under the
-  bar. A smaller model places lines less exactly, so check the result once more.
+- At the start it picks the largest model that fits in the free memory (small, base, then tiny)
+  and says under the bar when it uses a smaller one. When not even tiny fits, the memory message
+  comes at once. When memory runs short while listening, it tries again with a smaller model. A smaller model places lines less exactly, so check the result once more.
 - The song is processed on this PC only.
 - Lines to check get a dashed border and a note: lines not found (given a time between their
   neighbours), lines within 1 second of the line before, and lines heard differently from the lyrics.

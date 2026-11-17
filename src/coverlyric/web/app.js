@@ -804,7 +804,7 @@ async function pollAuto() {
       if (measured) line += ` · ${Math.round(share * 100)}%`;
       line += timeLeft(job.eta);
       if (job.phase === "install" && job.detail) line += ` · ${job.detail}`;
-      if (job.smaller) line += ` · 메모리가 부족해 더 작은 모델(${job.smaller})로 다시 하는 중`;
+      if (job.smaller) line += ` · 메모리가 부족해 더 작은 모델(${job.smaller})로 하는 중`;
       $("auto-text").textContent = line;
       if (job.partial && pollAuto.before) showPartial(job.partial);
       setTimeout(pollAuto, 1000);

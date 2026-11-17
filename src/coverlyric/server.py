@@ -554,23 +554,33 @@ class App:
             raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
         if model not in auto.MODELS:
             raise ValueError(f"unknown model {model}")
-        self.check_disk(model)
-        uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
-        if not uv:
-            raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행하세요.")
+        # A model that cannot get memory fails only after a minute of loading; the free commit
+        # says beforehand which one fits (#16).
+        picked = auto.fitting(model, media.commit_mb())
+        if picked is None:
+            raise ValueError(AUTO_NO_MEMORY)
+        self.check_disk(picked)
+        if importlib.util.find_spec("faster_whisper"):
+            # Already installed: started directly, without uv's own process in between.
+            cmd = [sys.executable]
+        else:
+            uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
+            if not uv:
+                raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행하세요.")
+            cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
+            cmd += ["python"]
+        cmd += ["-m", "coverlyric", "auto-job"]
         job = self.work / "auto-job.json"
         (self.work / "auto-result.json").unlink(missing_ok=True)
         job.write_text(
             json.dumps(
-                {"audio": p.path(p.audio), "lyrics": lyrics, "model": model},
+                {"audio": p.path(p.audio), "lyrics": lyrics, "model": picked},
                 ensure_ascii=False,
             ),
             encoding="utf-8",
         )
-        cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
-        cmd += ["python", "-m", "coverlyric", "auto-job", str(job)]
         self.auto_proc = subprocess.Popen(
-            cmd,
+            [*cmd, str(job)],
             # hf-xet holds the model in memory until it is complete, so the download bar would
             # not move; the plain HTTP download writes the cache file as it goes.
             # No token is needed for the public models; the lookup only prints warnings.
@@ -585,6 +595,8 @@ class App:
         )
         self.auto = {"state": "running", "phase": "install", "done": 0.0, "total": p.duration}
         self.auto["started"] = self.auto["phase_started"] = time.time()
+        if picked != model:
+            self.auto["smaller"] = picked
         threading.Thread(target=self.watch_auto, args=(self.auto_proc,), daemon=True).start()
         return self.auto
 

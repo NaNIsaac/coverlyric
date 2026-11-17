@@ -26,6 +26,21 @@ MODELS = {  # MB in the cache once downloaded
 }
 SMALLER = {"small": "base", "base": "tiny"}  # tried in turn when a model cannot get memory
 NO_MEMORY_EXIT = 3  # the auto job's exit code when no listening model could get memory
+# Peak commit in MB of the job process that loads each model (int8, one BLAS thread) and listens to a
+# song, with the transcriber's own imports; loading converts the weights and briefly needs more.
+PEAK_MB = {"small": 730, "base": 430, "tiny": 320}
+MARGIN_MB = 50  # other programs move while the model loads
+
+
+def fitting(model: str, free_mb: float | None) -> str | None:
+    """The largest model from `model` down that fits in the free commit, or None when none does.
+    With the free commit unknown the model asked for is used, and a failed load still falls back."""
+    if free_mb is None:
+        return model
+    name: str | None = model
+    while name and PEAK_MB[name] + MARGIN_MB > free_mb:
+        name = SMALLER.get(name)
+    return name
 
 
 def out_of_memory(error: BaseException) -> bool:
