@@ -366,7 +366,7 @@ class App:
                     LOG.info("render %d%% (%.0f of %.0f s)", logged * 10, done, total)
             elif line.startswith("out "):
                 out = Path(line[4:])  # another name when the old video was held open
-            elif line.startswith("start "):
+            elif line.startswith(("start ", "memory ")):
                 LOG.info("render %s", line)
             elif line.startswith("error: "):
                 said = line[7:]

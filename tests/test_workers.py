@@ -23,6 +23,7 @@ def test_workers_follow_cores_and_free_memory(monkeypatch, cores, available, exp
     monkeypatch.delenv("COVERLYRIC_WORKERS", raising=False)
     monkeypatch.setattr(cli.os, "cpu_count", lambda: cores)
     monkeypatch.setattr(media, "memory_mb", lambda: (8000.0, available))
+    monkeypatch.setattr(media, "commit_mb", lambda: None)
     assert cli.workers() == expected
 
 
@@ -41,4 +42,5 @@ def test_a_bad_worker_setting_does_not_break_the_render(monkeypatch, given, expe
     monkeypatch.setenv("COVERLYRIC_WORKERS", given)
     monkeypatch.setattr(cli.os, "cpu_count", lambda: 4)
     monkeypatch.setattr(media, "memory_mb", lambda: (8000.0, 4000.0))
+    monkeypatch.setattr(media, "commit_mb", lambda: None)
     assert cli.workers() == (expected or 3)

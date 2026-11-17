@@ -8,7 +8,6 @@ import json
 import os
 import sys
 import traceback
-from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 from PIL import Image
@@ -21,15 +20,14 @@ WORKER_MB = 150  # each extra worker measured about 120 MB in a 60 s 1080p rende
 # Under this much free memory at most two workers: the render is bound by the encoder, and on a
 # 16 GB PC a 60 s part took 65.6 s with two workers at 993 MB against 62.6 s with four at 1831 MB.
 LOW_MB, LOW_WORKERS = 2048, 2
-WORKER_ERROR = (
-    "작업 프로세스가 비정상 종료되었습니다. 대부분 메모리 부족이 원인입니다. "
-    "다른 프로그램을 닫고 다시 만드세요."
-)
+# For any failure memory could cause; the raw system text stays in coverlyric.log (#12).
+MEMORY_ERROR = "메모리가 부족해 영상을 만들지 못했습니다. 다른 프로그램을 닫고 다시 만들어 보세요."
 
 
 def workers() -> int:
     """Render processes: one core is left for the encoder and the page, and the memory available
-    when the render starts must hold the encoder plus every worker. Under LOW_MB free there are at most
+    when the render starts must hold the encoder plus every worker. That is free physical memory,
+    or on Windows the commit still available when it is less (#12). Under LOW_MB there are at most
     two, and with less than the encoder needs, one."""
     try:
         given = int(os.environ.get("COVERLYRIC_WORKERS") or 0)
@@ -38,6 +36,8 @@ def workers() -> int:
     if given > 0:
         return min(8, given)
     _, available = media.memory_mb()
+    if (commit := media.commit_mb()) is not None:
+        available = min(available, commit) if available else commit
     by_memory = int((available - BASE_MB) // WORKER_MB) if available else 6
     if available and available < LOW_MB:
         by_memory = min(by_memory, LOW_WORKERS)
@@ -46,8 +46,8 @@ def workers() -> int:
 
 def failure(e: BaseException) -> str:
     """One line for the page: what failed and what to do."""
-    if isinstance(e, BrokenProcessPool | MemoryError):
-        return WORKER_ERROR
+    if render.out_of_memory(e):
+        return MEMORY_ERROR
     return str(e) or type(e).__name__
 
 
@@ -80,10 +80,16 @@ def run_job(path: Path) -> None:
         left_s = -1 if left is None else round(left)
         print(f"progress {done:.1f} {total:.1f} {frames} {frames_total} {left_s}", flush=True)
 
+    def say(text: str) -> None:
+        print(f"memory {text}", flush=True)
+
     count = workers()
     total, available = media.memory_mb()
+    commit = media.commit_mb()
     print(
-        f"start workers {count} memory {available:.0f} of {total:.0f} MB free, "
+        f"start workers {count} memory {available:.0f} of {total:.0f} MB free"
+        + (f", commit {commit:.0f} MB" if commit is not None else "")
+        + ", "
         f"song {song.duration:.1f} s, out {out.name}",
         flush=True,
     )
@@ -92,9 +98,9 @@ def run_job(path: Path) -> None:
     lines = project.preview_lines() if clip else tuple(timing.ready(project.lines))
     try:
         if clip:
-            render.render(part, lines, song, project.style, count, tuple(clip), report, True)
+            render.render(part, lines, song, project.style, count, tuple(clip), report, True, say)
         else:
-            render.render(part, lines, song, project.style, count, report=report)
+            render.render(part, lines, song, project.style, count, report=report, note=say)
         out = place(part, out)
     finally:
         part.unlink(missing_ok=True)

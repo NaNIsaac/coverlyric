@@ -10,12 +10,14 @@ the default style is the original look.
 from __future__ import annotations
 
 import colorsys
+import errno
 import math
 import subprocess
 import tempfile
 import time
 from collections import deque
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict, dataclass, fields, replace
 from functools import lru_cache
 from multiprocessing import shared_memory
@@ -1287,18 +1289,63 @@ def render(
     span: tuple[float, float] | None = None,
     report=print,
     quick: bool = False,
+    note=print,
 ) -> None:
     """Write the mp4. As chunks finish, `report(done_seconds, total_seconds, frames_done,
     frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by.
-    `quick` makes a small clip at half the frame rate to look at in the page."""
+    `quick` makes a small clip at half the frame rate to look at in the page.
+    When memory runs out, the render starts again with less (`steps`), and `note` says how (#12)."""
     codec = "libx264" if quick else media.encoder()
-    try:
-        encode(out, lines, song, style, workers, span, report, codec, quick)
-    except RuntimeError:
-        if codec == "libx264":
-            raise
-        # A graphics driver can pass the short test and still fail on a whole song.
-        encode(out, lines, song, style, workers, span, report, "libx264", quick)
+    tries = steps(workers)
+    for k, (count, shared) in enumerate(tries):
+        try:
+            try:
+                encode(out, lines, song, style, count, span, report, codec, quick, shared)
+            except RuntimeError:
+                if codec == "libx264":
+                    raise
+                # A graphics driver can pass the short test and still fail on a whole song.
+                codec = "libx264"
+                encode(out, lines, song, style, count, span, report, codec, quick, shared)
+            return
+        except Exception as e:
+            if k + 1 == len(tries) or not out_of_memory(e):
+                raise
+            count, shared = tries[k + 1]
+            note(
+                f"memory short ({type(e).__name__}: {e}): again with {count} worker(s)"
+                + ("" if shared else ", the CD turn drawn on each frame")
+            )
+
+
+def steps(workers: int) -> list[tuple[int, bool]]:
+    """The tries when memory runs short: (workers, shared CD turn and moving picture), halving the
+    workers down to one, then one without the shared pictures."""
+    counts = [max(1, workers)]
+    while counts[-1] > 1:
+        counts.append(counts[-1] // 2)
+    return [(n, True) for n in counts] + [(1, False)]
+
+
+# Windows: ERROR_NOT_ENOUGH_MEMORY, ERROR_COMMITMENT_LIMIT (the paging file is too small).
+WIN_MEMORY = (8, 1455)
+
+
+def out_of_memory(e: BaseException) -> bool:
+    """A failure that less memory could avoid: Python out of memory, a worker killed (on this PC
+    almost always for memory), or the system refusing to commit more."""
+    if isinstance(e, MemoryError | BrokenProcessPool):
+        return True
+    return isinstance(e, OSError) and (
+        getattr(e, "winerror", None) in WIN_MEMORY or e.errno == errno.ENOMEM
+    )
+
+
+def room_for(mb: float) -> bool:
+    """Whether shared blocks of `mb` leave half the memory that can still be committed for the
+    workers and the encoder; True where that cannot be read."""
+    commit = media.commit_mb()
+    return commit is None or mb <= commit / 2
 
 
 FADE_IN, FADE_OUT = 0.5, 1.5  # seconds
@@ -1332,6 +1379,7 @@ def encode(
     report,
     codec: str,
     quick: bool = False,
+    shared: bool = True,
 ) -> None:
     first, last = (0.0, song.duration) if span is None else span
     fps = rate(style)
@@ -1384,26 +1432,36 @@ def encode(
         "+faststart",
         str(out),
     ]
-    turning = turn_set(style)
-    turns = None
-    if turning:
-        size, period = turns_bytes(*turning), turning[1]
-        turns = shared_memory.SharedMemory(create=True, size=size)
-        turns.buf[size - period : size] = bytes(period)  # no picture drawn yet
-    pictures = moving = None
-    if song.anim:
-        # Uncached: the parent keeps only the shared copy.
-        found = anim.frames.__wrapped__(
-            song.anim, anim.stamps(song.anim), style.anim_fps, style.anim_scale
-        )
-        if found:
-            pictures = anim.share(*found)
-            moving = (pictures.name, found[0])
-            del found
     # Only `ahead` chunks are in flight, each with its own slots, so memory stays flat however long
     # the song is; a chunk's slots are free again once the main process has written them out.
     ahead = workers + 1
-    frames = shared_memory.SharedMemory(create=True, size=ahead * CHUNK * FRAME)
+    ring = ahead * CHUNK * FRAME
+    turning = turn_set(style) if shared else None
+    if turning and not room_for((turns_bytes(*turning) + ring) / 2**20):
+        turning = None  # each worker draws the CD turn itself
+    turns = pictures = moving = frames = None
+    try:
+        if turning:
+            size, period = turns_bytes(*turning), turning[1]
+            turns = shared_memory.SharedMemory(create=True, size=size)
+            turns.buf[size - period : size] = bytes(period)  # no picture drawn yet
+        if song.anim and shared:
+            # Uncached: the parent keeps only the shared copy.
+            found = anim.frames.__wrapped__(
+                song.anim, anim.stamps(song.anim), style.anim_fps, style.anim_scale
+            )
+            if found:
+                pictures = anim.share(*found)
+                moving = (pictures.name, found[0])
+                del found
+        frames = shared_memory.SharedMemory(create=True, size=ring)
+    except BaseException:
+        # A block made before the one that failed would hold its memory through the next try.
+        for memory in (turns, pictures):
+            if memory:
+                memory.close()
+                memory.unlink()
+        raise
     span_n = CHUNK * step
     chunks = [
         (
