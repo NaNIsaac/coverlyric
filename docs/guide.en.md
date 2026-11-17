@@ -113,6 +113,8 @@ are in the **색** group, the rest in **모양**.
 
 ![Make](screenshots/5-make.png)
 
+- **화질** (1080p or 720p) and **1초에 장면** (24 or 30 frames a second): size and frame rate of the
+  video. A 720p file is smaller and a little faster to make.
 - **10초 미리보기** (10-second preview) makes 10 seconds from the preview time at small size and
   plays it in place of the still; **미리보기 닫기** closes it.
 - **이대로 영상 만들기** → **확인**. While it runs, the page shows how far into the song the video is
@@ -124,7 +126,7 @@ Files in `만든 영상`:
 
 | File | Content |
 |---|---|
-| `title.mp4` | video (1920x1080, 24 fps, H.264 + AAC) |
+| `title.mp4` | video (1920x1080 and 24 fps by default, H.264 + AAC) |
 | `title.png` | thumbnail (1280x720) |
 | `title.lrc`, `title.srt` | timing |
 
