@@ -28,8 +28,12 @@ def workers() -> int:
     """Render processes: one core is left for the encoder and the page, and the memory available
     when the render starts must hold the encoder plus every worker. A PC with little free memory
     gets one worker."""
-    if given := os.environ.get("COVERLYRIC_WORKERS"):
-        return max(1, int(given))
+    try:
+        given = int(os.environ.get("COVERLYRIC_WORKERS") or 0)
+    except ValueError:
+        given = 0  # not a number: decide from this PC rather than fail every render
+    if given > 0:
+        return min(8, given)
     _, available = media.memory_mb()
     by_memory = int((available - BASE_MB) // WORKER_MB) if available else 6
     return max(1, min(6, (os.cpu_count() or 2) - 1, by_memory))

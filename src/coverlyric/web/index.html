@@ -43,7 +43,7 @@
 <main>
   <section class="steps">
     <details class="step" id="step-files" open>
-      <summary><svg class="i"><use href="#i-song"/></svg>노래와 표지<span class="num">1단계</span></summary>
+      <summary><svg class="i"><use href="#i-song"/></svg>노래와 표지<span class="state" id="state-files"></span><span class="num">1단계</span></summary>
       <div class="pick">
         <label class="file-button"><svg class="i"><use href="#i-song"/></svg>노래 파일 고르기<input type="file" id="audio-file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*"></label>
         <span id="audio-name" class="note">없음</span>
@@ -57,14 +57,14 @@
     </details>
 
     <details class="step" id="step-lyrics">
-      <summary><svg class="i"><use href="#i-lines"/></svg>가사<span class="num">2단계</span></summary>
+      <summary><svg class="i"><use href="#i-lines"/></svg>가사<span class="state" id="state-lyrics"></span><span class="num">2단계</span></summary>
       <p class="help">가사를 붙여 넣으세요. 한 줄이 화면의 한 줄이 됩니다. [후렴] 같은 표시는 빠집니다.</p>
       <textarea id="lyrics-text" rows="9" placeholder="여기에 가사를 붙여 넣기"></textarea>
       <button id="lyrics-apply"><svg class="i"><use href="#i-check"/></svg>가사 넣기</button>
     </details>
 
     <details class="step" id="step-timing">
-      <summary><svg class="i"><use href="#i-clock"/></svg>타이밍 <span class="note">(각 줄의 시작 시간)</span><span class="num">3단계</span></summary>
+      <summary><svg class="i"><use href="#i-clock"/></svg>타이밍 <span class="note">(각 줄의 시작 시간)</span><span class="state" id="state-timing"></span><span class="num">3단계</span></summary>
       <p class="help">맞추는 방법을 고르세요. 결과는 오른쪽 아래 목록에 들어갑니다.</p>
       <div class="methods" role="radiogroup" aria-label="맞추는 방법">
         <button class="tab method" data-tab="auto" role="radio">
@@ -146,7 +146,7 @@
           <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
         </div>
       </fieldset>
-      <fieldset class="group">
+      <fieldset class="group" id="anim-group">
         <legend>움직이는 그림</legend>
         <p class="note" id="anim-help">GIF 한 개 또는 그림 여러 장을 넣으면 영상 위에서 순서대로 반복 재생됩니다.</p>
         <label class="file-button small"><svg class="i"><use href="#i-plus"/></svg>움직이는 그림 추가<input type="file" id="anim-file" accept=".gif,.png,.jpg,.jpeg,.webp" multiple></label>
@@ -205,8 +205,8 @@
       <span class="transport-label">미리보기 시점</span>
       <input type="range" id="time" min="0" max="60" step="0.1" value="0" aria-label="미리보기 시점">
       <span id="time-label" class="clock">0:00</span>
+      <span class="keys note"><kbd>Space</kbd> 재생과 멈춤 <kbd>←</kbd><kbd>→</kbd> 5초 이동</span>
       <button id="clip-make" class="quiet" title="이 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-film"/></svg><span id="clip-label">10초 미리보기 영상</span></button>
-      <button id="time-now" class="quiet"><svg class="i"><use href="#i-seek"/></svg>재생 위치로</button>
     </div>
     <div class="editor" id="timing-editor">
       <div class="editor-bar">
@@ -243,6 +243,14 @@
   </div>
 </dialog>
 <div id="toast" role="status"></div>
+<div id="drop" class="drop" hidden>
+  <div class="drop-card">
+    <svg class="i"><use href="#i-file-plus"/></svg>
+    <strong>놓으면 넣습니다</strong>
+    <span class="note">노래, 표지 사진, 자막(SRT, LRC, VTT), 가사(TXT), 글꼴</span>
+    <span class="note">움직이는 그림 칸 위에 놓으면 움직이는 그림으로 들어갑니다.</span>
+  </div>
+</div>
 <script src="/clock.js"></script>
 <script src="/app.js"></script>
 </body>

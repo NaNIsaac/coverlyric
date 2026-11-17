@@ -1,6 +1,7 @@
 import io
 import json
 import threading
+import time
 import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -74,3 +75,50 @@ def test_anim_frames_are_served_only_when_listed(base, tmp_path):
     for other in ("project.json", "../작업 중/project.json", "anim/missing.png"):
         with pytest.raises(urllib.error.HTTPError):
             call(f"{base}/media/anim?name={urllib.parse.quote(other)}")
+
+
+@pytest.mark.parametrize(
+    ("header", "status", "length"),
+    [("bytes=999999999-", 416, None), ("bytes=-999999999", 206, "all"), ("bytes=10-19", 206, 10)],
+)
+def test_audio_ranges_are_clamped(base, header, status, length):
+    call(f"{base}/api/demo", b"")
+    size = len(call(f"{base}/media/audio")[0])
+    req = urllib.request.Request(f"{base}/media/audio", headers={"Range": header})
+    try:
+        with urllib.request.urlopen(req) as res:
+            got, data = res.status, res.read()
+    except urllib.error.HTTPError as e:
+        got, data = e.code, None
+    assert got == status
+    if length is not None:
+        assert len(data) == (size if length == "all" else length)
+
+
+def test_two_quick_render_clicks_start_one_render(tmp_path, monkeypatch):
+    app = server.App(tmp_path)
+    app.demo()
+    started = []
+
+    class Slow:
+        stdout = iter(())
+        pid = 0
+
+        def __init__(self, *args, **kwargs):
+            started.append(1)
+            time.sleep(0.3)
+
+        def wait(self):
+            return 0
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(server.subprocess, "Popen", Slow)
+    monkeypatch.setattr(server.App, "watch", lambda self, proc, out: None)
+    clicks = [threading.Thread(target=app.start_render) for _ in range(2)]
+    for t in clicks:
+        t.start()
+    for t in clicks:
+        t.join()
+    assert len(started) == 1
