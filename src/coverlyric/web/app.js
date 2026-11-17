@@ -14,6 +14,7 @@ const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 
 let state = null;
 let diff = [];
 let tapIndex = -1;
+let tapUndo = [];
 let syncTimer = null;
 let syncing = false;
 let again = false;
@@ -35,19 +36,6 @@ async function api(path, options = {}) {
     throw new Error(message);
   }
   return res;
-}
-
-function clock(seconds) {
-  if (seconds == null || Number.isNaN(seconds)) return "";
-  const s = Math.max(0, seconds);
-  const m = Math.floor(s / 60);
-  return `${m}:${(s - m * 60).toFixed(2).padStart(5, "0")}`;
-}
-
-function parseClock(text) {
-  const m = String(text).trim().match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);
-  if (!m) return null;
-  return (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2]);
 }
 
 function payload() {
@@ -201,11 +189,13 @@ function drawLines() {
     if (diff[i] != null) row.classList.add("differs");
     row.innerHTML = `
       <span class="n">${i + 1}</span>
-      <input class="t" type="text" value="${t == null ? "" : clock(t)}" placeholder="시간">
-      <button class="quiet" data-a="minus" title="0.1초 빠르게">−0.1</button>
-      <button class="quiet" data-a="plus" title="0.1초 늦게">+0.1</button>
-      <button class="quiet" data-a="play" title="이 줄부터 듣기">▶</button>
-      <input class="x" type="text">
+      <input class="t" type="text" value="${clockTenth(t)}" placeholder="0:00.0" aria-label="${i + 1}번째 줄 시작">
+      <input class="x" type="text" aria-label="${i + 1}번째 줄 가사">
+      <span class="nudge">
+        <button class="quiet" data-a="minus" title="0.1초 빠르게">−0.1</button>
+        <button class="quiet" data-a="plus" title="0.1초 늦게">+0.1</button>
+        <button class="quiet" data-a="play" title="이 줄부터 듣기">▶</button>
+      </span>
       <button class="quiet" data-a="del" title="이 줄 지우기">✕</button>`;
     row.querySelector(".x").value = text;
     if (diff[i] != null) {
@@ -221,10 +211,18 @@ function drawLines() {
       }
       row.appendChild(mine);
     }
-    row.querySelector(".t").addEventListener("change", (e) => {
-      const v = e.target.value.trim() === "" ? null : parseClock(e.target.value);
-      if (e.target.value.trim() !== "" && v == null) { toast("시간은 1:23.45 처럼 써 주세요."); return; }
-      state.lines[i][0] = v;
+    const box = row.querySelector(".t");
+    const bad = () => box.value.trim() !== "" && parseClock(box.value) == null;
+    box.addEventListener("input", () => box.classList.toggle("invalid", bad()));
+    box.addEventListener("change", () => {
+      if (bad()) {
+        box.classList.add("invalid");
+        toast("시간은 10, 10.5, 1:05, 1:05.3 처럼 써 주세요.");
+        return;
+      }
+      state.lines[i][0] = box.value.trim() === "" ? null : parseClock(box.value);
+      box.value = clockTenth(state.lines[i][0]);
+      updateCheck();
       scheduleSync();
     });
     row.querySelector(".x").addEventListener("change", (e) => { state.lines[i][1] = e.target.value; scheduleSync(); });
@@ -234,7 +232,8 @@ function drawLines() {
       if (a === "minus" || a === "plus") {
         if (state.lines[i][0] == null) return;
         state.lines[i][0] = Math.max(0, Math.round((state.lines[i][0] + (a === "plus" ? 0.1 : -0.1)) * 100) / 100);
-        row.querySelector(".t").value = clock(state.lines[i][0]);
+        row.querySelector(".t").value = clockTenth(state.lines[i][0]);
+        row.querySelector(".t").classList.remove("invalid");
         showAt(state.lines[i][0] + 0.3);
       } else if (a === "play") {
         const p = $("player");
@@ -249,6 +248,12 @@ function drawLines() {
     });
     holder.appendChild(row);
   });
+  updateCheck();
+  const next = holder.querySelector(".line.next");
+  if (next) next.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+function updateCheck() {
   const timed = state.lines.filter(([t]) => t != null).length;
   $("check").textContent = state.lines.length ? `가사 ${state.lines.length}줄 중 ${timed}줄에 시간이 있어요.` : "";
 }
@@ -315,39 +320,51 @@ async function importText(name, text) {
 }
 
 function setTab(name) {
-  for (const b of document.querySelectorAll(".tab")) b.classList.toggle("active", b.dataset.tab === name);
+  for (const b of document.querySelectorAll(".tab")) {
+    b.classList.toggle("active", b.dataset.tab === name);
+    b.setAttribute("aria-checked", String(b.dataset.tab === name));
+  }
   for (const body of document.querySelectorAll(".tab-body")) body.hidden = body.dataset.body !== name;
-  if (name === "ai") refreshPrompt();
-}
-
-async function refreshPrompt() {
-  await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
-  const data = await (await api("/api/prompt")).json();
-  $("prompt").value = data.lines ? data.prompt : "먼저 2단계에서 가사를 넣어 주세요.";
 }
 
 function tapNextLabel() {
   if (tapIndex < 0) { $("tap-next").textContent = ""; return; }
-  if (tapIndex >= state.lines.length) { $("tap-next").textContent = "끝까지 맞췄어요! 아래 목록에서 다듬어 보세요."; return; }
-  $("tap-next").textContent = `다음 줄: ${state.lines[tapIndex][1] || "(빈 줄)"}`;
+  $("tap-next").textContent = tapIndex >= state.lines.length
+    ? "끝까지 맞췄어요. 목록에서 다듬어 보세요."
+    : state.lines[tapIndex][1] || "(빈 줄)";
 }
 
 function tap() {
   if (tapIndex < 0 || tapIndex >= state.lines.length) return;
+  tapUndo.push([tapIndex, state.lines[tapIndex][0]]);
   state.lines[tapIndex][0] = Math.round($("player").currentTime * 100) / 100;
   tapIndex += 1;
   drawLines();
   tapNextLabel();
-  if (tapIndex >= state.lines.length) stopTap();
+  if (tapIndex >= state.lines.length) stopTap(false);
   scheduleSync(600);
 }
 
-function stopTap() {
-  $("tap-now").disabled = true;
-  $("tap-stop").disabled = true;
-  if (tapIndex < state.lines.length) $("player").pause();
-  tapIndex = -1;
+function untap() {
+  const last = tapUndo.pop();
+  if (!last) return;
+  [tapIndex] = last;
+  state.lines[tapIndex][0] = last[1];
   drawLines();
+  tapNextLabel();
+  scheduleSync(600);
+}
+
+function stopTap(pause = true) {
+  if (pause) $("player").pause();
+  $("tap-bar").hidden = true;
+  tapIndex = -1;
+  tapUndo = [];
+  drawLines();
+}
+
+function showTiming() {
+  document.body.classList.toggle("timing-open", $("step-timing").open);
 }
 
 async function pollRender() {
@@ -398,14 +415,15 @@ function bind() {
   });
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
+  $("step-timing").addEventListener("toggle", showTiming);
 
   $("tap-start").addEventListener("click", () => {
     if (!state.has_audio) { toast("먼저 노래 파일을 넣어 주세요."); return; }
     if (!state.lines.length) { toast("먼저 2단계에서 가사를 넣어 주세요."); return; }
     tapIndex = 0;
+    tapUndo = [];
     diff = [];
-    $("tap-now").disabled = false;
-    $("tap-stop").disabled = false;
+    $("tap-bar").hidden = false;
     const p = $("player");
     p.currentTime = 0;
     p.play();
@@ -414,30 +432,23 @@ function bind() {
     $("tap-now").focus();
   });
   $("tap-now").addEventListener("click", tap);
-  $("tap-stop").addEventListener("click", () => { stopTap(); tapNextLabel(); });
+  $("tap-undo").addEventListener("click", untap);
+  $("tap-stop").addEventListener("click", () => stopTap());
   document.addEventListener("keydown", (e) => {
-    if (tapIndex < 0) return;
+    if ($("tap-bar").hidden) return;
     const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
-    if ((e.code === "Space" || e.code === "Enter") && !typing) {
+    if (typing) return;
+    if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
       tap();
+    } else if (e.code === "Backspace") {
+      e.preventDefault();
+      untap();
+    } else if (e.code === "Escape") {
+      stopTap();
     }
   });
 
-  $("prompt-copy").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText($("prompt").value);
-      toast("복사했어요. 채팅 AI에 노래 파일과 함께 붙여 넣으세요.");
-    } catch (e) {
-      $("prompt").select();
-      toast("Ctrl+C 를 눌러 복사하세요.");
-    }
-  });
-  $("answer-apply").addEventListener("click", async () => {
-    const text = $("answer").value;
-    if (!text.trim()) { toast("AI의 답을 먼저 붙여 넣어 주세요."); return; }
-    try { await importText("answer.srt", text); } catch (e) { toast(e.message); }
-  });
   $("timing-file").addEventListener("change", async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -540,9 +551,11 @@ async function boot() {
   pollRender();
   const params = new URLSearchParams(location.search);
   if (params.get("t")) showAt(Number(params.get("t")));
+  setTab(document.querySelector(".tab:not(:disabled)").dataset.tab);
   const step = params.get("step");
   if (step && $(step)) {
     for (const d of document.querySelectorAll(".step")) d.open = d.id === step;
+    showTiming();
     if (params.get("tab")) setTab(params.get("tab"));
   }
 }
