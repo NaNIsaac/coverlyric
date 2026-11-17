@@ -3,6 +3,7 @@ folder, draws previews and runs the render in a child process."""
 
 from __future__ import annotations
 
+import importlib.util
 import io
 import json
 import logging
@@ -357,6 +358,25 @@ class App:
             for name, (_, size) in auto.MODELS.items()
         }
 
+    def check_disk(self, model: str) -> None:
+        """The first run installs faster-whisper into the program's environment and downloads the
+        model into the Hugging Face cache; a full drive would fail half way with a vague message."""
+        need: list[tuple[Path, int]] = []
+        if not auto.has_model(model):
+            need.append((auto.model_cache(), auto.MODELS[model][1] + 100))
+        if importlib.util.find_spec("faster_whisper") is None:
+            need.append((PROJECT, 300))
+        for folder, mb in need:
+            while not folder.exists() and folder.parent != folder:
+                folder = folder.parent
+            free = shutil.disk_usage(folder)[2] / 1e6
+            if free < mb:
+                raise ValueError(
+                    f"디스크 공간 부족: 자동 맞추기를 처음 쓰려면 {folder.anchor or folder}에 "
+                    f"여유 공간 {mb} MB가 필요합니다 (현재 {free:.0f} MB). "
+                    "공간을 늘린 뒤 다시 누르세요."
+                )
+
     def start_auto(self, model: str) -> dict:
         if self.auto.get("state") == "running":
             return self.auto
@@ -370,6 +390,7 @@ class App:
             raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
         if model not in auto.MODELS:
             raise ValueError(f"unknown model {model}")
+        self.check_disk(model)
         uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
         if not uv:
             raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행하세요.")
@@ -386,6 +407,9 @@ class App:
         cmd += ["python", "-m", "coverlyric", "auto-job", str(job)]
         self.auto_proc = subprocess.Popen(
             cmd,
+            # hf-xet holds the model in memory until it is complete, so the download bar would
+            # not move; the plain HTTP download writes the cache file as it goes.
+            env={**os.environ, "HF_HUB_DISABLE_XET": "1"},
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

@@ -126,3 +126,41 @@ def test_the_found_times_are_saved_even_without_the_page(tmp_path):
     saved = json.loads((app.work / "project.json").read_text(encoding="utf-8"))
     assert saved["lines"] == result["lines"]
     assert server.App(tmp_path).project.lines[0] == (1.5, "첫 번째 줄이에요")
+
+
+def test_the_first_automatic_timing_checks_free_disk(tmp_path, monkeypatch):
+    app = server.App(tmp_path)
+    app.demo()
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path / "hub"))  # no model downloaded yet
+    monkeypatch.setenv("COVERLYRIC_UV", str(tmp_path / "no-uv"))
+    monkeypatch.setattr(server.shutil, "disk_usage", lambda path: (100e9, 99.8e9, 200e6))
+    with pytest.raises(ValueError, match="디스크 공간 부족") as e:
+        app.start_auto("small")
+    assert "200 MB" in str(e.value)
+
+
+def test_the_model_download_writes_to_disk_as_it_goes(tmp_path, monkeypatch):
+    """hf-xet keeps the whole model in memory until the end, so the progress bar, which measures
+    the cache folder, would stand still; plain HTTP downloads write as they go."""
+    app = server.App(tmp_path)
+    app.demo()
+    monkeypatch.setenv("COVERLYRIC_UV", sys.executable)
+    monkeypatch.setattr(server.App, "check_disk", lambda self, model: None)
+    seen = {}
+
+    class Fake:
+        stdout = iter(())
+        pid = 0
+
+        def __init__(self, cmd, **kwargs):
+            seen.update(kwargs)
+
+        def wait(self):
+            return 1
+
+        def poll(self):
+            return 1
+
+    monkeypatch.setattr(server.subprocess, "Popen", Fake)
+    app.start_auto("small")
+    assert seen["env"]["HF_HUB_DISABLE_XET"] == "1"
