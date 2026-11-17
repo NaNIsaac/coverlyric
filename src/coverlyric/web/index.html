@@ -185,6 +185,7 @@
       <div id="stage">
         <img id="still" alt="미리보기">
         <div id="boxes"></div>
+        <video id="clip" controls playsinline hidden></video>
         <p id="stage-empty">노래와 표지를 넣으면 미리보기가 표시됩니다.</p>
       </div>
     </div>
@@ -193,6 +194,7 @@
       <input type="range" id="time" min="0" max="60" step="0.1" value="0" aria-label="미리보기 시점">
       <span id="time-label" class="clock">0:00</span>
       <button id="time-now" class="quiet"><svg class="i"><use href="#i-seek"/></svg>재생 위치로</button>
+      <button id="clip-make" class="quiet" title="이 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-film"/></svg><span id="clip-label">10초 미리보기 영상</span></button>
     </div>
     <div class="editor" id="timing-editor">
       <div class="editor-bar">

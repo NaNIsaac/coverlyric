@@ -49,7 +49,6 @@ def run_job(path: Path) -> None:
     project = Project.from_dict(path.parent, data)
     out = Path(data["out"])
     song = project.song()
-    lines = tuple(timing.ready(project.lines))
     part = out.with_name(out.stem + ".making.mp4")
 
     def report(done: float, total: float, frames: int, frames_total: int, left: float | None):
@@ -64,6 +63,13 @@ def run_job(path: Path) -> None:
         f"song {song.duration:.1f} s, out {out.name}",
         flush=True,
     )
+    if clip := data.get("clip"):
+        # A short look from the page: the preview's lines, small and quick, and nothing beside it.
+        lines = project.preview_lines()
+        render.render(part, lines, song, project.style, count, tuple(clip), report, quick=True)
+        part.replace(out)
+        return
+    lines = tuple(timing.ready(project.lines))
     render.render(part, lines, song, project.style, count, report=report)
     part.replace(out)
     first = next((t for t, text in lines if text), 0.0)

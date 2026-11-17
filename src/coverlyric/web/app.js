@@ -630,6 +630,45 @@ async function pollRender() {
   }
 }
 
+async function pollClip() {
+  let job;
+  try {
+    job = await (await api("/api/clip")).json();
+  } catch (e) {
+    setTimeout(pollClip, 1000);
+    return;
+  }
+  const label = $("clip-label");
+  if (job.state === "running") {
+    $("clip-make").disabled = true;
+    label.textContent = `만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`;
+    setTimeout(pollClip, 500);
+    return;
+  }
+  $("clip-make").disabled = false;
+  label.textContent = "10초 미리보기 영상";
+  if (job.state === "done") {
+    const video = $("clip");
+    video.src = job.url;
+    video.hidden = false;
+    $("boxes").hidden = true;
+    label.textContent = "미리보기 영상 닫기";
+    video.play().catch(() => {});
+  } else if (job.state === "error") {
+    toast(`미리보기 영상 실패: ${job.message}`, 9000);
+  }
+}
+
+function closeClip() {
+  const video = $("clip");
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+  video.hidden = true;
+  $("boxes").hidden = false;
+  $("clip-label").textContent = "10초 미리보기 영상";
+}
+
 function showRenderError(message) {
   const el = $("make-error");
   el.textContent = message;
@@ -790,6 +829,17 @@ function bind() {
 
   $("time").addEventListener("input", (e) => showAt(Number(e.target.value)));
   $("time-now").addEventListener("click", () => showAt($("player").currentTime));
+  $("clip-make").addEventListener("click", async () => {
+    if (!$("clip").hidden) return closeClip();
+    try {
+      await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
+      await api(`/api/clip?t=${Number($("time").value)}`, { method: "POST" });
+      $("player").pause();
+      pollClip();
+    } catch (e) {
+      toast(e.message, 6000);
+    }
+  });
 
   $("make").addEventListener("click", async () => {
     const untimed = state.lines.findIndex(([t]) => t == null);
