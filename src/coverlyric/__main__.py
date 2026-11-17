@@ -68,7 +68,6 @@ def run_job(path: Path) -> None:
     project = Project.from_dict(path.parent, data)
     out = Path(data["out"])
     song = project.song()
-    lines = tuple(timing.ready(project.lines))
     part = out.with_name(out.stem + ".making.mp4")
 
     def report(done: float, total: float, frames: int, frames_total: int, left: float | None):
@@ -83,12 +82,20 @@ def run_job(path: Path) -> None:
         f"song {song.duration:.1f} s, out {out.name}",
         flush=True,
     )
+    clip = data.get("clip")
+    # A clip is a short look from the page: the preview's lines, small and quick, nothing beside it.
+    lines = project.preview_lines() if clip else tuple(timing.ready(project.lines))
     try:
-        render.render(part, lines, song, project.style, count, report=report)
+        if clip:
+            render.render(part, lines, song, project.style, count, tuple(clip), report, True)
+        else:
+            render.render(part, lines, song, project.style, count, report=report)
         out = place(part, out)
     finally:
         part.unlink(missing_ok=True)
     print(f"out {out}", flush=True)
+    if clip:
+        return
     first = next((t for t, text in lines if text), 0.0)
     still = render.frame(min(song.duration, first + 0.6), lines, song, project.style)
     still.resize((1280, 720), Image.LANCZOS).save(out.with_suffix(".png"))

@@ -74,13 +74,15 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
 4. **Look:** the cover sits in a clear CD case with the disc half out and turning (both
    switchable), or as a round cover. Drag the album, the lyrics, the title and the playback bar on
    the preview to move them, and drag a corner to resize. Pick the font, band colour, background
-   blur and darkness. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
+   blur and darkness. **10초 미리보기 영상** (10-second preview clip) makes 10 seconds from the
+   current time at small size and plays it in place. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
    webp) that loop over the video: reorder them with ↑ ↓, set the frames per second, choose above
    or under the album and lyrics, and drag it on the preview.
-5. **Render:** press **이대로 영상 만들기**. It usually takes less than the song's length,
+5. **Render:** press **이대로 영상 만들기**. The page shows how far into the song it is, the lyric
+   there and the time left. It usually takes less than the song's length,
    depending on the PC.
 
-The `만든 영상` folder then holds the mp4 (1920x1080, 30 fps, H.264 + AAC), a 1280x720 thumbnail,
+The `만든 영상` folder then holds the mp4 (1920x1080, 24 fps, H.264 + AAC), a 1280x720 thumbnail,
 and the timing as LRC and SRT. Press **끝내기** on the page or close the terminal window to quit;
 work is saved and reopens where you left off.
 
