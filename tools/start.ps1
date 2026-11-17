@@ -1,4 +1,56 @@
 ﻿# Started by the .bat next to the README: installs uv on first run (no admin rights), then opens the page.
+
+# uv's virtual environment names Python by a minor-version junction (python 3.14 -> 3.14.x). Some
+# sessions, such as an elevated or sandboxed shell, may not follow a junction (os error 448), and
+# Python cannot start. The environment then names the full-version folder the junction points to.
+function Repair-VenvHome([string]$venv) {
+    $cfg = Join-Path $venv 'pyvenv.cfg'
+    if (-not (Test-Path -LiteralPath $cfg)) { return $false }
+    $changed = $false
+    $lines = foreach ($line in [IO.File]::ReadAllLines($cfg)) {
+        if ($line -match '^home\s*=\s*(.+)$') {
+            $path = $Matches[1].Trim()
+            for ($dir = $path; $dir; $dir = Split-Path -Parent $dir) {
+                $item = Get-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue
+                if ($item -and $item.LinkType -eq 'Junction') {
+                    $target = @($item.Target)[0]
+                    if (-not [IO.Path]::IsPathRooted($target)) { $target = Join-Path (Split-Path -Parent $dir) $target }
+                    $line = 'home = ' + $target + $path.Substring($dir.Length)
+                    $changed = $true
+                    break
+                }
+            }
+        }
+        $line
+    }
+    if ($changed) { [IO.File]::WriteAllLines($cfg, [string[]]$lines, (New-Object Text.UTF8Encoding $false)) }
+    return $changed
+}
+
+# Runs the program; when it fails because the environment's Python cannot start through the junction,
+# repairs the environment and runs it once more. A failure of the program itself is not retried.
+function Start-Program([string]$uv, [string]$venv) {
+    & $uv run --frozen --no-dev coverlyric
+    $code = $LASTEXITCODE
+    if ($code -ne 0) {
+        $python = Join-Path $venv 'Scripts\python.exe'
+        $starts = $false
+        if (Test-Path -LiteralPath $python) {
+            & $python --version *> $null
+            $starts = $LASTEXITCODE -eq 0
+        }
+        if (-not $starts -and (Repair-VenvHome $venv)) {
+            Write-Host 'Python 경로를 고쳐 다시 시작합니다.'
+            & $uv run --frozen --no-dev coverlyric
+            $code = $LASTEXITCODE
+        }
+    }
+    $global:LASTEXITCODE = $code
+}
+
+# Dot-sourced by the tests for the functions above.
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $Host.UI.RawUI.WindowTitle = 'coverlyric 가사 영상 만들기'
@@ -60,7 +112,7 @@ if (-not $uv) {
 $env:COVERLYRIC_UV = $uv
 Write-Host '프로그램을 시작합니다. 잠시 뒤 브라우저에 페이지가 열립니다.'
 Write-Host '사용하는 동안 이 창을 열어 두세요. 끝내려면 페이지의 [끝내기]를 누르세요.'
-& $uv run --frozen --no-dev coverlyric
+Start-Program $uv (Join-Path $root '.venv')
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
     Write-Host "프로그램이 오류로 끝났습니다 (종료 코드 $LASTEXITCODE). 위 메시지를 확인하세요."
