@@ -1,4 +1,4 @@
-"""Write the demo song (a generated tune), the demo cover and the demo project into src/lyricvideo/demo.
+"""Write the demo song (a generated tune), the demo cover and the demo project into src/coverlyric/demo.
 
 uv run python tools/make_demo.py
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-OUT = Path(__file__).resolve().parents[1] / "src" / "lyricvideo" / "demo"
+OUT = Path(__file__).resolve().parents[1] / "src" / "coverlyric" / "demo"
 RATE = 22050
 NOTES = [  # (start s, length s, MIDI note)
     (0.0, 2.0, 57), (2.0, 2.0, 60), (4.0, 2.0, 64), (6.0, 2.0, 62),

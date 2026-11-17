@@ -1,10 +1,10 @@
 [project]
-name = "lyricvideo"
+name = "coverlyric"
 version = "0.1.0"
 description = "Make a lyric video from a song, a square cover and the lyrics, in a local browser page"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE", "src/lyricvideo/fonts/OFL-*.txt"]
+license-files = ["LICENSE", "src/coverlyric/fonts/OFL-*.txt"]
 requires-python = ">=3.12"
 dependencies = [
     "imageio-ffmpeg>=0.6.0",
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lyricvideo = "lyricvideo.__main__:main"
+coverlyric = "coverlyric.__main__:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3"]

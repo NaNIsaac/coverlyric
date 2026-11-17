@@ -1,4 +1,4 @@
-from lyricvideo import timing
+from coverlyric import timing
 
 SRT = """1
 00:00:03,000 --> 00:00:06,000

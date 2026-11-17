@@ -174,7 +174,7 @@ class App:
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
         data["out"] = str(out)
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        cmd = [sys.executable, "-m", "lyricvideo", "render-job", str(job)]
+        cmd = [sys.executable, "-m", "coverlyric", "render-job", str(job)]
         self.proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -371,7 +371,7 @@ def serve(home: Path, port: int = 0, browser: bool = True) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", port), handler(app, ref))
     ref.append(server)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
-    print(f"가사 영상 만들기: {url}")
+    print(f"coverlyric 가사 영상 만들기: {url}")
     print("이 창을 닫거나 화면의 [끝내기]를 누르면 프로그램이 끝나요.", flush=True)
     if browser:
         webbrowser.open(url)

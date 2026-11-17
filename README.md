@@ -1,4 +1,4 @@
-# lyricvideo
+# coverlyric
 
 [한국어 사용 설명서 (README.ko.md)](README.ko.md)
 
@@ -27,18 +27,18 @@ With uv already installed, from the repository folder:
 
 <!-- test -->
 ```sh
-uv run lyricvideo still src/lyricvideo/demo/demo.json --at 7 --out demo-still.png
+uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
 ```
 
-This draws one frame of the demo song. `uv run lyricvideo` opens the page.
+This draws one frame of the demo song. `uv run coverlyric` opens the page.
 
 ## Command line
 
 ```sh
-uv run lyricvideo                         # open the page (the default)
-uv run lyricvideo app --home <folder>     # keep work and videos in <folder>
-uv run lyricvideo still <project.json> --at 30 --out still.png
-uv run lyricvideo render <project.json> --out video.mp4 [--clip 10,20]
+uv run coverlyric                         # open the page (the default)
+uv run coverlyric app --home <folder>     # keep work and videos in <folder>
+uv run coverlyric still <project.json> --at 30 --out still.png
+uv run coverlyric render <project.json> --out video.mp4 [--clip 10,20]
 ```
 
 A project file is what the page saves in `작업 중/project.json`: paths to the song and cover, the
@@ -47,7 +47,7 @@ lines with their start times, and the style. Finished videos go to `만든 영�
 ## Fonts
 
 The bundled fonts are under the SIL Open Font License 1.1; each licence is next to its font in
-`src/lyricvideo/fonts/`:
+`src/coverlyric/fonts/`:
 
 | Font | Licence file |
 |---|---|

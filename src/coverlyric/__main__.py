@@ -1,4 +1,4 @@
-"""Command line: `lyricvideo` opens the page; `render` and `still` work from a project file for scripts
+"""Command line: `coverlyric` opens the page; `render` and `still` work from a project file for scripts
 and tests."""
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def run_job(path: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="lyricvideo", description=__doc__)
+    parser = argparse.ArgumentParser(prog="coverlyric", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command")
     app = sub.add_parser("app", help="open the page in the browser (the default)")
@@ -68,9 +68,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.command in (None, "app"):
         from .server import serve
 
-        home = getattr(args, "home", None) or Path(os.environ.get("LYRICVIDEO_HOME") or Path.cwd())
+        home = getattr(args, "home", None) or Path(os.environ.get("COVERLYRIC_HOME") or Path.cwd())
         browser = not getattr(args, "no_browser", False) and not os.environ.get(
-            "LYRICVIDEO_NO_BROWSER"
+            "COVERLYRIC_NO_BROWSER"
         )
         serve(home.resolve(), getattr(args, "port", 0), browser)
     elif args.command == "render":

@@ -2,7 +2,7 @@
 
 import subprocess
 
-from lyricvideo import media
+from coverlyric import media
 
 exe = media.ffmpeg()
 version = subprocess.run([exe, "-version"], capture_output=True, text=True).stdout.splitlines()[0]

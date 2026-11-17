@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from lyricvideo import media, render
-from lyricvideo.project import Project
+from coverlyric import media, render
+from coverlyric.project import Project
 
 DEMO = Path(render.__file__).parent / "demo" / "demo.json"
 

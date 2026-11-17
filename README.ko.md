@@ -1,4 +1,4 @@
-# 가사 영상 만들기
+# coverlyric 가사 영상 만들기
 
 [English README](README.md)
 

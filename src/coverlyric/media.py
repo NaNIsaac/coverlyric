@@ -11,7 +11,7 @@ from functools import lru_cache
 
 @lru_cache(maxsize=1)
 def ffmpeg() -> str:
-    if exe := os.environ.get("LYRICVIDEO_FFMPEG"):
+    if exe := os.environ.get("COVERLYRIC_FFMPEG"):
         return exe
     import imageio_ffmpeg
 

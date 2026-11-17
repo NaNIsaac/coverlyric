@@ -5,7 +5,7 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from lyricvideo import server
+from coverlyric import server
 
 
 @pytest.fixture()
