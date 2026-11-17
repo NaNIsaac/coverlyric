@@ -216,6 +216,22 @@ class Tilt:
         xs, ys = [p[0] for p in pts], [p[1] for p in pts]
         return math.floor(min(xs)), math.floor(min(ys)), math.ceil(max(xs)), math.ceil(max(ys))
 
+    def over(self, region: tuple[int, ...]) -> Tilt:
+        """The same tilt, warping another flat region of the album's plane (its reflection)."""
+        box = self.bounds(region)
+        rows, rhs = [], []
+        for x in (region[0], region[2]):
+            for y in (region[1], region[3]):
+                px, py = self.point(x, y)
+                px, py, fx, fy = px - box[0], py - box[1], x - region[0], y - region[1]
+                rows += [
+                    [px, py, 1, 0, 0, 0, -fx * px, -fx * py],
+                    [0, 0, 0, px, py, 1, -fy * px, -fy * py],
+                ]
+                rhs += [fx, fy]
+        coeffs = tuple(float(c) for c in np.linalg.solve(np.array(rows), np.array(rhs)))
+        return replace(self, region=tuple(region), box=box, coeffs=coeffs)
+
     def apply(self, flat: Image.Image, part: tuple[int, ...] | None = None) -> Image.Image:
         """`flat`, the size of region, warped: all of box, or only the frame box `part` of it. In
         premultiplied alpha, so the transparent pixels around the album do not darken its edges."""
@@ -274,17 +290,7 @@ def tilt_of(style: Style) -> Tilt | None:
     rad = math.radians(angle)
     sin = math.sin(rad)
     near = TILT_DISTANCE + min((region[0] - centre[0]) * sin, (region[2] - centre[0]) * sin)
-    flat = Tilt(region, region, centre, math.cos(rad), sin, near, ())
-    box = flat.bounds(region)
-    corners = [(x, y) for x in (region[0], region[2]) for y in (region[1], region[3])]
-    rows, rhs = [], []
-    for x, y in corners:
-        px, py = flat.point(x, y)
-        px, py, x, y = px - box[0], py - box[1], x - region[0], y - region[1]
-        rows += [[px, py, 1, 0, 0, 0, -x * px, -x * py], [0, 0, 0, px, py, 1, -y * px, -y * py]]
-        rhs += [x, y]
-    coeffs = tuple(float(c) for c in np.linalg.solve(np.array(rows), np.array(rhs)))
-    return replace(flat, box=box, coeffs=coeffs)
+    return Tilt(region, region, centre, math.cos(rad), sin, near, ()).over(region)
 
 
 def tilted_shadow(
