@@ -107,6 +107,8 @@ class Style:
     anim_above: bool = True  # over everything, or under the album and the lyrics
     tone: str = "none"  # background colour: none | warm | cool | mono | cover (tinted with the cover's colour)
     vignette: float = 0.0  # 0 to 1: how much darker the background gets towards the frame's edges
+    floor: float = 0.0  # 0 to 1: a soft shadow on the floor under the album
+    reflection: bool = False  # the case mirrored on the floor under it (case layout)
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -627,6 +629,30 @@ def panel_layer(g: Geometry, style: Style) -> Image.Image:
     return panel
 
 
+def floor_shadow(box: tuple[int, ...], s: float, strength: float) -> Image.Image:
+    """A wide, soft oval on the floor under an album whose box is (x0, y0, x1, y1)."""
+    x0, _, x1, y1 = box
+    pad, depth = round((x1 - x0) * 0.08), round(34 * s)
+    oval = (x0 - pad, y1 - depth // 2, x1 + pad, y1 + depth)
+    return shadow(oval, round(26 * s), round(200 * min(strength, 1.0)), True)
+
+
+def reflection(layer: Image.Image, box: tuple[int, ...], s: float) -> Image.Image:
+    """The bottom 45 % of the album in box, mirrored under it and fading out."""
+    x0, _, _, y1 = box
+    gap = round(4 * s)
+    part = layer.crop(box).transpose(Image.FLIP_TOP_BOTTOM)
+    part = part.crop((0, 0, part.width, min(round(part.height * 0.45), H - y1 - gap)))
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if part.height <= 0:
+        return out
+    fade = np.linspace(0.32, 0.0, part.height)[:, None] * np.ones((1, part.width))
+    alpha = np.asarray(part.getchannel("A"), dtype=float) * fade
+    part.putalpha(Image.fromarray(alpha.astype(np.uint8), "L"))
+    place(out, part, x0, y1 + gap)
+    return out
+
+
 def shadow(box: tuple[int, ...], blur: int, alpha: int, round_: bool = False) -> Image.Image:
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -738,7 +764,19 @@ def scene(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
     if style.layout == "case":
         x0, y0, x1, y1 = g.case
         case = jewel_case(art, g, s)
-        if tilted := tilt_of(style):
+        tilted = tilt_of(style)
+        if style.reflection:
+            mirror = reflection(case, g.case, s)
+            if tilted and (ref := mirror.getbbox()):
+                # The mirror image stands in the album's plane under it, so the same tilt turns it.
+                turned = tilted.over(ref)
+                flat, mirror = mirror.crop(ref), Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                place(mirror, turned.apply(flat), *turned.box[:2])
+            bg = Image.alpha_composite(bg, mirror)
+        if style.floor > 0:
+            foot = tilted.bounds(g.case) if tilted else g.case
+            bg = Image.alpha_composite(bg, floor_shadow(foot, s, style.floor))
+        if tilted:
             flat = case.crop(tilted.region)
             shade = tilted_shadow(
                 tilted.apply(flat),
@@ -766,12 +804,14 @@ def round_album(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
     disc.putalpha(circle_mask(r * 2))
     cx, cy = g.round_c
     at = (cx - r, cy - r)
+    foot = (cx - r, cy - r, cx + r, cy + r)
     if tilted := tilt_of(style):
         flat = Image.new(
             "RGBA", (tilted.region[2] - tilted.region[0], tilted.region[3] - tilted.region[1])
         )
         flat.paste(disc, (at[0] - tilted.region[0], at[1] - tilted.region[1]))
         disc, at = tilted.apply(flat), tilted.box[:2]
+        foot = tilted.bounds(foot)
         shade = tilted_shadow(disc, at, (0, round(10 * s)), round(14 * s), 120)
     else:
         drop = (
@@ -781,7 +821,10 @@ def round_album(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
             cy + r + round(16 * s),
         )
         shade = shadow(drop, round(14 * s), 120, True)
-    bg = Image.alpha_composite(background(song, style, art_stamp), shade)
+    bg = background(song, style, art_stamp)
+    if style.floor > 0:
+        bg = Image.alpha_composite(bg, floor_shadow(foot, s, style.floor))
+    bg = Image.alpha_composite(bg, shade)
     return bg, disc, at
 
 

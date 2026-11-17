@@ -109,3 +109,15 @@ def test_the_tilted_album_stays_in_its_flat_place(layout, tilt):
         assert (box[2] - box[0]) * (box[3] - box[1]) <= (flat_box[2] - flat_box[0] + 4) * (
             flat_box[3] - flat_box[1] + 4
         )
+
+
+@pytest.mark.parametrize("tilt", [-40, 30])
+def test_floor_shadow_and_reflection_follow_the_tilt(demo, tilt):
+    song = demo.song()
+    stamp = render.stamp(song.art)
+    plain = np.asarray(render.scene(song, render.Style(tilt=tilt), stamp)[0], int)
+    t = render.tilt_of(render.Style(tilt=tilt))
+    below = t.bounds(render.geometry(render.Style()).case)[3] + 4
+    for extra in ({"reflection": True}, {"floor": 0.8}):
+        bg = np.asarray(render.scene(song, render.Style(tilt=tilt, **extra), stamp)[0], int)
+        assert np.abs(bg - plain)[below:].max() > 10

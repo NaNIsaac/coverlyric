@@ -131,8 +131,8 @@ def test_band_from_cover_is_the_cover_colour_kept_readable(base):
     band = json.loads(call(f"{base}/api/band-from-cover")[0])["band"]
     assert len(band) == 7 and band.startswith("#")
     rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
-    default = server.luminance(render.hex_rgb(render.Style().band))
-    assert server.luminance(rgb) <= default + 0.01
+    need = server.contrast(render.hex_rgb(render.Style().band), (255, 255, 255))
+    assert server.contrast(rgb, (255, 255, 255)) >= need - 0.01
 
 
 def test_a_bright_cover_gives_a_band_as_readable_as_the_default(base):
@@ -142,8 +142,23 @@ def test_a_bright_cover_gives_a_band_as_readable_as_the_default(base):
     call(f"{base}/api/upload?kind=art", buf.getvalue(), {"X-Name": "bright.png"})
     band = json.loads(call(f"{base}/api/band-from-cover")[0])["band"]
     rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
-    assert server.luminance(rgb) <= server.luminance(render.hex_rgb(render.Style().band)) + 0.01
+    need = server.contrast(render.hex_rgb(render.Style().band), (255, 255, 255))
+    assert server.contrast(rgb, (255, 255, 255)) >= need - 0.01
     assert rgb[0] > rgb[2]  # still the cover's yellow, only darker
+
+
+def test_dark_lyrics_on_a_dark_cover_get_a_lighter_band(base):
+    call(f"{base}/api/demo", b"")
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 400), (20, 30, 90)).save(buf, "PNG")
+    call(f"{base}/api/upload?kind=art", buf.getvalue(), {"X-Name": "navy.png"})
+    call(f"{base}/api/state", {"style": {"lyric_colour": "#111111"}})
+    band = json.loads(call(f"{base}/api/band-from-cover")[0])["band"]
+    rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
+    need = server.contrast(render.hex_rgb(render.Style().band), (255, 255, 255))
+    assert server.contrast(rgb, (17, 17, 17)) >= need - 0.01
+    assert server.luminance(rgb) > server.luminance((20, 30, 90))
+    assert rgb[2] > rgb[0]  # still blue, only lighter
 
 
 def test_the_preview_says_which_lines_are_too_wide(base):
