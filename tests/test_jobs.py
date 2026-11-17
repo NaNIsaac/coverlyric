@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import threading
@@ -111,3 +112,17 @@ def test_a_render_waits_for_automatic_timing(tmp_path):
     finally:
         if app.proc:
             server.kill_tree(app.proc)
+
+
+def test_the_found_times_are_saved_even_without_the_page(tmp_path):
+    app = server.App(tmp_path)
+    app.demo()
+    result = {"lines": [[1.5, "첫 번째 줄이에요"], [4.0, "두 번째 줄은 조금 길어요"]], "notes": []}
+    (app.work / "auto-result.json").write_text(json.dumps(result, ensure_ascii=False), "utf-8")
+    proc = subprocess.Popen([sys.executable, "-c", "pass"], stdout=subprocess.PIPE, text=True)
+    app.auto_proc = proc
+    app.auto = {"state": "running"}
+    app.watch_auto(proc)
+    saved = json.loads((app.work / "project.json").read_text(encoding="utf-8"))
+    assert saved["lines"] == result["lines"]
+    assert server.App(tmp_path).project.lines[0] == (1.5, "첫 번째 줄이에요")

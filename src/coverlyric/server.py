@@ -386,6 +386,9 @@ class App:
         result = self.work / "auto-result.json"
         if code == 0 and result.exists():
             data = json.loads(result.read_text(encoding="utf-8"))
+            # Saved here, not by the page, so a page reloaded during the run still gets the times.
+            self.project.lines = [(t, text) for t, text in data["lines"]]
+            self.save()
             self.auto = {"state": "done", **data}
         elif self.auto.get("state") != "stopped":
             self.auto = {"state": "error", "message": "\n".join(tail) or f"exit {code}"}
