@@ -348,6 +348,7 @@ async function addAnim(files) {
 function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
+  for (const r of document.querySelectorAll('input[name="tone"]')) r.checked = r.value === s.tone;
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
@@ -357,6 +358,7 @@ function fillLook() {
   $("band").value = s.band;
   $("blur").value = s.blur;
   $("dim").value = s.dim;
+  $("vignette").value = s.vignette;
   $("lyric_colour").value = s.lyric_colour;
   $("lyric_edge").value = s.lyric_edge;
   $("lyric_edge_colour").value = s.lyric_edge_colour;
@@ -1131,6 +1133,9 @@ function bind() {
   for (const r of document.querySelectorAll('input[name="layout"]')) {
     r.addEventListener("change", () => { state.style.layout = r.value; fillLook(); scheduleSync(0); });
   }
+  for (const r of document.querySelectorAll('input[name="tone"]')) {
+    r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
+  }
   $("spin").addEventListener("change", (e) => { state.style.spin = e.target.checked ? 7 : 0; scheduleSync(0); });
   $("tilt").addEventListener("input", (e) => {
     state.style.tilt = Number(e.target.value);
@@ -1140,8 +1145,19 @@ function bind() {
   $("show_cd").addEventListener("change", (e) => { state.style.show_cd = e.target.checked; fillLook(); scheduleSync(0); });
   $("font").addEventListener("change", (e) => { state.style.font = e.target.value; scheduleSync(0); });
   $("band").addEventListener("input", (e) => { state.style.band = e.target.value; scheduleSync(); });
+  $("band-cover").addEventListener("click", async () => {
+    try {
+      const { band } = await (await api("/api/band-from-cover")).json();
+      state.style.band = band;
+      $("band").value = band;
+      scheduleSync(0);
+    } catch (e) {
+      toast(e.message);
+    }
+  });
   $("blur").addEventListener("input", (e) => { state.style.blur = Number(e.target.value); scheduleSync(); });
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
+  $("vignette").addEventListener("input", (e) => { state.style.vignette = Number(e.target.value); scheduleSync(); });
   $("lyric_colour").addEventListener("input", (e) => { state.style.lyric_colour = e.target.value; scheduleSync(); });
   $("lyric_edge").addEventListener("change", (e) => {
     state.style.lyric_edge = e.target.value;

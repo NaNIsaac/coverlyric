@@ -3,6 +3,7 @@ folder, draws previews and runs the render in a child process."""
 
 from __future__ import annotations
 
+import colorsys
 import importlib.util
 import io
 import json
@@ -49,6 +50,18 @@ TYPES = {
     ".mp4": "video/mp4",
 }
 LOG = logging.getLogger("coverlyric")
+
+
+def luminance(rgb) -> float:
+    """Relative luminance (WCAG) of an RGB colour given as 0-1 floats or 0-255 ints."""
+    scale = 255 if max(rgb) > 1 else 1
+    lin = [
+        (c / scale / 12.92) if c / scale <= 0.04045 else ((c / scale + 0.055) / 1.055) ** 2.4
+        for c in rgb
+    ]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
 AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 CLIP_S = 10.0  # seconds in the preview clip
@@ -259,6 +272,22 @@ class App:
         small.save(buf, "JPEG", quality=88)
         fits = render.line_fits(tuple(p.lines), p.style)
         return buf.getvalue(), render.boxes(p.style, t, song), fits
+
+    def band_from_cover(self) -> str:
+        """The cover's own colour as #rrggbb for the lyric band, darkened until the white line on it is at
+        least as readable as on the default band."""
+        p = self.project
+        if not p.art:
+            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣으세요.")
+        song = p.song()
+        with self.lock:
+            rgb = render.cover_colour(song.art, render.stamp(song.art))
+        hue, sat, val = colorsys.rgb_to_hsv(*(c / 255 for c in rgb))
+        limit = luminance(render.hex_rgb(render.Style().band))
+        while val > 0.05 and luminance(colorsys.hsv_to_rgb(hue, sat, val)) > limit:
+            val *= 0.97
+        r, g, b = (round(c * 255) for c in colorsys.hsv_to_rgb(hue, sat, val))
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def start_render(self) -> dict:
         with self.starting:
@@ -651,6 +680,8 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.file(WEB / url.path[1:])
                 elif url.path == "/api/state":
                     self.json(app.state())
+                elif url.path == "/api/band-from-cover":
+                    self.json({"band": app.band_from_cover()})
                 elif url.path == "/api/fonts":
                     self.json(fonts.choices())
                 elif url.path == "/api/render":

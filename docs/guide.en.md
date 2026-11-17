@@ -96,9 +96,15 @@ are in the **색** group, the rest in **모양**.
 - **Album:** **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
   **CD 돌기** hide or stop the CD. **기울기** (tilt, -25° to 25°) turns the album about its upright axis.
 - **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
-- **띠 색:** colour of the band behind the current line and of the progress bar.
+- **띠 색:** colour of the band behind the current line and of the progress bar. **표지 색으로**
+  beside it takes the cover's most telling colour, darkened a little if needed so the white line stays
+  readable.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
-- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, with an outline or
+- **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
+  the eye to the album and the lyrics.
+- **배경 색감** (background tone): **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백**
+  (black and white) or **표지 색** (tinted with the cover's most telling colour).
+- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, title and artist, with an outline or
   shadow that keeps them readable on a light cover.
 - **움직이는 그림** (moving picture): one GIF or several images (png, jpg, webp) loop over the video.
   Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장** (frames per second). Turn off

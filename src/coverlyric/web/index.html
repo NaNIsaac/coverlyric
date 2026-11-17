@@ -173,14 +173,28 @@
       <fieldset class="group">
         <legend>가사 띠와 배경</legend>
         <div class="grid">
-          <label class="color">띠 색<input type="color" id="band"></label>
+          <div class="band-row">
+            <label class="color">띠 색<input type="color" id="band"></label>
+            <button id="band-cover" class="quiet small" title="표지에서 가장 눈에 띄는 색을 띠 색으로 씁니다"><svg class="i"><use href="#i-image"/></svg>표지 색으로</button>
+          </div>
           <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
           <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
+          <label>가장자리 어둡게<input type="range" id="vignette" min="0" max="1" step="0.05"></label>
+        </div>
+      </fieldset>
+      <fieldset class="group">
+        <legend>배경 색감</legend>
+        <div class="seg tones">
+          <label><input type="radio" name="tone" value="none" checked> 그대로</label>
+          <label><input type="radio" name="tone" value="warm"> 따뜻하게</label>
+          <label><input type="radio" name="tone" value="cool"> 차갑게</label>
+          <label><input type="radio" name="tone" value="mono"> 흑백</label>
+          <label><input type="radio" name="tone" value="cover" title="표지에서 가장 눈에 띄는 색으로 배경을 물들입니다"> 표지 색</label>
         </div>
       </fieldset>
       <div id="colour-more">
         <fieldset class="group">
-          <legend>가사 글자</legend>
+          <legend>글자 (가사, 제목, 가수)</legend>
           <div class="grid">
             <label class="color">글자 색<input type="color" id="lyric_colour"></label>
             <label class="field">테두리
@@ -192,7 +206,7 @@
             </label>
             <label class="color" id="lyric-edge-colour-row">테두리 색<input type="color" id="lyric_edge_colour"></label>
           </div>
-          <p class="note">밝은 표지에서는 외곽선이나 그림자를 넣으면 가사가 잘 읽힙니다.</p>
+          <p class="note">밝은 표지에서는 외곽선이나 그림자를 넣으면 글자가 잘 읽힙니다.</p>
         </fieldset>
       </div>
     </section>

@@ -9,7 +9,7 @@ from http.server import ThreadingHTTPServer
 import pytest
 from PIL import Image
 
-from coverlyric import server
+from coverlyric import render, server
 
 
 @pytest.fixture()
@@ -122,6 +122,28 @@ def test_two_quick_render_clicks_start_one_render(tmp_path, monkeypatch):
     for t in clicks:
         t.join()
     assert len(started) == 1
+
+
+def test_band_from_cover_is_the_cover_colour_kept_readable(base):
+    with pytest.raises(urllib.error.HTTPError):
+        call(f"{base}/api/band-from-cover")  # no cover yet
+    call(f"{base}/api/demo", b"")
+    band = json.loads(call(f"{base}/api/band-from-cover")[0])["band"]
+    assert len(band) == 7 and band.startswith("#")
+    rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
+    default = server.luminance(render.hex_rgb(render.Style().band))
+    assert server.luminance(rgb) <= default + 0.01
+
+
+def test_a_bright_cover_gives_a_band_as_readable_as_the_default(base):
+    call(f"{base}/api/demo", b"")
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 400), (250, 215, 70)).save(buf, "PNG")
+    call(f"{base}/api/upload?kind=art", buf.getvalue(), {"X-Name": "bright.png"})
+    band = json.loads(call(f"{base}/api/band-from-cover")[0])["band"]
+    rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
+    assert server.luminance(rgb) <= server.luminance(render.hex_rgb(render.Style().band)) + 0.01
+    assert rgb[0] > rgb[2]  # still the cover's yellow, only darker
 
 
 def test_the_preview_says_which_lines_are_too_wide(base):

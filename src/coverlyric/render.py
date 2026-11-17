@@ -9,6 +9,7 @@ the default style is the original look.
 
 from __future__ import annotations
 
+import colorsys
 import math
 import subprocess
 import tempfile
@@ -21,7 +22,7 @@ from multiprocessing import shared_memory
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from . import anim, fonts, media
 
@@ -103,6 +104,8 @@ class Style:
     anim_scale: float = 1.0
     anim_fps: float = 8.0  # frames per second of an image list; a GIF keeps its own delays
     anim_above: bool = True  # over everything, or under the album and the lyrics
+    tone: str = "none"  # background colour: none | warm | cool | mono | cover (tinted with the cover's colour)
+    vignette: float = 0.0  # 0 to 1: how much darker the background gets towards the frame's edges
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -395,6 +398,30 @@ def tracked(
         x += w + gap
 
 
+def lettered(
+    draw: ImageDraw.ImageDraw,
+    centre: tuple[float, float],
+    text: str,
+    f: ImageFont.FreeTypeFont,
+    alpha: int,
+    style: Style,
+    tracking: float = TRACKING,
+) -> None:
+    """``tracked`` text in the lyric colour, with the style's outline or shadow: the lyrics, the title
+    and the artist share them so a light cover can be read in all three."""
+    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
+    if style.lyric_edge == "shadow":
+        # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
+        drop = f.size * SHADOW_DROP
+        x, y = centre
+        tracked(draw, (x + drop, y + drop), text, f, (*rim, round(alpha * SHADOW_ALPHA)), tracking)
+    if style.lyric_edge == "outline":
+        stroke = max(1, round(f.size * OUTLINE_WIDTH))
+        tracked(draw, centre, text, f, (*ink, alpha), tracking, stroke, (*rim, alpha))
+    else:
+        tracked(draw, centre, text, f, (*ink, alpha), tracking)
+
+
 def text_width(text: str, f: ImageFont.FreeTypeFont, tracking: float = TRACKING) -> float:
     """The width ``tracked`` draws ``text`` at."""
     return sum(f.getlength(ch) for ch in text) + f.size * tracking * max(0, len(text) - 1)
@@ -471,8 +498,62 @@ def circle_mask(size: int, inner: float = 0.0, outer: float = 1.0) -> Image.Imag
     return mask.resize((size, size), Image.LANCZOS)
 
 
+TONES = ("none", "warm", "cool", "mono", "cover")
+# Channel mixes for the warm and cool tones, as the 12 numbers Image.convert takes (R, G, B rows).
+WARM = (1.08, 0.04, 0, 0, 0, 1.0, 0, 0, 0, 0, 0.86, 0)
+COOL = (0.88, 0, 0, 0, 0, 1.0, 0.02, 0, 0, 0.04, 1.1, 0)
+
+
 @lru_cache(maxsize=2)
-def backdrop(path: str, art_stamp: float, blur: int, dim: float) -> Image.Image:
+def cover_colour(path: str, art_stamp: float = 0.0) -> tuple[int, int, int]:
+    """The cover's own colour: of its five main colours, the one with the most area times saturation,
+    so a small grey border or a dark corner does not win over the colour people see."""
+    small = square(path, art_stamp).convert("RGB").resize((64, 64))
+    pal = small.quantize(5, method=Image.Quantize.MEDIANCUT)
+    rgb = pal.getpalette()
+
+    def weight(item: tuple[int, int]) -> float:
+        count, k = item
+        _, sat, val = colorsys.rgb_to_hsv(*(c / 255 for c in rgb[k * 3 : k * 3 + 3]))
+        return count * (sat * val + 0.05)
+
+    k = max(pal.getcolors(), key=weight)[1]
+    return tuple(rgb[k * 3 : k * 3 + 3])
+
+
+def toned(bg: Image.Image, tone: str, path: str, art_stamp: float) -> Image.Image:
+    if tone == "warm":
+        return bg.convert("RGB", WARM)
+    if tone == "cool":
+        return bg.convert("RGB", COOL)
+    if tone == "mono":
+        return ImageOps.grayscale(bg).convert("RGB")
+    if tone == "cover":
+        colour = cover_colour(path, art_stamp)
+        lift = 255 / max(max(colour), 1)
+        return ImageOps.colorize(
+            ImageOps.grayscale(bg), (0, 0, 0), tuple(round(c * lift) for c in colour)
+        )
+    return bg
+
+
+@lru_cache(maxsize=2)
+@lru_cache(maxsize=2)
+def vignette_mask(strength: float) -> Image.Image:
+    """Multiplier for the background: 1 in the middle, falling smoothly to 1 - 0.85 x strength at the
+    corners. Elliptical, so it follows the 16:9 frame."""
+    y, x = np.ogrid[0:H, 0:W]
+    d = np.hypot((x - W / 2) / (W / 2), (y - H / 2) / (H / 2)) / math.sqrt(2)
+    u = np.clip((d - 0.35) / 0.65, 0, 1)
+    fall = u * u * (3 - 2 * u)
+    mask = (1 - 0.85 * strength * fall) * 255
+    return Image.fromarray(mask.astype(np.uint8), "L").convert("RGB")
+
+
+@lru_cache(maxsize=2)
+def backdrop(
+    path: str, art_stamp: float, blur: int, dim: float, tone: str = "none", vignette: float = 0.0
+) -> Image.Image:
     """The cover filling the frame, blurred and darkened. It does not depend on where anything is placed,
     so moving the album or the lyrics on the preview does not redo it. Shared: callers copy it."""
     art = square(path, art_stamp)
@@ -488,34 +569,39 @@ def backdrop(path: str, art_stamp: float, blur: int, dim: float) -> Image.Image:
     )
     if blur > 0:
         bg = bg.filter(ImageFilter.GaussianBlur(blur))
+    bg = toned(bg.convert("RGB"), tone, path, art_stamp)
+    if vignette > 0:
+        bg = ImageChops.multiply(bg, vignette_mask(min(vignette, 1.0)))
     return Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), dim).convert("RGBA")
 
 
 def background(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
     g = geometry(style)
     face = fonts.resolve(style.font)
-    bg = backdrop(song.art, art_stamp, style.blur, style.dim).copy()
+    bg = backdrop(song.art, art_stamp, style.blur, style.dim, style.tone, style.vignette).copy()
     cx, top, s = g.title
     if not style.show_title:
         return Image.alpha_composite(bg, panel_layer(g, style))
     box = round(TITLE_BOX * s)
     text = Image.new("RGBA", (W * SS, box * SS), (0, 0, 0, 0))
     d = ImageDraw.Draw(text)
-    tracked(
+    lettered(
         d,
         (W * SS / 2, TITLE_Y * s * SS),
         song.title,
         font(face, 58 * s * SS, 600),
-        (255, 255, 255, 255),
+        255,
+        style,
         0.06,
     )
     if song.artist:
-        tracked(
+        lettered(
             d,
             (W * SS / 2, ARTIST_Y * s * SS),
             song.artist,
             font(face, 26 * s * SS, 400),
-            (255, 255, 255, 165),
+            165,
+            style,
             0.18,
         )
     place(bg, text.resize((W, box), Image.LANCZOS), cx - W // 2, top)
@@ -750,7 +836,6 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
     row = g.row
     mid = ph / 2
     face, now, room, row_px = panel_fit(style)
-    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
 
     def filled(k: int) -> float:
         return 1.0 if 0 <= k < len(lines) and lines[k][1] else 0.0
@@ -784,15 +869,7 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
         pitch = size * ROW_PITCH
         for n, part in enumerate(rows):
             at = y + (n - (len(rows) - 1) / 2) * pitch
-            if style.lyric_edge == "shadow":
-                # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
-                drop = size * SHADOW_DROP
-                tracked(d, (pw / 2 + drop, at + drop), part, f, (*rim, round(alpha * SHADOW_ALPHA)))
-            if style.lyric_edge == "outline":
-                stroke = max(1, round(size * OUTLINE_WIDTH))
-                tracked(d, (pw / 2, at), part, f, (*ink, alpha), TRACKING, stroke, (*rim, alpha))
-            else:
-                tracked(d, (pw / 2, at), part, f, (*ink, alpha))
+            lettered(d, (pw / 2, at), part, f, alpha, style)
     # Averaging each 2x2 block takes 8 ms where LANCZOS took 37 ms, and this runs on every frame of a
     # move; the panel differs from LANCZOS by about one level of 255 on average (PSNR about 47 dB).
     return layer.reduce(SS)
@@ -839,7 +916,7 @@ def progress_bar(t: float, song: Song, style: Style) -> Image.Image:
 
 def forget_art() -> None:
     """Drop every cached layer made from the cover, after a new cover is saved under the same name."""
-    for cached in (square, backdrop, scene, round_album):
+    for cached in (square, backdrop, cover_colour, scene, round_album):
         cached.cache_clear()
 
 
