@@ -182,7 +182,10 @@
 
   <section class="make" id="step-make" aria-label="영상 만들기">
     <div class="output-options" id="output-options"></div>
-    <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
+    <div class="make-row">
+      <button id="clip-make" title="미리보기 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-play"/></svg><span id="clip-label">10초 미리보기</span></button>
+      <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
+    </div>
     <p class="note">걸리는 시간: 노래 길이 정도 또는 그보다 짧게</p>
     <div id="progress" hidden>
       <div class="progress-head">
@@ -208,6 +211,7 @@
       <div id="stage">
         <img id="still" alt="미리보기">
         <div id="boxes"></div>
+        <video id="clip" controls playsinline hidden></video>
         <p id="stage-empty">노래와 표지를 넣으면 미리보기가 표시됩니다.</p>
       </div>
     </div>

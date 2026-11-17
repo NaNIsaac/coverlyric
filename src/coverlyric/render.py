@@ -28,6 +28,9 @@ from . import anim, fonts, media
 W, H, FPS = 1920, 1080, 30
 CHUNK = 4  # frames a worker draws at a time
 FRAME = W * H * 4  # one RGBA frame, 8.3 MB
+# A quick clip for looking, not for keeping: every second frame, half size, the fastest x264.
+QUICK_STEP, QUICK_SIZE = 2, (960, 540)
+QUICK_X264 = ["-preset", "ultrafast", "-crf", "26", "-threads", "2"]
 SS = 2  # the lyric panel and title are drawn at twice the size and scaled down
 DIM_WEIGHT, NOW_WEIGHT = 350, 600
 DIM_SIZE, NOW_SIZE = 34, 44
@@ -821,11 +824,11 @@ def attached(name: str) -> shared_memory.SharedMemory:
 def render_chunk(args) -> list[int]:
     """Draw frames start..stop into the chunk's slots of the shared frame memory and say which slot
     holds each frame. Pickling 8 MB frames back to the main process cost more than drawing them."""
-    start, stop, lines, song, style, turns, moving, frames, first = args
+    start, stop, step, lines, song, style, turns, moving, frames, first = args
     p = painter(lines, song, style, turns, moving)
     buf = attached(frames).buf
     slots, slot, last = [], first - 1, None
-    for n in range(start, stop):
+    for n in range(start, stop, step):
         raw = p.raw(n / FPS)
         if raw is not last:
             slot += 1
@@ -844,17 +847,19 @@ def render(
     workers: int,
     span: tuple[float, float] | None = None,
     report=print,
+    quick: bool = False,
 ) -> None:
     """Write the mp4. As chunks finish, `report(done_seconds, total_seconds, frames_done,
-    frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by."""
-    codec = media.encoder()
+    frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by.
+    `quick` makes a small 15 fps clip to look at in the page."""
+    codec = "libx264" if quick else media.encoder()
     try:
-        encode(out, lines, song, style, workers, span, report, codec)
+        encode(out, lines, song, style, workers, span, report, codec, quick)
     except RuntimeError:
         if codec == "libx264":
             raise
         # A graphics driver can pass the short test and still fail on a whole song.
-        encode(out, lines, song, style, workers, span, report, "libx264")
+        encode(out, lines, song, style, workers, span, report, "libx264", quick)
 
 
 def encode(
@@ -866,9 +871,14 @@ def encode(
     span: tuple[float, float] | None,
     report,
     codec: str,
+    quick: bool = False,
 ) -> None:
     first, last = (0.0, song.duration) if span is None else span
     begin, total = round(first * FPS), math.ceil(last * FPS)
+    step = QUICK_STEP if quick else 1
+    video = ["-c:v", codec, *media.ENCODERS[codec]]
+    if quick:
+        video = ["-vf", "scale={}:{}".format(*QUICK_SIZE), "-c:v", "libx264", *QUICK_X264]
     cmd = [
         media.ffmpeg(),
         "-y",
@@ -881,7 +891,7 @@ def encode(
         "-s",
         f"{W}x{H}",
         "-r",
-        str(FPS),
+        str(FPS // step),
         "-i",
         "-",
         "-ss",
@@ -894,9 +904,7 @@ def encode(
         "0:v",
         "-map",
         "1:a",
-        "-c:v",
-        codec,
-        *media.ENCODERS[codec],
+        *video,
         "-pix_fmt",
         "yuv420p",
         "-c:a",
@@ -927,10 +935,23 @@ def encode(
     # the song is; a chunk's slots are free again once the main process has written them out.
     ahead = workers + 1
     frames = shared_memory.SharedMemory(create=True, size=ahead * CHUNK * FRAME)
+    span_n = CHUNK * step
     chunks = [
-        (s, min(total, s + CHUNK), lines, song, style, turns and turns.name, moving, frames.name, 0)
-        for s in range(begin, total, CHUNK)
+        (
+            s,
+            min(total, s + span_n),
+            step,
+            lines,
+            song,
+            style,
+            turns and turns.name,
+            moving,
+            frames.name,
+            0,
+        )
+        for s in range(begin, total, span_n)
     ]
+    count = len(range(begin, total, step))
     started = time.monotonic()
     try:
         with (
@@ -953,10 +974,10 @@ def encode(
                     break  # ffmpeg stopped; its exit code says so below
                 if k + ahead < len(chunks):
                     waiting.append(submit(k + ahead))
-                done = chunks[k][1] - begin
+                done = len(range(begin, chunks[k][1], step))
                 spent = time.monotonic() - started
-                left = (total - begin - done) * spent / done if k >= 2 else None
-                report(done / FPS, (total - begin) / FPS, done, total - begin, left)
+                left = (count - done) * spent / done if k >= 2 else None
+                report((chunks[k][1] - begin) / FPS, (total - begin) / FPS, done, count, left)
             try:
                 ff.stdin.close()
             except OSError:

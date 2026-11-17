@@ -46,10 +46,12 @@ TYPES = {
     ".m4a": "audio/mp4",
     ".flac": "audio/flac",
     ".ogg": "audio/ogg",
+    ".mp4": "video/mp4",
 }
 LOG = logging.getLogger("coverlyric")
 AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+CLIP_S = 10.0  # seconds in the preview clip
 
 
 def start_log(home: Path) -> Path:
@@ -105,12 +107,16 @@ class App:
         self.output.mkdir(parents=True, exist_ok=True)
         self.file = self.work / "project.json"
         self.lock = threading.Lock()
+        self.starting = threading.Lock()  # a double click must not start two jobs
         self.project = Project.load(self.file) if self.file.exists() else Project(self.work)
         self.job: dict = {"state": "idle"}
         self.log = home / "coverlyric.log"
         self.auto: dict = {"state": "idle"}
         self.auto_proc: subprocess.Popen | None = None
         self.proc: subprocess.Popen | None = None
+        self.clip: dict = {"state": "idle"}
+        self.clip_proc: subprocess.Popen | None = None
+        self.clip_file = self.work / "preview-clip.mp4"
 
     def save(self) -> None:
         self.project.save(self.file)
@@ -253,8 +259,13 @@ class App:
         return buf.getvalue(), render.boxes(p.style, t, song)
 
     def start_render(self) -> dict:
+        with self.starting:
+            return self.begin_render()
+
+    def begin_render(self) -> dict:
         if self.job.get("state") == "running":
             return self.job
+        self.stop_clip()  # the video wins over a look at it
         if self.auto.get("state") == "running":
             # Both at once need about 2 GB, more than a 4 GB PC has free.
             raise ValueError("자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤 영상을 만드세요.")
@@ -338,6 +349,68 @@ class App:
             "log": str(self.log),
         }
 
+    def start_clip(self, at: float) -> dict:
+        """A CLIP_S second look from time `at`, small and quick, rendered like the video."""
+        if self.clip.get("state") == "running":
+            return self.clip
+        if self.job.get("state") == "running" or self.auto.get("state") == "running":
+            raise ValueError("영상 만들기나 자동 맞추기가 끝난 뒤 미리보기 영상을 만드세요.")
+        p = self.project
+        if not p.audio or not p.art:
+            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 1단계에서 넣으세요.")
+        song = p.song()
+        start = min(max(0.0, at), max(0.0, song.duration - 1.0))
+        end = min(song.duration, start + CLIP_S)
+        out = self.work / "preview-clip.mp4"
+        job = self.work / "clip-job.json"
+        data = p.to_dict()
+        data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
+        data["out"], data["clip"] = str(out), [start, end]
+        job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        cmd = [sys.executable, "-m", "coverlyric", "render-job", str(job)]
+        self.clip_proc = proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **new_group(),
+        )
+        self.clip = {"state": "running", "done": 0.0, "total": end - start, "at": start}
+        threading.Thread(target=self.watch_clip, args=(proc, out, start), daemon=True).start()
+        return self.clip
+
+    def watch_clip(self, proc: subprocess.Popen, out: Path, start: float) -> None:
+        tail: list[str] = []
+        for raw in proc.stdout:
+            line = raw.rstrip()
+            if m := re.match(r"progress ([\d.]+) ([\d.]+)", line):
+                self.clip["done"], self.clip["total"] = float(m[1]), float(m[2])
+            elif line.startswith("out "):
+                out = Path(line[4:])  # another name while the page still holds the last clip
+            elif line and not line.startswith("start "):
+                tail = (tail + [line])[-20:]
+        code = proc.wait()
+        if self.clip_proc is not proc or self.clip.get("state") == "stopped":
+            return
+        if code == 0 and out.exists():
+            version = int(out.stat().st_mtime * 1000)
+            self.clip_file = out
+            self.clip = {"state": "done", "url": f"/media/clip?v={version}", "at": start}
+            return
+        for line in tail:
+            LOG.info("  %s", line)
+        LOG.error("preview clip failed (exit code %s)", code)
+        reason = tail[-1] if tail else "미리보기 영상을 만들지 못했습니다."
+        self.clip = {"state": "error", "message": f"{reason} (종료 코드 {code})"}
+
+    def stop_clip(self) -> dict:
+        if self.clip_proc and self.clip_proc.poll() is None:
+            self.clip = {"state": "stopped"}
+            kill_tree(self.clip_proc)
+        return self.clip
+
     def stop_render(self) -> dict:
         if self.proc and self.proc.poll() is None:
             self.job = {"state": "stopped"}
@@ -378,6 +451,10 @@ class App:
                 )
 
     def start_auto(self, model: str) -> dict:
+        with self.starting:
+            return self.begin_auto(model)
+
+    def begin_auto(self, model: str) -> dict:
         if self.auto.get("state") == "running":
             return self.auto
         if self.job.get("state") == "running":
@@ -535,8 +612,14 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     start = int(m[1])
                     end = int(m[2]) if m[2] else end
                 else:
-                    start = size - int(m[2])
+                    start = max(0, size - int(m[2] or 0))
                 end = min(end, size - 1)
+                if start > end:
+                    self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 self.send_response(HTTPStatus.PARTIAL_CONTENT)
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             else:
@@ -548,7 +631,10 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             with path.open("rb") as f:
                 f.seek(start)
-                self.wfile.write(f.read(end - start + 1))
+                left = end - start + 1
+                while left > 0 and (chunk := f.read(min(left, 1 << 20))):
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
 
         def do_GET(self) -> None:
             if not self.trusted():
@@ -567,6 +653,10 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json(fonts.choices())
                 elif url.path == "/api/render":
                     self.json(app.progress())
+                elif url.path == "/api/clip":
+                    self.json(app.clip)
+                elif url.path == "/media/clip":
+                    self.file(app.clip_file)
                 elif url.path == "/api/auto":
                     self.json({**app.auto_progress(), "models": app.models()})
                 elif url.path == "/api/prompt":
@@ -639,6 +729,10 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json(app.stop_auto())
                 elif url.path == "/api/render/stop":
                     self.json(app.stop_render())
+                elif url.path == "/api/clip":
+                    self.json(app.start_clip(float(query.get("t", ["0"])[0])))
+                elif url.path == "/api/clip/stop":
+                    self.json(app.stop_clip())
                 elif url.path == "/api/demo":
                     self.json(app.demo())
                 elif url.path == "/api/new":
@@ -660,6 +754,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
 
 
 def serve(home: Path, port: int = 0, browser: bool = True) -> None:
+    home.mkdir(parents=True, exist_ok=True)  # the log file opens before App makes its folders
     start_log(home)
     app = App(home)
     ref: list = []
