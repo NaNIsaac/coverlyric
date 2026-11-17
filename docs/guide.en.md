@@ -99,6 +99,9 @@ are in the **색** group, the rest in **모양**.
 - **띠 색:** colour of the band behind the current line and of the progress bar. **표지 색으로**
   beside it takes the cover's most telling colour, darkened (light lyrics) or lightened (dark lyrics) a
   little if needed so the lyric colour stays readable on it.
+- **바닥 그림자** (floor shadow): a soft shadow on the floor under the album, case or round cover.
+- **바닥에 비친 모습** (reflection): the case mirrored on the floor under it, fading out (case only;
+  the CD out of the case is not mirrored).
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
 - **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
   the eye to the album and the lyrics.
