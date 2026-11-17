@@ -180,10 +180,14 @@
     <div id="progress" hidden>
       <div class="progress-head">
         <span class="state">영상 만드는 중</span>
-        <span id="progress-text" class="note"></span>
+        <span id="progress-song" class="clock"></span>
       </div>
       <progress id="progress-bar" max="1" value="0"></progress>
-      <button id="make-stop" class="quiet"><svg class="i"><use href="#i-stop"/></svg>그만 만들기</button>
+      <p id="progress-line" class="progress-line" title="여기까지 만든 곳의 가사"></p>
+      <div class="progress-foot">
+        <span id="progress-text" class="note"></span>
+        <button id="make-stop" class="quiet"><svg class="i"><use href="#i-stop"/></svg>그만 만들기</button>
+      </div>
     </div>
     <p id="make-error" class="warn" role="alert" hidden></p>
     <div id="done" hidden>
