@@ -27,20 +27,49 @@ function Repair-VenvHome([string]$venv) {
     return $changed
 }
 
-# Runs the program; when it fails because the environment's Python cannot start through the junction,
-# repairs the environment and runs it once more. A failure of the program itself is not retried.
-function Start-Program([string]$uv, [string]$venv) {
+# The newest stable Python in uv's Python folder from `least` on, by its full-version folder, which is
+# a real folder and not one of the minor-version junctions; $null when there is none.
+function Find-ManagedPython([string]$dir, [version]$least) {
+    if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return $null }
+    $found = foreach ($item in Get-ChildItem -LiteralPath $dir -Directory -Force) {
+        if ($item.LinkType -or $item.Name -notmatch '^cpython-(\d+\.\d+\.\d+)-windows-') { continue }
+        $version = [version]$Matches[1]
+        $exe = Join-Path $item.FullName 'python.exe'
+        if ($version -ge $least -and (Test-Path -LiteralPath $exe)) {
+            [pscustomobject]@{ Version = $version; Path = $exe }
+        }
+    }
+    @($found | Sort-Object Version -Descending)[0].Path
+}
+
+function Test-VenvPython([string]$venv) {
+    $python = Join-Path $venv 'Scripts\python.exe'
+    if (-not (Test-Path -LiteralPath $python)) { return $false }
+    & $python --version *> $null
+    return $LASTEXITCODE -eq 0
+}
+
+# Runs the program. When it fails and the environment's Python cannot start, it repairs the
+# environment's home and runs once more. When Python still cannot start, or uv failed before making
+# the environment (it queries every junction in its Python folder, #18), it runs once more with
+# UV_PYTHON naming a full-version Python from `least` (requires-python in pyproject.toml) on. A
+# failure of the program itself is not retried.
+function Start-Program([string]$uv, [string]$venv, [version]$least = '3.12') {
+    # Windows PowerShell 5.1 turns a native command's stderr into an error, which the script's 'Stop'
+    # would make end the launcher before the repair (#18).
+    $ErrorActionPreference = 'Continue'
     & $uv run --frozen --no-dev coverlyric
     $code = $LASTEXITCODE
-    if ($code -ne 0) {
-        $python = Join-Path $venv 'Scripts\python.exe'
-        $starts = $false
-        if (Test-Path -LiteralPath $python) {
-            & $python --version *> $null
-            $starts = $LASTEXITCODE -eq 0
-        }
-        if (-not $starts -and (Repair-VenvHome $venv)) {
-            Write-Host 'Python 경로를 고쳐 다시 시작합니다.'
+    if ($code -ne 0 -and -not (Test-VenvPython $venv) -and (Repair-VenvHome $venv)) {
+        Write-Host 'Python 경로를 고쳐 다시 시작합니다.'
+        & $uv run --frozen --no-dev coverlyric
+        $code = $LASTEXITCODE
+    }
+    if ($code -ne 0 -and -not (Test-VenvPython $venv)) {
+        $python = Find-ManagedPython (& $uv python dir 2>$null | Select-Object -First 1) $least
+        if ($python -and $env:UV_PYTHON -ne $python) {
+            Write-Host 'Python을 직접 지정해 다시 시작합니다.'
+            $env:UV_PYTHON = $python
             & $uv run --frozen --no-dev coverlyric
             $code = $LASTEXITCODE
         }
