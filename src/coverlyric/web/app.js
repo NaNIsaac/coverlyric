@@ -363,6 +363,8 @@ function fillLook() {
   $("show_title").checked = s.show_title;
   $("bar").checked = s.bar;
   $("fade").checked = s.fade;
+  $("height").value = String(s.height);
+  $("fps").value = String(s.fps);
   drawAnim();
   fillPlaces();
   const select = $("font");
@@ -1157,6 +1159,8 @@ function bind() {
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
   $("fade").addEventListener("change", (e) => { state.style.fade = e.target.checked; scheduleSync(0); });
+  $("height").addEventListener("change", (e) => { state.style.height = Number(e.target.value); scheduleSync(0); });
+  $("fps").addEventListener("change", (e) => { state.style.fps = Number(e.target.value); scheduleSync(0); });
   $("anim-file").addEventListener("change", (e) => { addAnim(e.target.files); e.target.value = ""; });
   $("anim_fps").addEventListener("input", (e) => {
     state.style.anim_fps = Number(e.target.value);

@@ -18,6 +18,9 @@ from .project import Project
 
 BASE_MB = 250  # kept free; encoder and main process measured about 320 MB with one worker
 WORKER_MB = 150  # each extra worker measured about 120 MB in a 60 s 1080p render (issue #3)
+# Under this much free memory at most two workers: the render is bound by the encoder, and on a
+# 16 GB PC a 60 s part took 65.6 s with two workers at 993 MB against 62.6 s with four at 1831 MB.
+LOW_MB, LOW_WORKERS = 2048, 2
 WORKER_ERROR = (
     "작업 프로세스가 비정상 종료되었습니다. 대부분 메모리 부족이 원인입니다. "
     "다른 프로그램을 닫고 다시 만드세요."
@@ -26,8 +29,8 @@ WORKER_ERROR = (
 
 def workers() -> int:
     """Render processes: one core is left for the encoder and the page, and the memory available
-    when the render starts must hold the encoder plus every worker. A PC with little free memory
-    gets one worker."""
+    when the render starts must hold the encoder plus every worker. Under LOW_MB free there are at most
+    two, and with less than the encoder needs, one."""
     try:
         given = int(os.environ.get("COVERLYRIC_WORKERS") or 0)
     except ValueError:
@@ -36,6 +39,8 @@ def workers() -> int:
         return min(8, given)
     _, available = media.memory_mb()
     by_memory = int((available - BASE_MB) // WORKER_MB) if available else 6
+    if available and available < LOW_MB:
+        by_memory = min(by_memory, LOW_WORKERS)
     return max(1, min(6, (os.cpu_count() or 2) - 1, by_memory))
 
 

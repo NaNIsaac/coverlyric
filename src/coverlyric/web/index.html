@@ -211,7 +211,20 @@
   </section>
 
   <section class="make" id="step-make" aria-label="영상 만들기">
-    <div class="output-options" id="output-options"></div>
+    <div class="output-options" id="output-options">
+      <label class="field">화질
+        <select id="height">
+          <option value="1080">1080p</option>
+          <option value="720">720p (더 빠름)</option>
+        </select>
+      </label>
+      <label class="field">1초에 장면
+        <select id="fps">
+          <option value="24">24장</option>
+          <option value="30">30장</option>
+        </select>
+      </label>
+    </div>
     <div class="make-row">
       <button id="clip-make" title="미리보기 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-play"/></svg><span id="clip-label">10초 미리보기</span></button>
       <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
