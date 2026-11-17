@@ -100,6 +100,8 @@ are in the **색** group, the rest in **모양**.
   beside it takes the cover's most telling colour, darkened a little if needed so the white line stays
   readable.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
+- **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
+  the eye to the album and the lyrics.
 - **배경 색감** (background tone): **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백**
   (black and white) or **표지 색** (tinted with the cover's most telling colour).
 - **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, with an outline or

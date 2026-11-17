@@ -356,6 +356,7 @@ function fillLook() {
   $("band").value = s.band;
   $("blur").value = s.blur;
   $("dim").value = s.dim;
+  $("vignette").value = s.vignette;
   $("lyric_colour").value = s.lyric_colour;
   $("lyric_edge").value = s.lyric_edge;
   $("lyric_edge_colour").value = s.lyric_edge_colour;
@@ -1149,6 +1150,7 @@ function bind() {
   });
   $("blur").addEventListener("input", (e) => { state.style.blur = Number(e.target.value); scheduleSync(); });
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
+  $("vignette").addEventListener("input", (e) => { state.style.vignette = Number(e.target.value); scheduleSync(); });
   $("lyric_colour").addEventListener("input", (e) => { state.style.lyric_colour = e.target.value; scheduleSync(); });
   $("lyric_edge").addEventListener("change", (e) => {
     state.style.lyric_edge = e.target.value;
