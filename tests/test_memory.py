@@ -239,3 +239,55 @@ def test_a_failed_clip_shows_words_not_the_traceback(tmp_path):
     run()
     assert app.clip["state"] == "error"
     assert app.clip["message"].startswith(cli.MEMORY_ERROR) and "1455" not in app.clip["message"]
+
+
+@pytest.mark.parametrize(
+    ("said", "kind"),
+    [
+        ("x264 [error]: malloc of size 12116928 failed\nError encoding a frame", MemoryError),
+        ("[in#0] Error during demuxing: Cannot allocate memory", MemoryError),
+        ("song.wav: Invalid data found when processing input", RuntimeError),
+    ],
+)
+def test_ffmpeg_out_of_memory_is_a_memory_error(said, kind):
+    error = render.ffmpeg_failure(3752568763, said)
+    assert type(error) is kind
+    assert render.out_of_memory(error) is (kind is MemoryError)
+
+
+FAKE_FFMPEG = """
+import sys
+sys.stdin.buffer.read({size})
+sys.stderr.write({said!r})
+sys.exit(0)
+"""
+
+
+@pytest.mark.parametrize(
+    ("said", "kind"),
+    [("[in#0] Error during demuxing: Cannot allocate memory\n", MemoryError), ("", RuntimeError)],
+)
+def test_ffmpeg_that_stops_early_is_never_a_finished_video(monkeypatch, tmp_path, said, kind):
+    # Out of memory, ffmpeg can take the failed read as the end of the input and exit 0 (#15).
+    fake = tmp_path / "ffmpeg.py"
+    fake.write_text(FAKE_FFMPEG.format(size=2 * render.FRAME, said=said), encoding="utf-8")
+    popen = server.subprocess.Popen
+
+    def run(cmd, **kw):
+        return popen([sys.executable, "-I", str(fake)] if cmd[0] == "ffmpeg" else cmd, **kw)
+
+    monkeypatch.setattr(media, "ffmpeg", lambda: "ffmpeg")
+    monkeypatch.setattr(render.subprocess, "Popen", run)
+    demo = Project.load(DEMO)
+    with pytest.raises(kind):
+        render.encode(
+            tmp_path / "out.mp4",
+            demo.preview_lines(),
+            demo.song(),
+            render.Style(),
+            1,
+            (3.0, 5.0),
+            lambda *a: None,
+            "libx264",
+            shared=False,
+        )
