@@ -351,6 +351,8 @@ function fillLook() {
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
+  $("tilt").value = s.tilt;
+  $("tilt-label").textContent = s.tilt;
   $("show_cd").disabled = s.layout !== "case";
   $("band").value = s.band;
   $("blur").value = s.blur;
@@ -1130,6 +1132,11 @@ function bind() {
     r.addEventListener("change", () => { state.style.layout = r.value; fillLook(); scheduleSync(0); });
   }
   $("spin").addEventListener("change", (e) => { state.style.spin = e.target.checked ? 7 : 0; scheduleSync(0); });
+  $("tilt").addEventListener("input", (e) => {
+    state.style.tilt = Number(e.target.value);
+    $("tilt-label").textContent = e.target.value;
+    scheduleSync();
+  });
   $("show_cd").addEventListener("change", (e) => { state.style.show_cd = e.target.checked; fillLook(); scheduleSync(0); });
   $("font").addEventListener("change", (e) => { state.style.font = e.target.value; scheduleSync(0); });
   $("band").addEventListener("input", (e) => { state.style.band = e.target.value; scheduleSync(); });

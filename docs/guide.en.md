@@ -94,7 +94,7 @@ are in the **색** group, the rest in **모양**.
 - **Move and resize:** drag the dashed boxes in the preview; drag the lower-right corner to resize.
   The **위치와 크기** table takes numbers; **위치·크기 처음대로** resets the layout.
 - **Album:** **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
-  **CD 돌기** hide or stop the CD.
+  **CD 돌기** hide or stop the CD. **기울기** (tilt, -25° to 25°) turns the album about its upright axis.
 - **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
 - **띠 색:** colour of the band behind the current line and of the progress bar.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
