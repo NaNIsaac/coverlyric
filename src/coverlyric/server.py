@@ -117,7 +117,7 @@ class App:
             self.project.style = replace(self.project.style, font=str(target))
         else:
             raise ValueError(f"unknown upload kind {kind}")
-        render.scene.cache_clear()
+        render.forget_art()
         self.save()
         return self.state()
 
@@ -131,7 +131,7 @@ class App:
         demo.audio, demo.art = "song.wav", "cover.png"
         demo.duration = media.duration(str(self.work / "song.wav"))
         self.project = demo
-        render.scene.cache_clear()
+        render.forget_art()
         self.save()
         return self.state()
 
@@ -142,7 +142,7 @@ class App:
             if old.is_file():
                 old.unlink()
         self.project = Project(self.work)
-        render.scene.cache_clear()
+        render.forget_art()
         self.save()
         return self.state()
 
@@ -156,7 +156,7 @@ class App:
         small = img.resize((1280, 720), Image.LANCZOS)
         buf = io.BytesIO()
         small.save(buf, "JPEG", quality=88)
-        return buf.getvalue(), render.boxes(p.style)
+        return buf.getvalue(), render.boxes(p.style, t)
 
     def start_render(self) -> dict:
         if self.job.get("state") == "running":
