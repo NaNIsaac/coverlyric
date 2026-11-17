@@ -4,6 +4,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from coverlyric import server
 
 # A parent that starts a child which touches a file every 0.1 s, the way `uv run` starts the
@@ -97,3 +99,15 @@ def test_an_old_render_does_not_overwrite_the_new_one(tmp_path):
     watcher.join(timeout=10)
     assert app.job == {"state": "running", "done": 1.0}
     app.proc.wait()
+
+
+def test_a_render_waits_for_automatic_timing(tmp_path):
+    app = server.App(tmp_path)
+    app.demo()
+    app.auto = {"state": "running", "phase": "listen"}
+    try:
+        with pytest.raises(ValueError, match="자동 맞추기"):
+            app.start_render()
+    finally:
+        if app.proc:
+            server.kill_tree(app.proc)

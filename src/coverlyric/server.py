@@ -219,6 +219,9 @@ class App:
     def start_render(self) -> dict:
         if self.job.get("state") == "running":
             return self.job
+        if self.auto.get("state") == "running":
+            # Both at once need about 2 GB, more than a 4 GB PC has free.
+            raise ValueError("자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤 영상을 만드세요.")
         p = self.project
         if not p.audio or not p.art:
             raise ValueError("노래 파일과 앨범 표지가 필요합니다. 1단계에서 넣으세요.")
