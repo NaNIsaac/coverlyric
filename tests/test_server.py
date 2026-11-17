@@ -122,3 +122,15 @@ def test_two_quick_render_clicks_start_one_render(tmp_path, monkeypatch):
     for t in clicks:
         t.join()
     assert len(started) == 1
+
+
+def test_the_preview_says_which_lines_are_too_wide(base):
+    state = json.loads(call(f"{base}/api/demo", b"")[0])
+    lines = state["lines"]
+    lines[1][1] = (
+        "오늘도 나는 같은 자리에서 너를 기다리고 또 기다리다가 잠이 들어 꿈에서라도 만나길"
+    )
+    _, headers = call(f"{base}/api/preview?t=7", {"lines": lines})
+    fits = json.loads(headers["X-Fit"])
+    assert len(fits) == len(lines)
+    assert fits[0] == [1.0, 1] and fits[1][1] == 2
