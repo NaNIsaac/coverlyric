@@ -565,7 +565,7 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
     row = g.row
     mid = ph / 2
     face = fonts.resolve(style.font)
-    ink, edge = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
+    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
 
     def filled(k: int) -> float:
         return 1.0 if 0 <= k < len(lines) and lines[k][1] else 0.0
@@ -598,10 +598,10 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
         if style.lyric_edge == "shadow":
             # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
             drop = size * SHADOW_DROP
-            tracked(d, (pw / 2 + drop, y + drop), text, f, (*edge, round(alpha * SHADOW_ALPHA)))
+            tracked(d, (pw / 2 + drop, y + drop), text, f, (*rim, round(alpha * SHADOW_ALPHA)))
         if style.lyric_edge == "outline":
             stroke = max(1, round(size * OUTLINE_WIDTH))
-            tracked(d, (pw / 2, y), text, f, (*ink, alpha), TRACKING, stroke, (*edge, alpha))
+            tracked(d, (pw / 2, y), text, f, (*ink, alpha), TRACKING, stroke, (*rim, alpha))
         else:
             tracked(d, (pw / 2, y), text, f, (*ink, alpha))
     # Averaging each 2x2 block takes 8 ms where LANCZOS took 37 ms, and this runs on every frame of a
