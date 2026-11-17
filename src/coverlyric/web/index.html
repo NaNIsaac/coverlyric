@@ -171,7 +171,10 @@
       <fieldset class="group">
         <legend>가사 띠와 배경</legend>
         <div class="grid">
-          <label class="color">띠 색<input type="color" id="band"></label>
+          <div class="band-row">
+            <label class="color">띠 색<input type="color" id="band"></label>
+            <button id="band-cover" class="quiet small" title="표지에서 가장 눈에 띄는 색을 띠 색으로 씁니다"><svg class="i"><use href="#i-image"/></svg>표지 색으로</button>
+          </div>
           <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
           <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
         </div>

@@ -1108,6 +1108,16 @@ function bind() {
   $("show_cd").addEventListener("change", (e) => { state.style.show_cd = e.target.checked; fillLook(); scheduleSync(0); });
   $("font").addEventListener("change", (e) => { state.style.font = e.target.value; scheduleSync(0); });
   $("band").addEventListener("input", (e) => { state.style.band = e.target.value; scheduleSync(); });
+  $("band-cover").addEventListener("click", async () => {
+    try {
+      const { band } = await (await api("/api/band-from-cover")).json();
+      state.style.band = band;
+      $("band").value = band;
+      scheduleSync(0);
+    } catch (e) {
+      toast(e.message);
+    }
+  });
   $("blur").addEventListener("input", (e) => { state.style.blur = Number(e.target.value); scheduleSync(); });
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });

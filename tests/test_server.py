@@ -122,3 +122,13 @@ def test_two_quick_render_clicks_start_one_render(tmp_path, monkeypatch):
     for t in clicks:
         t.join()
     assert len(started) == 1
+
+
+def test_band_from_cover_is_the_cover_colour_kept_readable(base):
+    with pytest.raises(urllib.error.HTTPError):
+        call(f"{base}/api/band-from-cover")  # no cover yet
+    call(f"{base}/api/demo", b"")
+    band = json.loads(call(f"{base}/api/band-from-cover")[0])["band"]
+    assert len(band) == 7 and band.startswith("#")
+    rgb = [int(band[k : k + 2], 16) for k in (1, 3, 5)]
+    assert max(rgb) <= round(server.BAND_VALUE * 255)
