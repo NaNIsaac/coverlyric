@@ -13,7 +13,8 @@
   --warn: #f08a72;
   --mark: #3d3424;
   --focus: #f4c77c;
-  --panel-w: 384px;
+  --panel-w: 340px;
+  --rail-w: 64px;
   --top-h: 48px;
   --transport-h: 56px;
   --editor-h: 0px;
@@ -63,10 +64,42 @@ main {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: var(--panel-w) 1fr;
+  grid-template-columns: var(--rail-w) var(--panel-w) 1fr;
   grid-template-rows: 1fr auto;
-  grid-template-areas: "steps preview" "make preview";
+  grid-template-areas: "rail steps preview" "rail make preview";
 }
+
+.rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  background: var(--shell);
+  border-right: 1px solid var(--line);
+}
+.rail-tab {
+  position: relative;
+  height: 58px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.rail-tab .i { width: 20px; height: 20px; }
+.rail-tab:hover { background: var(--panel); color: var(--ink); }
+.rail-tab[aria-selected="true"] { background: var(--panel); color: var(--ink); font-weight: 700; }
+.rail-tab[aria-selected="true"]::before { content: ""; position: absolute; left: -6px; top: 12px; bottom: 12px; width: 3px; border-radius: 0 2px 2px 0; background: var(--accent); }
+.rail-tab[aria-selected="true"] .i { color: var(--accent); }
+.rail-tab .dot { position: absolute; top: 9px; right: 12px; width: 7px; height: 7px; border-radius: 50%; }
+.rail-tab .dot.miss { background: var(--warn); }
 
 .steps {
   grid-area: steps;
@@ -76,43 +109,22 @@ main {
   border-right: 1px solid var(--line);
   scrollbar-color: var(--raised) transparent;
 }
-.step { border-bottom: 1px solid var(--line); padding: 0 16px; }
-.step[open] { padding-bottom: 14px; }
-.step summary {
-  margin: 0 -16px;
+.pane { padding: 0 16px 16px; }
+.pane-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 44px;
-  padding: 0 14px 0 16px;
-  cursor: pointer;
-  font-size: 15px;
+  gap: 6px;
+  height: 48px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 700;
-  list-style: none;
-  user-select: none;
 }
-.step summary::-webkit-details-marker { display: none; }
-.step summary:hover { background: var(--raised); }
-.step summary .i { color: var(--muted); }
-.step[open] summary .i { color: var(--accent); }
-.step summary .note { font-size: 12px; }
-.step summary .state { margin-left: auto; display: flex; gap: 8px; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
-.step summary .state .ok { color: var(--ink); }
-.step summary .state .ok::after { content: " ✓"; color: var(--accent); }
-.step summary .state .miss { color: var(--warn); }
-.step summary .state + .num { margin-left: 4px; }
-.step summary .num { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
-.step summary::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  margin: 0 4px 3px 4px;
-  border-right: 1.8px solid var(--muted);
-  border-bottom: 1.8px solid var(--muted);
-  transform: rotate(-45deg);
-  transition: transform 0.15s;
-}
-.step[open] summary::after { transform: rotate(45deg); }
+.pane-head.sub { height: auto; margin: 18px -16px 6px; padding: 12px 16px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.pane-head .note { font-size: 12px; }
+.pane-head .state { margin-left: auto; display: flex; gap: 8px; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.pane-head .state .ok { color: var(--ink); }
+.pane-head .state .ok::after { content: " ✓"; color: var(--accent); }
+.pane-head .state .miss { color: var(--warn); }
 
 .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
 .pick { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
@@ -188,10 +200,10 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 .chat-ai { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 .chat-ai .note { margin: 0 0 4px; font-size: 12px; }
 .chat-ai > button { padding: 0 6px; margin-left: -6px; }
-.step .paste summary { display: list-item; height: auto; margin: 0; padding: 4px 0; color: var(--muted); font-size: 13px; font-weight: 400; list-style: disclosure-closed inside; }
-.step .paste[open] summary { list-style: disclosure-open inside; }
-.step .paste summary::after { display: none; }
-.step .paste summary:hover { background: none; color: var(--ink); }
+.pane .paste summary { display: list-item; height: auto; margin: 0; padding: 4px 0; color: var(--muted); font-size: 13px; font-weight: 400; list-style: disclosure-closed inside; }
+.pane .paste[open] summary { list-style: disclosure-open inside; }
+.pane .paste summary::after { display: none; }
+.pane .paste summary:hover { background: none; color: var(--ink); }
 
 .editor { display: none; flex-direction: column; height: var(--editor-h); background: var(--panel); border-top: 1px solid var(--line); }
 body.timing-open .editor { display: flex; }
@@ -247,6 +259,7 @@ body.timing-open .editor { display: flex; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
 .grid label:not(.check) { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
 .grid .check { margin: 0; align-self: end; height: 32px; }
+#g-colour .grid { grid-template-columns: 1fr; }
 .color { flex-direction: row !important; align-items: center; justify-content: space-between; }
 input[type="color"] { width: 52px; height: 28px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); cursor: pointer; }
 input[type="range"] { width: 100%; margin: 4px 0; }
@@ -265,6 +278,10 @@ input[type="range"] { width: 100%; margin: 4px 0; }
   box-shadow: 0 -8px 16px -12px rgb(0 0 0 / 0.6);
 }
 .make .note { margin: 6px 0 0; font-size: 12px; }
+.output-options:empty { display: none; }
+.make-row { display: flex; flex-direction: column; gap: 6px; }
+#clip-make { width: 100%; height: 34px; justify-content: center; white-space: nowrap; }
+.output-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 button.primary {
   width: 100%;
   height: 44px;
@@ -279,7 +296,19 @@ button.primary .i { width: 18px; height: 18px; stroke-width: 2; }
 #progress { margin-top: 12px; }
 .progress-head { display: flex; justify-content: space-between; align-items: baseline; }
 .progress-head .state { font-weight: 700; color: var(--accent); }
-.progress-head .note { margin: 0; font-variant-numeric: tabular-nums; }
+.progress-head .clock { min-width: 0; font-size: 14px; }
+.progress-line {
+  margin: 4px 0 6px;
+  padding: 2px 0 2px 10px;
+  border-left: 3px solid var(--accent);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.progress-line.gap { color: var(--muted); }
+.progress-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.progress-foot .note { margin: 0; font-variant-numeric: tabular-nums; }
 progress {
   appearance: none;
   width: 100%;
@@ -293,7 +322,7 @@ progress {
 progress::-webkit-progress-bar { background: var(--field); }
 progress::-webkit-progress-value { background: var(--accent); transition: width 0.4s; }
 progress::-moz-progress-bar { background: var(--accent); }
-#make-stop { padding: 0 8px; margin-left: -8px; }
+#make-stop { padding: 0 8px; margin-right: -8px; }
 #done { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .done-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; font-weight: 700; }
 .done-line .i { color: var(--accent); stroke-width: 2.4; }
@@ -469,11 +498,14 @@ progress::-moz-progress-bar { background: var(--accent); }
 body.timing-open { --editor-h: max(300px, 44vh); }
 body.timing-open .stage-well { padding: 16px 24px; }
 @media (min-width: 1600px) {
-  :root { --panel-w: 420px; }
+  :root { --panel-w: 380px; --rail-w: 72px; }
 }
 @media (max-width: 960px) {
   body { overflow: auto; height: auto; }
-  main { grid-template-columns: 1fr; grid-template-rows: auto auto auto; grid-template-areas: "preview" "make" "steps"; }
+  main { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto; grid-template-areas: "preview" "make" "rail" "steps"; }
+  .rail { flex-direction: row; border-right: none; border-bottom: 1px solid var(--line); }
+  .rail-tab { flex: 1; }
+  .rail-tab[aria-selected="true"]::before { left: 12px; right: 12px; top: auto; bottom: -8px; width: auto; height: 3px; }
   .steps { overflow: visible; border-right: none; }
   .make { border-right: none; }
   #stage { width: 100%; }
