@@ -5,6 +5,9 @@ $Host.UI.RawUI.WindowTitle = 'coverlyric 가사 영상 만들기'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 $env:COVERLYRIC_HOME = $root
+# numpy fails to start on PCs with many cores and little free memory otherwise (issue #1).
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:OMP_NUM_THREADS = '1'
 
 $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
 if (-not $uv) {
