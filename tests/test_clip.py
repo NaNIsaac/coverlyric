@@ -1,4 +1,4 @@
-"""The 10 s preview clip: small, 15 fps, the preview's look, made by the page's own job."""
+"""The 10 s preview clip: small, half the frame rate, the preview's look, made by the page's own job."""
 
 import re
 import subprocess
@@ -39,11 +39,12 @@ def test_a_quick_clip_is_small_and_takes_every_second_frame(tmp_path):
         quick=True,
     )
     info = probe(out)
-    assert "960x540" in info and re.search(r"\b15 fps\b", info) and "Audio: aac" in info
+    rate = render.FPS // render.QUICK_STEP
+    assert "960x540" in info and re.search(rf"\b{rate} fps\b", info) and "Audio: aac" in info
     assert media.duration(str(out)) == pytest.approx(5.0, abs=0.1)
     done, total, frames, frames_total, _ = seen[-1]
     assert (done, total) == pytest.approx((5.0, 5.0))
-    assert frames == frames_total == 75
+    assert frames == frames_total == 5 * rate
 
 
 def wait(app: server.App, seconds: float = 120) -> dict:
