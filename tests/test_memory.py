@@ -31,9 +31,21 @@ def paging_error() -> OSError:
 
 
 def test_steps_halve_the_workers_then_drop_the_shared_turn():
-    assert render.steps(6) == [(6, True, True), (3, True, True), (1, True, True), (1, False, True)]
-    assert render.steps(2) == [(2, True, True), (1, True, True), (1, False, True)]
-    assert render.steps(1, anim=True) == [(1, True, True), (1, False, True), (1, False, False)]
+    shared, alone, bare = (True, True), (False, True), (False, False)
+    assert render.steps(6) == [
+        (6, *shared, False),
+        (3, *shared, False),
+        (1, *shared, False),
+        (1, *alone, False),
+    ]
+    assert render.steps(2) == [(2, *shared, False), (1, *shared, False), (1, *alone, False)]
+    assert render.steps(1, anim=True) == [
+        (1, *shared, False),
+        (1, *alone, False),
+        (1, *bare, False),
+    ]
+    assert render.steps(1, anim=True, smaller=True)[-2:] == [(1, *bare, False), (1, *bare, True)]
+    assert render.steps(1, smaller=True)[-1] == (1, *alone, True)
 
 
 @pytest.mark.parametrize(
@@ -55,7 +67,7 @@ def fake_encode(monkeypatch, fails: int, error=None):
     calls, notes = [], []
 
     def encode(out, lines, song, style, workers, span, report, codec, quick, shared):
-        calls.append((workers, shared, bool(song.anim)))
+        calls.append((workers, shared, bool(song.anim)) + ((720,) if style.height == 720 else ()))
         if len(calls) <= fails:
             raise error or paging_error()
 
@@ -79,7 +91,7 @@ def test_when_nothing_is_left_to_try_the_error_goes_up(monkeypatch, tmp_path):
     demo = Project.load(DEMO)
     with pytest.raises(PagingFileTooSmall) as caught:
         render.render(tmp_path / "out.mp4", (), demo.song(), render.Style(), 2, note=notes.append)
-    assert calls == [(2, True, False), (1, True, False), (1, False, False)]
+    assert calls == [(2, True, False), (1, True, False), (1, False, False), (1, False, False, 720)]
     message = cli.failure(caught.value)
     assert message == cli.MEMORY_ERROR
     assert "paging" not in message.lower() and "1455" not in message
@@ -199,6 +211,7 @@ def test_the_moving_picture_goes_last_and_the_user_is_told(monkeypatch, tmp_path
     song = replace(Project.load(DEMO).song(), anim=("a.gif",))
     said = render.render(tmp_path / "out.mp4", (), song, render.Style(), 2, note=notes.append)
     assert calls[-1] == (1, False, False)
+    assert len(calls) == 4
     assert said == render.ANIM_DROPPED
     assert "without the moving picture" in notes[-1]
 
@@ -291,3 +304,22 @@ def test_ffmpeg_that_stops_early_is_never_a_finished_video(monkeypatch, tmp_path
             "libx264",
             shared=False,
         )
+
+
+def test_a_1080p_video_short_of_memory_is_made_at_720p_and_the_user_is_told(monkeypatch, tmp_path):
+    calls, notes = fake_encode(monkeypatch, fails=4)
+    song = replace(Project.load(DEMO).song(), anim=("a.gif",))
+    said = render.render(tmp_path / "out.mp4", (), song, render.Style(), 2, note=notes.append)
+    assert calls[-2:] == [(1, False, False), (1, False, False, 720)]
+    assert said == f"{render.ANIM_DROPPED} {render.SMALLER}"
+    assert "at 720p" in notes[-1]
+
+
+def test_no_720p_step_for_720p_or_a_clip(monkeypatch, tmp_path):
+    calls, _ = fake_encode(monkeypatch, fails=99)
+    demo = Project.load(DEMO)
+    for style, quick in ((render.Style(height=720), False), (render.Style(), True)):
+        calls.clear()
+        with pytest.raises(PagingFileTooSmall):
+            render.render(tmp_path / "out.mp4", (), demo.song(), style, 1, quick=quick)
+        assert [c[:3] for c in calls] == [(1, True, False), (1, False, False)]
