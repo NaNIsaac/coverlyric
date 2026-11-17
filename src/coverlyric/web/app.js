@@ -804,6 +804,7 @@ async function pollAuto() {
       if (measured) line += ` · ${Math.round(share * 100)}%`;
       line += timeLeft(job.eta);
       if (job.phase === "install" && job.detail) line += ` · ${job.detail}`;
+      if (job.smaller) line += ` · 메모리가 부족해 더 작은 모델(${job.smaller})로 다시 하는 중`;
       $("auto-text").textContent = line;
       if (job.partial && pollAuto.before) showPartial(job.partial);
       setTimeout(pollAuto, 1000);
@@ -828,12 +829,13 @@ async function pollAuto() {
       scheduleSync();
       const sung = lyricIndex.length;
       const bad = job.notes.filter((n) => n.kind !== "differs").length;
-      toast(`${sung}줄 중 ${sung - bad}줄의 시간을 찾았습니다.${bad ? ` 확인이 필요한 줄 ${bad}개를 표시했습니다.` : ""}`, 8000);
+      const smaller = job.smaller ? ` 메모리가 부족해 더 작은 모델(${job.smaller})로 맞췄으니 시간을 한 번 더 확인하세요.` : "";
+      toast(`${sung}줄 중 ${sung - bad}줄의 시간을 찾았습니다.${bad ? ` 확인이 필요한 줄 ${bad}개를 표시했습니다.` : ""}${smaller}`, 10000);
       loadModels();
     } else if (job.state === "error" && pollAuto.waiting) {
       pollAuto.waiting = false;
       restoreLines();
-      toast(`자동 맞추기 실패: ${job.message}`, 10000);
+      toast(job.message, 10000);
     }
   } catch (e) {
     toast(e.message);

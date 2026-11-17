@@ -50,6 +50,16 @@ TYPES = {
     ".mp4": "video/mp4",
 }
 LOG = logging.getLogger("coverlyric")
+AUTO_NO_MEMORY = (
+    "메모리가 부족해 자동 맞추기를 하지 못했습니다. 다른 프로그램을 닫고 다시 해 보세요."
+)
+AUTO_FAILED = (
+    "자동 맞추기를 하지 못했습니다. 인터넷 연결을 확인하고 다시 해 보세요. "
+    "자세한 내용은 프로그램 폴더의 coverlyric.log 에 있습니다."
+)
+# What a process that ran out of memory leaves in its output when it dies before Python can
+# say so itself.
+NO_MEMORY_SIGNS = ("mkl_malloc", "failed to allocate", "MemoryError", "bad_alloc")
 
 
 def luminance(rgb: tuple[int, int, int]) -> float:
@@ -550,7 +560,8 @@ class App:
             cmd,
             # hf-xet holds the model in memory until it is complete, so the download bar would
             # not move; the plain HTTP download writes the cache file as it goes.
-            env={**os.environ, "HF_HUB_DISABLE_XET": "1"},
+            # No token is needed for the public models; the lookup only prints warnings.
+            env={**os.environ, "HF_HUB_DISABLE_XET": "1", "HF_HUB_DISABLE_IMPLICIT_TOKEN": "1"},
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -577,8 +588,10 @@ class App:
                 self.auto["done"], self.auto["total"] = float(m[2]), float(m[3])
             elif raw.startswith("lines "):
                 self.auto["partial"] = json.loads(raw[6:])
+            elif raw.startswith("smaller "):
+                self.auto["smaller"] = raw.split()[1]
             else:
-                tail = (tail + [raw.rstrip()])[-8:]
+                tail = (tail + [raw.rstrip()])[-40:]
                 if self.auto.get("phase") == "install" and raw.strip():
                     self.auto["detail"] = raw.strip()[:80]
         code = proc.wait()
@@ -590,9 +603,15 @@ class App:
             # Saved here, not by the page, so a page reloaded during the run still gets the times.
             self.project.lines = [(t, text) for t, text in data["lines"]]
             self.save()
-            self.auto = {"state": "done", **data}
+            smaller = {"smaller": self.auto["smaller"]} if "smaller" in self.auto else {}
+            self.auto = {"state": "done", **data, **smaller}
         elif self.auto.get("state") != "stopped":
-            self.auto = {"state": "error", "message": "\n".join(tail) or f"exit {code}"}
+            # Install logs and library warnings go to the log file; the page gets a sentence.
+            LOG.error("automatic timing failed (exit code %s):\n%s", code, "\n".join(tail))
+            short = code == auto.NO_MEMORY_EXIT or any(
+                s in line for line in tail for s in NO_MEMORY_SIGNS
+            )
+            self.auto = {"state": "error", "message": AUTO_NO_MEMORY if short else AUTO_FAILED}
 
     def stop_auto(self) -> dict:
         if self.auto_proc and self.auto_proc.poll() is None:

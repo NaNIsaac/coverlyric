@@ -19,9 +19,21 @@ from .timing import Line
 GAP = 6.0  # seconds of no singing after a line that get an empty entry, so the band is empty
 PLACED = 0.5  # share of a line's letters that must be heard for its time to count
 SHORTEST = 1.0  # seconds a line stays on the band at least
-MODELS = {
-    "small": ("small", 464),  # MB in the cache once downloaded
+MODELS = {  # MB in the cache once downloaded
+    "small": ("small", 464),
+    "base": ("base", 139),
+    "tiny": ("tiny", 72),
 }
+SMALLER = {"small": "base", "base": "tiny"}  # tried in turn when a model cannot get memory
+NO_MEMORY_EXIT = 3  # the auto job's exit code when no listening model could get memory
+
+
+def out_of_memory(error: BaseException) -> bool:
+    """CTranslate2 reports a failed allocation as a RuntimeError naming the allocator."""
+    text = str(error).lower()
+    return isinstance(error, MemoryError) or (
+        "alloc" in text and ("memory" in text or "malloc" in text)
+    )
 
 
 def letters(text: str) -> str:
