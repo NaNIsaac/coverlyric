@@ -174,7 +174,7 @@ function openCrop(file) {
     $("crop").showModal();
     placeCrop();
   };
-  img.onerror = () => { URL.revokeObjectURL(url); toast("이 그림은 열 수 없어요. png나 jpg를 골라 주세요."); };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("이 그림을 열 수 없습니다. png 또는 jpg 파일을 고르세요."); };
   const old = img.src;
   img.src = url;
   if (old.startsWith("blob:")) URL.revokeObjectURL(old);
@@ -717,6 +717,7 @@ async function boot() {
     for (const d of document.querySelectorAll(".step")) d.open = d.id === step;
     showTiming();
     if (params.get("tab")) setTab(params.get("tab"));
+    if (params.get("tapping")) $("tap-start").click();
   }
 }
 

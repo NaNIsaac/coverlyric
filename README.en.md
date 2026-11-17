@@ -41,8 +41,9 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
 
 ## Make a video
 
-1. **Song and cover:** pick the song and the cover; type the title and the artist (left empty, the
-   artist is not shown).
+1. **Song and cover:** pick the song and the cover. A crop window opens for the cover: drag the
+   square, drag its corner to resize, use **확대** (zoom), then press **확인** (OK). Type the title and
+   the artist (left empty, the artist is not shown).
 2. **Lyrics:** paste the lyrics, one screen line per line. Tags such as `[Chorus]` are removed.
 3. **Timing**, three ways; each fills the timing list under the preview, where a line can be
    nudged by 0.1 s, played from just before it, or typed as `10`, `10.5`, `1:05`, `1:05.3` or
