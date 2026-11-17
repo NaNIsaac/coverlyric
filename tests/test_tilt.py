@@ -65,7 +65,7 @@ def test_tilt_changes_only_the_album(demo, layout):
     flat = np.asarray(render.frame(5.0, lines, song, render.Style(layout=layout)), int)
     tilted = np.asarray(render.frame(5.0, lines, song, render.Style(layout=layout, tilt=20)), int)
     changed = np.abs(flat - tilted).max(axis=2) > 8
-    ys, xs = np.nonzero(changed)
+    xs = np.nonzero(changed)[1]
     assert changed.sum() > 10000
     panel = render.geometry(render.Style()).panel
     assert xs.max() < panel[0]  # the lyrics stay as they were
