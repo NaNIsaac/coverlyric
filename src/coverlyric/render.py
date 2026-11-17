@@ -28,6 +28,10 @@ from . import anim, fonts, media
 # 24 fps: the slow turn of the disc and the eased lyric list look the same as at 30, with a fifth
 # fewer frames to draw and encode.
 W, H, FPS = 1920, 1080, 24
+RATES = (24, 30)  # frame rates the page offers; FPS is the default
+# Smaller videos are drawn at 1080 like the rest and scaled once by ffmpeg: the render is bound by the
+# encoder, which then has a little under half the pixels.
+HEIGHTS = {1080: None, 720: (1280, 720)}
 CHUNK = 4  # frames a worker draws at a time
 FRAME = W * H * 4  # one RGBA frame, 8.3 MB
 # A quick clip for looking, not for keeping: every second frame, half size, the fastest x264.
@@ -82,6 +86,8 @@ class Style:
     bar_y: int = 0
     bar_scale: float = 1.0
     fade: bool = True  # the video and the sound fade in at the start and out at the end
+    fps: int = FPS  # one of RATES
+    height: int = 1080  # one of HEIGHTS
     anim_x: int = 0
     anim_y: int = 0
     anim_scale: float = 1.0
@@ -635,12 +641,16 @@ def stamp(path: str) -> float:
 TURNS_MB = 192  # one turn of the CD shared by the workers; a bigger CD is drawn for every frame
 
 
+def rate(style: Style) -> int:
+    return style.fps if style.fps in RATES else FPS
+
+
 def turn_set(style: Style) -> tuple[tuple[int, int, int, int], int] | None:
     """The frame box of the CD once it is out of the case, and the frames one turn takes, when one
     turn is a whole number of frames and its pictures fit in TURNS_MB."""
     if style.layout != "case" or not style.show_cd or style.spin <= 0:
         return None
-    period = style.spin * FPS
+    period = style.spin * rate(style)
     if abs(period - round(period)) > 1e-6:
         return None
     g = geometry(style)
@@ -748,7 +758,10 @@ class Painter:
         if disc is not None and self.turns is not None and disc[0] == g.disc_x:
             img = self.still.copy()
             box = self.turns.box
-            img.paste(self.turns.get(round(t * FPS), lambda: self.cd_box(*disc, box)), box[:2])
+            img.paste(
+                self.turns.get(round(t * rate(self.style)), lambda: self.cd_box(*disc, box)),
+                box[:2],
+            )
             disc = None  # drawn
         else:
             img = self.bg.copy()
@@ -829,10 +842,11 @@ def render_chunk(args) -> list[int]:
     holds each frame. Pickling 8 MB frames back to the main process cost more than drawing them."""
     start, stop, step, lines, song, style, turns, moving, frames, first = args
     p = painter(lines, song, style, turns, moving)
+    fps = rate(style)
     buf = attached(frames).buf
     slots, slot, last = [], first - 1, None
     for n in range(start, stop, step):
-        raw = p.raw(n / FPS)
+        raw = p.raw(n / fps)
         if raw is not last:
             slot += 1
             with buf[slot * FRAME : (slot + 1) * FRAME] as view:
@@ -854,7 +868,7 @@ def render(
 ) -> None:
     """Write the mp4. As chunks finish, `report(done_seconds, total_seconds, frames_done,
     frames_total, seconds_left)` is called; seconds_left is None until there is a rate to go by.
-    `quick` makes a small 15 fps clip to look at in the page."""
+    `quick` makes a small clip at half the frame rate to look at in the page."""
     codec = "libx264" if quick else media.encoder()
     try:
         encode(out, lines, song, style, workers, span, report, codec, quick)
@@ -898,9 +912,12 @@ def encode(
     quick: bool = False,
 ) -> None:
     first, last = (0.0, song.duration) if span is None else span
-    begin, total = round(first * FPS), math.ceil(last * FPS)
+    fps = rate(style)
+    begin, total = round(first * fps), math.ceil(last * fps)
     step = QUICK_STEP if quick else 1
     vf, af = fades(style, song.duration, first, last)
+    if not quick and HEIGHTS.get(style.height):
+        vf.insert(0, "scale={}:{}".format(*HEIGHTS[style.height]))
     if quick:
         vf.append("scale={}:{}".format(*QUICK_SIZE))
         codec_args = ["-c:v", "libx264", *QUICK_X264]
@@ -920,7 +937,7 @@ def encode(
         "-s",
         f"{W}x{H}",
         "-r",
-        str(FPS // step),
+        str(fps // step),
         "-i",
         "-",
         "-ss",
@@ -1007,7 +1024,7 @@ def encode(
                 done = len(range(begin, chunks[k][1], step))
                 spent = time.monotonic() - started
                 left = (count - done) * spent / done if k >= 2 else None
-                report((chunks[k][1] - begin) / FPS, (total - begin) / FPS, done, count, left)
+                report((chunks[k][1] - begin) / fps, (total - begin) / fps, done, count, left)
             try:
                 ff.stdin.close()
             except OSError:
