@@ -84,6 +84,17 @@ The `만든 영상` folder then holds the mp4 (1920x1080, 30 fps, H.264 + AAC), 
 and the timing as LRC and SRT. Press **끝내기** on the page or close the terminal window to quit;
 work is saved and reopens where you left off.
 
+Tips:
+
+- Each step title shows its state (for example 노래 ✓ 표지 ✓, 4줄, 4/4 ✓).
+- The preview follows the song while it plays. <kbd>Space</kbd> plays and pauses, <kbd>←</kbd>
+  <kbd>→</kbd> move 5 s (outside text boxes). Clicking a row of the timing list moves the preview
+  to that line.
+- Drop a file anywhere on the window: the song, a cover photo (the crop window opens), an SRT,
+  LRC or VTT file, lyrics as TXT, or a font. Images dropped on the moving picture box become
+  moving picture frames.
+- Deleting a row shows **되돌리기** (undo) in the notice for a moment.
+
 ## Problems
 
 | Symptom | Action |
