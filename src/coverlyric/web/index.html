@@ -176,7 +176,23 @@
           <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
         </div>
       </fieldset>
-      <div id="colour-more"></div>
+      <div id="colour-more">
+        <fieldset class="group">
+          <legend>가사 글자</legend>
+          <div class="grid">
+            <label class="color">글자 색<input type="color" id="lyric_colour"></label>
+            <label class="field">테두리
+              <select id="lyric_edge">
+                <option value="none">없음</option>
+                <option value="outline">외곽선</option>
+                <option value="shadow">그림자</option>
+              </select>
+            </label>
+            <label class="color" id="lyric-edge-colour-row">테두리 색<input type="color" id="lyric_edge_colour"></label>
+          </div>
+          <p class="note">밝은 표지에서는 외곽선이나 그림자를 넣으면 가사가 잘 읽힙니다.</p>
+        </fieldset>
+      </div>
     </section>
   </section>
 

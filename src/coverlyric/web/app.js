@@ -352,6 +352,10 @@ function fillLook() {
   $("band").value = s.band;
   $("blur").value = s.blur;
   $("dim").value = s.dim;
+  $("lyric_colour").value = s.lyric_colour;
+  $("lyric_edge").value = s.lyric_edge;
+  $("lyric_edge_colour").value = s.lyric_edge_colour;
+  $("lyric-edge-colour-row").hidden = s.lyric_edge === "none";
   $("show_title").checked = s.show_title;
   $("bar").checked = s.bar;
   drawAnim();
@@ -1106,6 +1110,13 @@ function bind() {
   $("band").addEventListener("input", (e) => { state.style.band = e.target.value; scheduleSync(); });
   $("blur").addEventListener("input", (e) => { state.style.blur = Number(e.target.value); scheduleSync(); });
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
+  $("lyric_colour").addEventListener("input", (e) => { state.style.lyric_colour = e.target.value; scheduleSync(); });
+  $("lyric_edge").addEventListener("change", (e) => {
+    state.style.lyric_edge = e.target.value;
+    $("lyric-edge-colour-row").hidden = e.target.value === "none";
+    scheduleSync(0);
+  });
+  $("lyric_edge_colour").addEventListener("input", (e) => { state.style.lyric_edge_colour = e.target.value; scheduleSync(); });
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
   $("anim-file").addEventListener("change", (e) => { addAnim(e.target.files); e.target.value = ""; });
