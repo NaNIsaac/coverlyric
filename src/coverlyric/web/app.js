@@ -8,8 +8,9 @@ const DEFAULT_PLACES = {
   panel_x: 0, panel_y: 0, panel_scale: 1,
   title_x: 0, title_y: 0, title_scale: 1,
   bar_x: 0, bar_y: 0, bar_scale: 1,
+  anim_x: 0, anim_y: 0, anim_scale: 1,
 };
-const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 바" };
+const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 바", anim: "움직이는 그림" };
 
 let state = null;
 let diff = [];
@@ -45,7 +46,7 @@ async function api(path, options = {}) {
 }
 
 function payload() {
-  return { title: state.title, artist: state.artist, lines: state.lines, style: state.style };
+  return { title: state.title, artist: state.artist, lines: state.lines, style: state.style, anim: state.anim };
 }
 
 function scheduleSync(delay = 150) {
@@ -261,6 +262,80 @@ function fillPlaces() {
   }
 }
 
+// A GIF is the whole moving picture and keeps its own speed; images are frames shown at anim_fps.
+function drawAnim() {
+  const list = state.anim || [];
+  const gif = list.some((name) => name.toLowerCase().endsWith(".gif"));
+  $("anim-panel").hidden = !list.length;
+  document.querySelector('.places tr[data-el="anim"]').hidden = !list.length;
+  $("anim-fps-row").hidden = gif || list.length < 2;
+  $("anim_fps").value = state.style.anim_fps;
+  $("anim-fps-label").textContent = state.style.anim_fps;
+  $("anim_above").checked = state.style.anim_above;
+  const holder = $("anim-list");
+  holder.innerHTML = "";
+  list.forEach((name, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="n">${i + 1}</span>
+      <img alt="" loading="lazy">
+      <span class="name"></span>
+      <span class="acts">
+        <button class="quiet" data-a="up" title="앞으로" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="quiet" data-a="down" title="뒤로" ${i === list.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="quiet" data-a="del" title="이 장 빼기">✕</button>
+      </span>`;
+    li.querySelector("img").src = `/media/anim?name=${encodeURIComponent(name)}`;
+    li.querySelector(".name").textContent = name.split("/").pop();
+    li.addEventListener("click", (e) => {
+      const a = e.target.dataset && e.target.dataset.a;
+      if (!a) return;
+      const next = [...list];
+      if (a === "del") next.splice(i, 1);
+      else {
+        const j = a === "up" ? i - 1 : i + 1;
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      setAnim(next);
+    });
+    holder.appendChild(li);
+  });
+}
+
+async function setAnim(names) {
+  try {
+    const res = await api("/api/state", { method: "POST", body: JSON.stringify({ ...payload(), anim: names }) });
+    state = await res.json();
+    fillLook();
+    scheduleSync(0);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function addAnim(files) {
+  // Images are frames in name order; one GIF replaces whatever was there.
+  const list = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (!list.length) return;
+  toast(`${list.length}개 넣는 중...`);
+  try {
+    for (const file of list) {
+      const res = await api("/api/upload?kind=anim", {
+        method: "POST",
+        headers: { "X-Name": encodeURIComponent(file.name) },
+        body: file,
+      });
+      state = await res.json();
+    }
+    fillLook();
+    scheduleSync(0);
+    toast("넣었어요. 미리보기에서 끌어 옮기고 모서리로 크기를 바꿀 수 있어요.", 5000);
+  } catch (e) {
+    toast(e.message, 6000);
+    fillLook();
+  }
+}
+
 function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
@@ -273,6 +348,7 @@ function fillLook() {
   $("dim").value = s.dim;
   $("show_title").checked = s.show_title;
   $("bar").checked = s.bar;
+  drawAnim();
   fillPlaces();
   const select = $("font");
   if (![...select.options].some((o) => o.value === s.font)) {
@@ -772,6 +848,14 @@ function bind() {
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
+  $("anim-file").addEventListener("change", (e) => { addAnim(e.target.files); e.target.value = ""; });
+  $("anim_fps").addEventListener("input", (e) => {
+    state.style.anim_fps = Number(e.target.value);
+    $("anim-fps-label").textContent = e.target.value;
+    scheduleSync();
+  });
+  $("anim_above").addEventListener("change", (e) => { state.style.anim_above = e.target.checked; scheduleSync(0); });
+  $("anim-clear").addEventListener("click", () => setAnim([]));
   for (const tr of document.querySelectorAll(".places tr[data-el]")) {
     for (const input of tr.querySelectorAll("input")) {
       input.addEventListener("change", () => {

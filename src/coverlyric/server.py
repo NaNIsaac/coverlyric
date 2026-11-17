@@ -550,6 +550,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json(
                         {"prompt": timing.ai_prompt(own, app.project.title), "lines": len(own)}
                     )
+                elif url.path == "/media/anim":
+                    # Only a file the project lists, for the frame thumbnails on the page.
+                    name = query.get("name", [""])[0]
+                    listed = name in app.project.anim
+                    self.file(app.work / name if listed else app.work / "missing")
                 elif url.path in ("/media/audio", "/media/art"):
                     name = app.project.audio if url.path.endswith("audio") else app.project.art
                     self.file(app.work / name if name else app.work / "missing")
