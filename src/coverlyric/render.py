@@ -81,6 +81,7 @@ class Style:
     bar_x: int = 0
     bar_y: int = 0
     bar_scale: float = 1.0
+    fade: bool = True  # the video and the sound fade in at the start and out at the end
     anim_x: int = 0
     anim_y: int = 0
     anim_scale: float = 1.0
@@ -864,6 +865,27 @@ def render(
         encode(out, lines, song, style, workers, span, report, "libx264", quick)
 
 
+FADE_IN, FADE_OUT = 0.5, 1.5  # seconds
+
+
+def fades(style: Style, duration: float, first: float, last: float) -> tuple[list[str], list[str]]:
+    """ffmpeg's video and audio filters for the fade from and to black and silence, on the part of
+    the song from first to last: the fade in only when it holds the start, the fade out only when it
+    holds the end. Times are within the part."""
+    vf: list[str] = []
+    af: list[str] = []
+    if not style.fade:
+        return vf, af
+    if first <= 0.0:
+        vf.append(f"fade=t=in:st=0:d={FADE_IN}")
+        af.append(f"afade=t=in:st=0:d={FADE_IN}")
+    if last >= duration - 1e-3:
+        start = max(0.0, last - first - FADE_OUT)
+        vf.append(f"fade=t=out:st={start:.3f}:d={FADE_OUT}")
+        af.append(f"afade=t=out:st={start:.3f}:d={FADE_OUT}")
+    return vf, af
+
+
 def encode(
     out: Path,
     lines: tuple[tuple[float, str], ...],
@@ -878,9 +900,14 @@ def encode(
     first, last = (0.0, song.duration) if span is None else span
     begin, total = round(first * FPS), math.ceil(last * FPS)
     step = QUICK_STEP if quick else 1
-    video = ["-c:v", codec, *media.ENCODERS[codec]]
+    vf, af = fades(style, song.duration, first, last)
     if quick:
-        video = ["-vf", "scale={}:{}".format(*QUICK_SIZE), "-c:v", "libx264", *QUICK_X264]
+        vf.append("scale={}:{}".format(*QUICK_SIZE))
+        codec_args = ["-c:v", "libx264", *QUICK_X264]
+    else:
+        codec_args = ["-c:v", codec, *media.ENCODERS[codec]]
+    video = [*(["-vf", ",".join(vf)] if vf else []), *codec_args]
+    audio = ["-af", ",".join(af)] if af else []
     cmd = [
         media.ffmpeg(),
         "-y",
@@ -909,6 +936,7 @@ def encode(
         *video,
         "-pix_fmt",
         "yuv420p",
+        *audio,
         "-c:a",
         "aac",
         "-b:a",

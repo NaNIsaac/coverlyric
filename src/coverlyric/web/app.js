@@ -354,6 +354,7 @@ function fillLook() {
   $("dim").value = s.dim;
   $("show_title").checked = s.show_title;
   $("bar").checked = s.bar;
+  $("fade").checked = s.fade;
   drawAnim();
   fillPlaces();
   const select = $("font");
@@ -1108,6 +1109,7 @@ function bind() {
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
+  $("fade").addEventListener("change", (e) => { state.style.fade = e.target.checked; scheduleSync(0); });
   $("anim-file").addEventListener("change", (e) => { addAnim(e.target.files); e.target.value = ""; });
   $("anim_fps").addEventListener("input", (e) => {
     state.style.anim_fps = Number(e.target.value);
