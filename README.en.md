@@ -23,7 +23,8 @@ runs on your PC and is used from a page in your browser.
 - The lyrics as text
 
 **Minimum:** Windows 10/11 64-bit, 4 GB RAM, 2 CPU cores, 500 MB free disk for the first start;
-automatic timing needs about 0.7 GB more disk once. No GPU is used. Automatic timing uses about
+automatic timing needs about 0.7 GB more disk once. A working H.264 encoder on the graphics card (NVIDIA,
+Intel, AMD) compresses the video; otherwise the CPU does. Automatic timing uses about
 1 GB of memory, and a render 0.4 to 0.9 GB depending on the free memory
 ([measurements](#memory-and-speed)).
 
@@ -149,8 +150,11 @@ uv run pytest
 
 - The page is served by a local web server on `127.0.0.1` only.
 - Frames are drawn with Pillow and piped to ffmpeg (from the imageio-ffmpeg package), which writes
-  an H.264 + AAC mp4. Worker processes draw 8 frames at a time, and only a few such chunks are in
-  memory at once.
+  an H.264 + AAC mp4. Layers that do not move are drawn once, equal frames are reused, and worker
+  processes draw 4 frames at a time into shared memory; only a few such chunks are in memory at
+  once.
+- The encoder is the first of h264_nvenc, h264_qsv and h264_amf that works on this PC, else
+  libx264. The `COVERLYRIC_ENCODER` environment variable picks one.
 - The number of workers follows the memory free when the render starts: 250 MB kept back,
   then one worker per 150 MB, at most the cores minus one and 6, at least 1. The
   `COVERLYRIC_WORKERS` environment variable sets it by hand.
@@ -163,7 +167,7 @@ uv run pytest
 
 ## Memory and speed
 
-Measured on a PC with a 12-thread CPU and 32 GB RAM (2026-11-18). Memory is the peak of the summed
+Measured on a PC with a 12-thread CPU and 32 GB RAM, before the render speed-up (2026-11-18). Memory is the peak of the summed
 private memory of the python processes and ffmpeg.
 
 | Song | Workers | Time | Peak memory |
@@ -182,11 +186,13 @@ uses one worker.
 On a PC with 8 GB RAM and 12 threads, a 60 s part of a 4 min 25 s song (1920x1080, 3000 px cover,
 peak of the whole render):
 
-| Workers | Time | Peak memory |
-|---|---|---|
-| 1 | 311 s | 434 MB |
-| 2 | 203 s | 546 MB |
-| 4 | 143 s | 799 MB |
+| Workers | Time before | Peak memory before | Time after the speed-up |
+|---|---|---|---|
+| By free memory (1 before) | 311 s | 434 MB | 64.7 s |
+| 2 | 203 s | 546 MB | 72.7 s |
+| 4 | 143 s | 799 MB | 60.4 s |
+
+After the speed-up the lowest free memory during a render was 466 to 557 MB, with no failure.
 
 Automatic timing (same PC, the 3 min 48 s song, model already downloaded): `small` about 120 s,
 1.04 GB at most.
