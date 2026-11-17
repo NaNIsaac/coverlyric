@@ -166,7 +166,7 @@ def test_an_unknown_tone_leaves_the_background_as_it_is(demo):
     song = demo.song()
     a = render.backdrop(song.art, 0.0, 30, 0.5, "none")
     b = render.backdrop(song.art, 0.0, 30, 0.5, "sepia")
-    assert ImageChops.difference(a, b).getbbox() is None
+    assert ImageChops.difference(a, b).getbbox(alpha_only=False) is None
 
 
 def test_vignette_darkens_the_edges_and_leaves_the_middle(demo):
@@ -179,7 +179,34 @@ def test_vignette_darkens_the_edges_and_leaves_the_middle(demo):
     assert np.abs(dark[middle] - plain[middle]).max() <= 1
     assert dark[corner][..., :3].mean() < 0.3 * plain[corner][..., :3].mean()
     none = render.backdrop(song.art, 0.0, 30, 0.0, "none", 0.0)
-    assert ImageChops.difference(none, render.backdrop(song.art, 0.0, 30, 0.0)).getbbox() is None
+    assert (
+        ImageChops.difference(none, render.backdrop(song.art, 0.0, 30, 0.0)).getbbox(
+            alpha_only=False
+        )
+        is None
+    )
+
+
+def test_floor_shadow_and_reflection_change_only_the_floor(demo):
+    from dataclasses import replace
+
+    song = demo.song()
+    plain = render.scene(song, render.Style())[0]
+    g = render.geometry(render.Style())
+    _, y0, _, y1 = g.case
+    for style in (replace(render.Style(), floor=1.0), replace(render.Style(), reflection=True)):
+        bg = render.scene(song, style)[0]
+        diff = ImageChops.difference(bg, plain).getbbox(alpha_only=False)
+        assert diff is not None and diff[3] > y1 and diff[1] > y0 + (y1 - y0) // 2
+    off = render.scene(song, replace(render.Style(), floor=0.0, reflection=False))[0]
+    assert ImageChops.difference(off, plain).getbbox(alpha_only=False) is None
+    disc = replace(render.Style(), layout="disc")
+    assert (
+        ImageChops.difference(
+            render.scene(song, replace(disc, reflection=True))[0], render.scene(song, disc)[0]
+        ).getbbox(alpha_only=False)
+        is None
+    )
 
 
 def test_opening_card_covers_the_start_and_fades_into_the_song(demo):

@@ -64,6 +64,9 @@ SHADOW_DROP, SHADOW_ALPHA = 0.05, 0.7  # offset as a share of the font size, and
 TITLE_Y, ARTIST_Y, TITLE_BOX = 100, 162, 240
 INTRO_FADE = 0.8  # seconds the opening title card takes to fade into the song's frame
 BAR = (110, 1000, 1850, 1040)
+# The album's tilt: at most this many degrees, seen from this many pixels away, close enough that
+# 20 degrees already reads as turned.
+TILT_MAX, TILT_DISTANCE = 40.0, 1150
 
 
 @dataclass(frozen=True)
@@ -83,6 +86,7 @@ class Style:
     album_x: int = 0
     album_y: int = 0
     album_scale: float = 1.0
+    tilt: float = 0.0  # degrees the album turns about its upright axis; positive faces it right
     panel_x: int = 0
     panel_y: int = 0
     panel_scale: float = 1.0
@@ -104,6 +108,8 @@ class Style:
     anim_above: bool = True  # over everything, or under the album and the lyrics
     tone: str = "none"  # background colour: none | warm | cool | mono | cover (tinted with the cover's colour)
     vignette: float = 0.0  # 0 to 1: how much darker the background gets towards the frame's edges
+    floor: float = 0.0  # 0 to 1: a soft shadow on the floor under the album
+    reflection: bool = False  # the case mirrored on the floor under it (case layout)
     intro: float = 0.0  # seconds of a full-frame title card at the start, ended by the first line
 
     @classmethod
@@ -188,6 +194,119 @@ def geometry(style: Style) -> Geometry:
     )
 
 
+@dataclass(frozen=True)
+class Tilt:
+    """The album turned about the upright line through its centre and seen from a fixed distance.
+    A flat drawing of `region` (frame pixels) is warped into `box`; a plane seen in perspective is a
+    homography, so the four corners fix it. The view is scaled so the nearest edge keeps its flat
+    size: the album only shrinks, never grows past its flat place, the lyrics or the CD's turn box."""
+
+    region: tuple[int, int, int, int]
+    box: tuple[int, int, int, int]
+    centre: tuple[float, float]
+    cos: float
+    sin: float
+    near: float  # TILT_DISTANCE plus the nearest edge's depth: that edge is drawn at scale 1
+    coeffs: tuple[float, ...]  # Pillow's PERSPECTIVE data: box pixel -> region pixel
+
+    def point(self, x: float, y: float) -> tuple[float, float]:
+        u, v = x - self.centre[0], y - self.centre[1]
+        k = self.near / (TILT_DISTANCE + u * self.sin)
+        return self.centre[0] + u * self.cos * k, self.centre[1] + v * k
+
+    def bounds(self, box: tuple[int, ...]) -> tuple[int, int, int, int]:
+        """The frame box that holds `box` once tilted."""
+        pts = [self.point(x, y) for x in (box[0], box[2]) for y in (box[1], box[3])]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return math.floor(min(xs)), math.floor(min(ys)), math.ceil(max(xs)), math.ceil(max(ys))
+
+    def over(self, region: tuple[int, ...]) -> Tilt:
+        """The same tilt, warping another flat region of the album's plane (its reflection)."""
+        box = self.bounds(region)
+        rows, rhs = [], []
+        for x in (region[0], region[2]):
+            for y in (region[1], region[3]):
+                px, py = self.point(x, y)
+                px, py, fx, fy = px - box[0], py - box[1], x - region[0], y - region[1]
+                rows += [
+                    [px, py, 1, 0, 0, 0, -fx * px, -fx * py],
+                    [0, 0, 0, px, py, 1, -fy * px, -fy * py],
+                ]
+                rhs += [fx, fy]
+        coeffs = tuple(float(c) for c in np.linalg.solve(np.array(rows), np.array(rhs)))
+        return replace(self, region=tuple(region), box=box, coeffs=coeffs)
+
+    def apply(self, flat: Image.Image, part: tuple[int, ...] | None = None) -> Image.Image:
+        """`flat`, the size of region, warped: all of box, or only the frame box `part` of it. In
+        premultiplied alpha, so the transparent pixels around the album do not darken its edges."""
+        part = part or self.box
+        a, b, c, d, e, f, g, h = self.coeffs
+        dx, dy = part[0] - self.box[0], part[1] - self.box[1]
+        w = g * dx + h * dy + 1
+        shifted = (
+            a / w, b / w, (a * dx + b * dy + c) / w,
+            d / w, e / w, (d * dx + e * dy + f) / w,
+            g / w, h / w,
+        )  # fmt: skip
+        size = (part[2] - part[0], part[3] - part[1])
+        # Only the flat pixels the part reads are converted and sampled, with the bicubic's reach.
+        a, b, c, d, e, f, g, h = shifted
+        xs, ys = [], []
+        for px in (0, size[0]):
+            for py in (0, size[1]):
+                w = g * px + h * py + 1
+                xs.append((a * px + b * py + c) / w)
+                ys.append((d * px + e * py + f) / w)
+        ix, iy = max(0, math.floor(min(xs)) - 3), max(0, math.floor(min(ys)) - 3)
+        crop = (
+            ix,
+            iy,
+            min(flat.width, math.ceil(max(xs)) + 3),
+            min(flat.height, math.ceil(max(ys)) + 3),
+        )
+        shifted = (a - ix * g, b - ix * h, c - ix, d - iy * g, e - iy * h, f - iy, g, h)
+        source = flat.crop(crop).convert("RGBa")
+        warped = source.transform(size, Image.PERSPECTIVE, shifted, Image.BICUBIC)
+        return warped.convert("RGBA")
+
+
+@lru_cache(maxsize=16)
+def tilt_of(style: Style) -> Tilt | None:
+    """The album's tilt, or None when it faces the viewer."""
+    angle = max(-TILT_MAX, min(TILT_MAX, style.tilt))
+    if abs(angle) < 0.05:
+        return None
+    g = geometry(style)
+    if style.layout == "case":
+        cy = (g.case[1] + g.case[3]) / 2
+        centre = ((g.case[0] + g.case[2]) / 2, cy)
+        # Wide enough for the CD at every point of its slide out of the case.
+        region = (
+            g.case[0],
+            min(g.case[1], math.floor(cy - g.disc_r)),
+            max(g.case[2], g.disc_x + g.disc_r),
+            max(g.case[3], math.ceil(cy + g.disc_r)),
+        )
+    else:
+        (cx, cy), r = g.round_c, g.round_r
+        centre, region = (cx, cy), (cx - r, cy - r, cx + r, cy + r)
+    region = (region[0] - 2, region[1] - 2, region[2] + 2, region[3] + 2)
+    rad = math.radians(angle)
+    sin = math.sin(rad)
+    near = TILT_DISTANCE + min((region[0] - centre[0]) * sin, (region[2] - centre[0]) * sin)
+    return Tilt(region, region, centre, math.cos(rad), sin, near, ()).over(region)
+
+
+def tilted_shadow(
+    layer: Image.Image, at: tuple[int, int], drop: tuple[int, int], blur: int, alpha: int
+):
+    """A frame-size shadow of a tilted album's outline, moved by `drop`."""
+    shade = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    mask = layer.getchannel("A").point(lambda v: alpha if v else 0)
+    shade.paste((0, 0, 0, 255), (at[0] + drop[0], at[1] + drop[1]), mask)
+    return shade.filter(ImageFilter.GaussianBlur(blur))
+
+
 def disc_centre_x(g: Geometry, t: float) -> float:
     """Where the case CD's centre is at time t: inside the case until SLIDE, then sliding out."""
     inside = (g.case[0] + g.case[2]) // 2
@@ -208,6 +327,8 @@ def boxes(
     else:
         cx, cy = g.round_c
         album = (cx - g.round_r, cy - g.round_r, cx + g.round_r, cy + g.round_r)
+    if tilted := tilt_of(style):
+        album = tilted.bounds(album)
     t = g.title[2]
     title = (
         round(g.title[0] - 600 * t),
@@ -544,6 +665,30 @@ def panel_layer(g: Geometry, style: Style) -> Image.Image:
     return panel
 
 
+def floor_shadow(box: tuple[int, ...], s: float, strength: float) -> Image.Image:
+    """A wide, soft oval on the floor under an album whose box is (x0, y0, x1, y1)."""
+    x0, _, x1, y1 = box
+    pad, depth = round((x1 - x0) * 0.08), round(34 * s)
+    oval = (x0 - pad, y1 - depth // 2, x1 + pad, y1 + depth)
+    return shadow(oval, round(26 * s), round(200 * min(strength, 1.0)), True)
+
+
+def reflection(layer: Image.Image, box: tuple[int, ...], s: float) -> Image.Image:
+    """The bottom 45 % of the album in box, mirrored under it and fading out."""
+    x0, _, _, y1 = box
+    gap = round(4 * s)
+    part = layer.crop(box).transpose(Image.FLIP_TOP_BOTTOM)
+    part = part.crop((0, 0, part.width, min(round(part.height * 0.45), H - y1 - gap)))
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if part.height <= 0:
+        return out
+    fade = np.linspace(0.32, 0.0, part.height)[:, None] * np.ones((1, part.width))
+    alpha = np.asarray(part.getchannel("A"), dtype=float) * fade
+    part.putalpha(Image.fromarray(alpha.astype(np.uint8), "L"))
+    place(out, part, x0, y1 + gap)
+    return out
+
+
 def shadow(box: tuple[int, ...], blur: int, alpha: int, round_: bool = False) -> Image.Image:
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -654,33 +799,69 @@ def scene(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
     bg = background(song, style, art_stamp)
     if style.layout == "case":
         x0, y0, x1, y1 = g.case
-        drop = (x0 + round(8 * s), y0 + round(16 * s), x1 + round(8 * s), y1 + round(22 * s))
-        bg = Image.alpha_composite(bg, shadow(drop, round(18 * s), 140))
-        return bg, disc_print(art, g.disc_r), jewel_case(art, g, s)
-    under, disc = round_album(song, style, art_stamp)
+        case = jewel_case(art, g, s)
+        tilted = tilt_of(style)
+        if style.reflection:
+            mirror = reflection(case, g.case, s)
+            if tilted and (ref := mirror.getbbox()):
+                # The mirror image stands in the album's plane under it, so the same tilt turns it.
+                turned = tilted.over(ref)
+                flat, mirror = mirror.crop(ref), Image.new("RGBA", (W, H), (0, 0, 0, 0))
+                place(mirror, turned.apply(flat), *turned.box[:2])
+            bg = Image.alpha_composite(bg, mirror)
+        if style.floor > 0:
+            foot = tilted.bounds(g.case) if tilted else g.case
+            bg = Image.alpha_composite(bg, floor_shadow(foot, s, style.floor))
+        if tilted:
+            flat = case.crop(tilted.region)
+            shade = tilted_shadow(
+                tilted.apply(flat),
+                tilted.box[:2],
+                (round(8 * s), round(19 * s)),
+                round(18 * s),
+                140,
+            )
+        else:
+            drop = (x0 + round(8 * s), y0 + round(16 * s), x1 + round(8 * s), y1 + round(22 * s))
+            shade = shadow(drop, round(18 * s), 140)
+        return Image.alpha_composite(bg, shade), disc_print(art, g.disc_r), case
+    under, disc, at = round_album(song, style, art_stamp)
     bg = under.copy()
-    place(bg, disc, g.round_c[0] - g.round_r, g.round_c[1] - g.round_r)
+    place(bg, disc, *at)
     return bg, None, None
 
 
 @lru_cache(maxsize=2)
 def round_album(song: Song, style: Style, art_stamp: float = 0.0) -> tuple:
-    """The round layout's background with the disc's shadow, and the disc."""
+    """The round layout's background with the disc's shadow, the disc, and where it goes."""
     g, s = geometry(style), style.album_scale
     r = g.round_r
     disc = square(song.art, art_stamp).resize((r * 2, r * 2), Image.LANCZOS).convert("RGBA")
     disc.putalpha(circle_mask(r * 2))
     cx, cy = g.round_c
-    drop = (
-        cx - r - round(6 * s),
-        cy - r + round(4 * s),
-        cx + r + round(6 * s),
-        cy + r + round(16 * s),
-    )
-    bg = Image.alpha_composite(
-        background(song, style, art_stamp), shadow(drop, round(14 * s), 120, True)
-    )
-    return bg, disc
+    at = (cx - r, cy - r)
+    foot = (cx - r, cy - r, cx + r, cy + r)
+    if tilted := tilt_of(style):
+        flat = Image.new(
+            "RGBA", (tilted.region[2] - tilted.region[0], tilted.region[3] - tilted.region[1])
+        )
+        flat.paste(disc, (at[0] - tilted.region[0], at[1] - tilted.region[1]))
+        disc, at = tilted.apply(flat), tilted.box[:2]
+        foot = tilted.bounds(foot)
+        shade = tilted_shadow(disc, at, (0, round(10 * s)), round(14 * s), 120)
+    else:
+        drop = (
+            cx - r - round(6 * s),
+            cy - r + round(4 * s),
+            cx + r + round(6 * s),
+            cy + r + round(16 * s),
+        )
+        shade = shadow(drop, round(14 * s), 120, True)
+    bg = background(song, style, art_stamp)
+    if style.floor > 0:
+        bg = Image.alpha_composite(bg, floor_shadow(foot, s, style.floor))
+    bg = Image.alpha_composite(bg, shade)
+    return bg, disc, at
 
 
 def ease(u: float) -> float:
@@ -853,7 +1034,11 @@ def turn_set(style: Style) -> tuple[tuple[int, int, int, int], int] | None:
         return None
     g = geometry(style)
     cy, r = (g.case[1] + g.case[3]) // 2, g.disc_r
-    box = (max(0, g.disc_x - r), max(0, cy - r), min(W, g.disc_x + r), min(H, cy + r))
+    box = (g.disc_x - r, cy - r, g.disc_x + r, cy + r)
+    if tilted := tilt_of(style):
+        # Two pixels more each way for the bicubic warp's reach.
+        box = tilted.bounds((box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2))
+    box = (max(0, box[0]), max(0, box[1]), min(W, box[2]), min(H, box[3]))
     if box[2] <= box[0] or box[3] <= box[1]:
         return None
     if (box[2] - box[0]) * (box[3] - box[1]) * 3 * round(period) > TURNS_MB * 2**20:
@@ -916,19 +1101,26 @@ class Painter:
         # cannot stay in the background or come from the shared turn.
         under = self.timing is not None and not style.anim_above
         tucked = under and overlaps(self.anim_box, boxes(style)["album"])
+        self.tilt = tilt_of(style)
         if case is not None:
             box = case.getbbox() or (0, 0, 1, 1)
             self.case, self.case_at = case.crop(box), box[:2]
+            if self.tilt:
+                # The case alone, tilted, for frames without a CD and for the still around a turn.
+                self.case_flat = case.crop(self.tilt.region)
+                case_only = (self.tilt.apply(self.case_flat), *self.tilt.box[:2])
+            else:
+                case_only = (self.case, *self.case_at)
             if style.show_cd:
                 self.disc = Disc(face, g.disc_r)
             elif tucked:
-                self.over = (self.case, *self.case_at)
+                self.over = case_only
             else:
                 bg = bg.copy()
-                place(bg, self.case, *self.case_at)
+                place(bg, *case_only)
         elif tucked:
-            bg, disc = round_album(song, style, stamped)
-            self.over = (disc, g.round_c[0] - g.round_r, g.round_c[1] - g.round_r)
+            bg, disc, at = round_album(song, style, stamped)
+            self.over = (disc, *at)
         self.bg = bg
         self.intro = intro_end(lines, style)
         self.card = intro_card(song, style, stamped) if self.intro > 0 else None
@@ -936,7 +1128,7 @@ class Painter:
             self.turns = Turns(shared, *turning)
             # Outside the CD's box a turning frame is the background and the case, always.
             self.still = bg.copy()
-            place(self.still, self.case, *self.case_at)
+            place(self.still, *case_only)
         self.last: tuple = (None, b"")
 
     def state(self, t: float) -> tuple:
@@ -995,6 +1187,23 @@ class Painter:
         """The CD at x, turned, and the case over it, into img whose top left is `origin` of the frame."""
         g = self.g
         cy = (g.case[1] + g.case[3]) // 2
+        if self.tilt:
+            # Drawn flat, then tilted as one: CD and case share the perspective.
+            r0 = self.tilt.region
+            flat = Image.new("RGBA", self.case_flat.size, (0, 0, 0, 0))
+            place(flat, self.disc.at(turn), x - g.disc_r - r0[0], cy - g.disc_r - r0[1])
+            flat.alpha_composite(self.case_flat)
+            # Only the part img covers is warped: a turn picture is a small box of the frame.
+            b0 = self.tilt.box
+            part = (
+                max(b0[0], origin[0]),
+                max(b0[1], origin[1]),
+                min(b0[2], origin[0] + img.width),
+                min(b0[3], origin[1] + img.height),
+            )
+            if part[2] > part[0] and part[3] > part[1]:
+                place(img, self.tilt.apply(flat, part), part[0] - origin[0], part[1] - origin[1])
+            return
         place(img, self.disc.at(turn), x - g.disc_r - origin[0], cy - g.disc_r - origin[1])
         place(img, self.case, self.case_at[0] - origin[0], self.case_at[1] - origin[1])
 
