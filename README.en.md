@@ -80,7 +80,7 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
 5. **Render:** press **이대로 영상 만들기**. It usually takes less than the song's length,
    depending on the PC.
 
-The `만든 영상` folder then holds the mp4 (1920x1080, 30 fps, H.264 + AAC), a 1280x720 thumbnail,
+The `만든 영상` folder then holds the mp4 (1920x1080, 24 fps, H.264 + AAC), a 1280x720 thumbnail,
 and the timing as LRC and SRT. Press **끝내기** on the page or close the terminal window to quit;
 work is saved and reopens where you left off.
 
