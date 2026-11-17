@@ -38,7 +38,9 @@ line without a time).
 
 ![Lyrics group](screenshots/2-lyrics.png)
 
-- Each line becomes one line on screen.
+- Each line becomes one line on screen. A line wider than the band is drawn smaller, and if it is
+  still too wide, on two rows. Such lines are underlined in the timing list, and the count shows
+  above it.
 - Marks such as `[후렴]` or `[Chorus]` are dropped.
 
 ## Timing
@@ -86,7 +88,7 @@ video.
 
 ![Look group](screenshots/4-look.png)
 
-The preview is one frame of the video and redraws on every change. Band colour and background
+The preview is one frame of the video and redraws on every change. Band, background and lyric colours
 are in the **색** group, the rest in **모양**.
 
 - **Move and resize:** drag the dashed boxes in the preview; drag the lower-right corner to resize.
@@ -96,6 +98,8 @@ are in the **색** group, the rest in **모양**.
 - **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
 - **띠 색:** colour of the band behind the current line and of the progress bar.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
+- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, with an outline or
+  shadow that keeps them readable on a light cover.
 - **움직이는 그림** (moving picture): one GIF or several images (png, jpg, webp) loop over the video.
   Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장** (frames per second). Turn off
   **앨범과 가사 위에 보이기** to draw it below them.

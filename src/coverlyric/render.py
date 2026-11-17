@@ -41,6 +41,8 @@ SS = 2  # the lyric panel and title are drawn at twice the size and scaled down
 DIM_WEIGHT, NOW_WEIGHT = 350, 600
 DIM_SIZE, NOW_SIZE = 34, 44
 TRACKING = 0.04  # extra space between letters, in em
+MIN_FIT = 0.75  # a long line shrinks to this share of its size before it wraps to two rows
+ROW_PITCH = 1.08  # distance between the two rows of a wrapped line, in em
 
 DISC_C, DISC_R = (560, 610), 330
 CASE = (110, 318, 714, 902)
@@ -56,6 +58,8 @@ ENTER = 1.2  # seconds the list takes to rise into the empty panel for the first
 VISIBLE = 3.4
 EDGE = 70
 BAND_ALPHA = 165
+OUTLINE_WIDTH = 0.06  # of the font size
+SHADOW_DROP, SHADOW_ALPHA = 0.05, 0.7  # offset as a share of the font size, and strength
 TITLE_Y, ARTIST_Y, TITLE_BOX = 100, 162, 240
 BAR = (110, 1000, 1850, 1040)
 
@@ -67,6 +71,9 @@ class Style:
     layout: str = "case"  # case | disc
     font: str = fonts.DEFAULT
     band: str = "#c49668"
+    lyric_colour: str = "#ffffff"
+    lyric_edge: str = "none"  # none | outline | shadow, for lyrics on a light cover
+    lyric_edge_colour: str = "#000000"
     blur: int = 30
     dim: float = 0.5
     spin: float = 7.0  # seconds per turn of the case's CD; 0 keeps it still
@@ -120,7 +127,11 @@ class Song:
 
 
 def band_rgb(style: Style) -> tuple[int, int, int]:
-    h = style.band.lstrip("#")
+    return hex_rgb(style.band)
+
+
+def hex_rgb(colour: str) -> tuple[int, int, int]:
+    h = colour.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
@@ -255,14 +266,74 @@ def tracked(
     f: ImageFont.FreeTypeFont,
     fill: tuple,
     tracking: float = TRACKING,
+    stroke: float = 0,
+    stroke_fill: tuple | None = None,
 ) -> None:
-    """Text centred on ``centre`` with ``tracking`` em between letters (Pillow has no letter spacing)."""
+    """Text centred on ``centre`` with ``tracking`` em between letters (Pillow has no letter spacing),
+    with an outline ``stroke`` px wide when asked."""
     gap = f.size * tracking
     widths = [f.getlength(ch) for ch in text]
     x = centre[0] - (sum(widths) + gap * (len(text) - 1)) / 2
     for ch, w in zip(text, widths, strict=True):
-        draw.text((x, centre[1]), ch, font=f, fill=fill, anchor="lm")
+        draw.text(
+            (x, centre[1]),
+            ch,
+            font=f,
+            fill=fill,
+            anchor="lm",
+            stroke_width=stroke,
+            stroke_fill=stroke_fill,
+        )
         x += w + gap
+
+
+def text_width(text: str, f: ImageFont.FreeTypeFont, tracking: float = TRACKING) -> float:
+    """The width ``tracked`` draws ``text`` at."""
+    return sum(f.getlength(ch) for ch in text) + f.size * tracking * max(0, len(text) - 1)
+
+
+def halves(text: str) -> tuple[str, str]:
+    """Two rows of about equal length, broken at the space nearest the middle, or mid-word when the
+    line has no space."""
+    spaces = [i for i, ch in enumerate(text) if ch == " "]
+    at = min(spaces, key=lambda i: abs(i - len(text) / 2)) if spaces else len(text) // 2
+    return text[:at].strip(), text[at:].strip()
+
+
+@lru_cache(maxsize=1024)
+def fit(
+    text: str, face: str, size: float, room: float, row: float
+) -> tuple[float, tuple[str, ...]]:
+    """How a line fits the panel at the current-line size: a factor for the font size and the rows
+    it is drawn in. One factor per line, used at every size of its move, keeps the move smooth."""
+    f = font(face, size, NOW_WEIGHT)
+    width = text_width(text, f)
+    if width <= room:
+        return 1.0, (text,)
+    if room / width >= MIN_FIT:
+        return round(room / width, 3), (text,)
+    rows = halves(text)
+    widest = max(text_width(r, f) for r in rows)
+    tall = row * 0.85 / (2 * ROW_PITCH * size)  # two rows inside the band, with air
+    return round(min(1.0, room / widest, tall), 3), rows
+
+
+def panel_fit(style: Style) -> tuple[str, float, float, float]:
+    """The font, current-line size, usable width and row height of the panel, in panel pixels."""
+    g = geometry(style)
+    k = style.panel_scale
+    room = (g.panel[2] - g.panel[0] - 2 * (14 + 16) * k) * SS  # inside the band, with a margin
+    return fonts.resolve(style.font), NOW_SIZE * k * SS, room, g.row * SS
+
+
+def line_fits(lines: tuple[tuple[float, str], ...], style: Style) -> list[tuple[float, int]]:
+    """For the page: each line's size factor and row count, so long lines can be marked."""
+    face, size, room, row = panel_fit(style)
+    out = []
+    for _, text in lines:
+        factor, rows = fit(text, face, size, room, row) if text else (1.0, (text,))
+        out.append((factor, len(rows)))
+    return out
 
 
 @lru_cache(maxsize=2)
@@ -551,7 +622,8 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
     d = ImageDraw.Draw(layer)
     row = g.row
     mid = ph / 2
-    face = fonts.resolve(style.font)
+    face, now, room, row_px = panel_fit(style)
+    ink, rim = hex_rgb(style.lyric_colour), hex_rgb(style.lyric_edge_colour)
 
     def filled(k: int) -> float:
         return 1.0 if 0 <= k < len(lines) and lines[k][1] else 0.0
@@ -578,9 +650,22 @@ def panel_at(pos: float, lines: tuple[tuple[float, str], ...], style: Style) -> 
         alpha = int((dim + (255 - dim) * near) * edge)
         if alpha <= 0:
             continue
-        size = round((DIM_SIZE + (NOW_SIZE - DIM_SIZE) * near) * k_scale * SS * 2) / 2
+        factor, rows = fit(text, face, now, room, row_px)
+        size = round((DIM_SIZE + (NOW_SIZE - DIM_SIZE) * near) * k_scale * SS * factor * 2) / 2
         weight = round((DIM_WEIGHT + (NOW_WEIGHT - DIM_WEIGHT) * near) / 25) * 25
-        tracked(d, (pw / 2, y), text, font(face, size, weight), (255, 255, 255, alpha))
+        f = font(face, size, weight)
+        pitch = size * ROW_PITCH
+        for n, part in enumerate(rows):
+            at = y + (n - (len(rows) - 1) / 2) * pitch
+            if style.lyric_edge == "shadow":
+                # A hard offset copy: a blur of the panel would cost more than the panel on each moving frame.
+                drop = size * SHADOW_DROP
+                tracked(d, (pw / 2 + drop, at + drop), part, f, (*rim, round(alpha * SHADOW_ALPHA)))
+            if style.lyric_edge == "outline":
+                stroke = max(1, round(size * OUTLINE_WIDTH))
+                tracked(d, (pw / 2, at), part, f, (*ink, alpha), TRACKING, stroke, (*rim, alpha))
+            else:
+                tracked(d, (pw / 2, at), part, f, (*ink, alpha))
     # Averaging each 2x2 block takes 8 ms where LANCZOS took 37 ms, and this runs on every frame of a
     # move; the panel differs from LANCZOS by about one level of 255 on average (PSNR about 47 dB).
     return layer.reduce(SS)

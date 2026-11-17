@@ -21,6 +21,7 @@ let syncTimer = null;
 let syncing = false;
 let again = false;
 let lastBoxes = {};
+let fits = [];  // per line: [size factor, rows] in the video, from the last preview
 let dragging = false;
 
 function toast(text, ms = 3500, action = null) {
@@ -84,6 +85,8 @@ async function sync() {
       $("still").hidden = false;
       $("stage-empty").hidden = true;
       lastBoxes = JSON.parse(res.headers.get("X-Boxes") || "{}");
+      fits = JSON.parse(res.headers.get("X-Fit") || "[]");
+      markFits();
       drawBoxes();
     }
   } catch (e) {
@@ -352,6 +355,10 @@ function fillLook() {
   $("band").value = s.band;
   $("blur").value = s.blur;
   $("dim").value = s.dim;
+  $("lyric_colour").value = s.lyric_colour;
+  $("lyric_edge").value = s.lyric_edge;
+  $("lyric_edge_colour").value = s.lyric_edge_colour;
+  $("lyric-edge-colour-row").hidden = s.lyric_edge === "none";
   $("show_title").checked = s.show_title;
   $("bar").checked = s.bar;
   $("fade").checked = s.fade;
@@ -470,15 +477,34 @@ function drawLines() {
     });
     holder.appendChild(row);
   });
-  updateCheck();
+  markFits();
   markNow(Number($("time").value));
   const next = holder.querySelector(".line.next");
   if (next) next.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
+function fitKind(i) {
+  const f = fits[i];
+  if (!f || !state.lines[i] || !state.lines[i][1]) return "";
+  return f[1] > 1 ? "wrap" : f[0] < 1 ? "shrink" : "";
+}
+
+// Lines too wide for the lyric panel are drawn smaller, or on two rows; the list says which.
+function markFits() {
+  $("lines").querySelectorAll(".line").forEach((row, i) => {
+    const kind = fitKind(i);
+    if (kind) row.dataset.fit = kind; else delete row.dataset.fit;
+    const box = row.querySelector(".x");
+    if (box) box.title = kind === "wrap" ? "영상에서 두 줄로 나뉩니다." : kind === "shrink" ? "영상에서 글자가 작게 표시됩니다." : "";
+  });
+  updateCheck();
+}
+
 function updateCheck() {
   const timed = state.lines.filter(([t]) => t != null).length;
-  $("check").textContent = state.lines.length ? `시간 입력됨: ${timed} / ${state.lines.length}줄` : "";
+  const long = state.lines.filter((_, i) => fitKind(i)).length;
+  const note = long ? ` · 긴 줄 ${long}개 (영상에서 작게 또는 두 줄로 표시)` : "";
+  $("check").textContent = state.lines.length ? `시간 입력됨: ${timed} / ${state.lines.length}줄${note}` : "";
   updateStatus();
 }
 
@@ -1109,6 +1135,13 @@ function bind() {
   $("band").addEventListener("input", (e) => { state.style.band = e.target.value; scheduleSync(); });
   $("blur").addEventListener("input", (e) => { state.style.blur = Number(e.target.value); scheduleSync(); });
   $("dim").addEventListener("input", (e) => { state.style.dim = Number(e.target.value); scheduleSync(); });
+  $("lyric_colour").addEventListener("input", (e) => { state.style.lyric_colour = e.target.value; scheduleSync(); });
+  $("lyric_edge").addEventListener("change", (e) => {
+    state.style.lyric_edge = e.target.value;
+    $("lyric-edge-colour-row").hidden = e.target.value === "none";
+    scheduleSync(0);
+  });
+  $("lyric_edge_colour").addEventListener("input", (e) => { state.style.lyric_edge_colour = e.target.value; scheduleSync(); });
   $("show_title").addEventListener("change", (e) => { state.style.show_title = e.target.checked; scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
   $("fade").addEventListener("change", (e) => { state.style.fade = e.target.checked; scheduleSync(0); });
