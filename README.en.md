@@ -44,11 +44,15 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
 
 ## Make a video
 
+The controls sit in four groups on the left rail: **파일** (files), **가사** (lyrics and timing),
+**모양** (look) and **색** (colour). Only the chosen group is open, and **이대로 영상 만들기** (make)
+stays at the bottom whatever the group. A red dot marks a group that still lacks something.
+
 1. **Song and cover:** pick the song and the cover. A crop window opens for the cover: drag the
    square, drag its corner to resize, use **확대** (zoom), then press **확인** (OK). Type the title and
    the artist (left empty, the artist is not shown).
-2. **Lyrics:** paste the lyrics, one screen line per line. Tags such as `[Chorus]` are removed.
-3. **Timing**, three ways; each fills the timing list under the preview, where a line can be
+2. **Lyrics** (the 가사 group): paste the lyrics, one screen line per line. Tags such as `[Chorus]` are removed.
+3. **Timing**, lower in the 가사 group, three ways; each fills the timing list that opens under the preview with that group, where a line can be
    nudged by 0.1 s, played from just before it, or typed as `10`, `10.5`, `1:05`, `1:05.3` or
    `0:01:05`:
 
@@ -73,12 +77,13 @@ If Windows shows "Windows protected your PC", choose **More info**, then **Run a
    the song to the AI service, and its times are often wrong.
 4. **Look:** the cover sits in a clear CD case with the disc half out and turning (both
    switchable), or as a round cover. Drag the album, the lyrics, the title and the playback bar on
-   the preview to move them, and drag a corner to resize. Pick the font, band colour, background
-   blur and darkness. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
+   the preview to move them, and drag a corner to resize. Pick the font; the band colour,
+   background blur and darkness are in the 색 (colour) group. **움직이는 그림** (moving picture) adds one GIF or several images (png, jpg,
    webp) that loop over the video: reorder them with ↑ ↓, set the frames per second, choose above
    or under the album and lyrics, and drag it on the preview.
-5. **Render:** press **이대로 영상 만들기**. It usually takes less than the song's length,
-   depending on the PC.
+5. **Render:** press **이대로 영상 만들기**. While it renders, the page shows how far into the song
+   the video is made (for example 0:04 / 0:18), the lyric line at that point, the percent and the
+   time left. It usually takes less than the song's length, depending on the PC.
 
 The `만든 영상` folder then holds the mp4 (1920x1080, 30 fps, H.264 + AAC), a 1280x720 thumbnail,
 and the timing as LRC and SRT. Press **끝내기** on the page or close the terminal window to quit;
@@ -86,7 +91,7 @@ work is saved and reopens where you left off.
 
 Tips:
 
-- Each step title shows its state (for example 노래 ✓ 표지 ✓, 4줄, 4/4 ✓).
+- Each group title shows its state (for example 노래 ✓ 표지 ✓, 4줄, 4/4 ✓).
 - The preview follows the song while it plays. <kbd>Space</kbd> plays and pauses, <kbd>←</kbd>
   <kbd>→</kbd> move 5 s (outside text boxes). Clicking a row of the timing list moves the preview
   to that line.
