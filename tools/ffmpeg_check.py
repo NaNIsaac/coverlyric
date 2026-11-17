@@ -1,0 +1,11 @@
+"""Print the bundled ffmpeg's version line and whether it has the H.264 encoder."""
+
+import subprocess
+
+from lyricvideo import media
+
+exe = media.ffmpeg()
+version = subprocess.run([exe, "-version"], capture_output=True, text=True).stdout.splitlines()[0]
+encoders = subprocess.run([exe, "-hide_banner", "-encoders"], capture_output=True, text=True).stdout
+print(version)
+print("libx264:", "libx264" in encoders)

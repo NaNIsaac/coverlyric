@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>가사 영상 만들기</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header>
+  <h1>가사 영상 만들기</h1>
+  <div class="top-buttons">
+    <button id="demo" class="quiet">데모로 해보기</button>
+    <button id="new" class="quiet">새로 시작</button>
+    <button id="quit" class="quiet">끝내기</button>
+  </div>
+</header>
+
+<main>
+  <section class="steps">
+    <details class="step" id="step-files" open>
+      <summary><b>1</b> 노래와 표지</summary>
+      <div class="row">
+        <label class="file-button">노래 파일 고르기<input type="file" id="audio-file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*"></label>
+        <span id="audio-name" class="note">아직 없어요</span>
+      </div>
+      <div class="row">
+        <label class="file-button">앨범 표지 고르기<input type="file" id="art-file" accept=".png,.jpg,.jpeg,.webp,.bmp,image/*"></label>
+        <span id="art-name" class="note">정사각형 그림이 좋아요</span>
+      </div>
+      <label class="field">노래 제목<input type="text" id="title" placeholder="예: 비 오는 밤"></label>
+      <label class="field">가수 <span class="note">(비워 두면 안 나와요)</span><input type="text" id="artist"></label>
+    </details>
+
+    <details class="step" id="step-lyrics">
+      <summary><b>2</b> 가사</summary>
+      <p class="help">가사를 붙여 넣으세요. 한 줄이 화면의 한 줄이 돼요. [후렴] 같은 표시는 지워져요.</p>
+      <textarea id="lyrics-text" rows="9" placeholder="여기에 가사를 붙여 넣기"></textarea>
+      <button id="lyrics-apply">가사 넣기</button>
+    </details>
+
+    <details class="step" id="step-timing">
+      <summary><b>3</b> 타이밍 <span class="note">(각 줄이 언제 나올지)</span></summary>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="tap">직접 맞추기</button>
+        <button class="tab" data-tab="ai">채팅 AI에게 맡기기</button>
+        <button class="tab" data-tab="file">자막 파일 넣기</button>
+        <button class="tab" data-tab="auto" disabled title="다음 버전에서 나와요">자동 (준비 중)</button>
+      </div>
+
+      <div class="tab-body" data-body="tap">
+        <ol class="help">
+          <li><b>처음부터 맞추기</b>를 누르면 노래가 처음부터 나와요.</li>
+          <li>각 줄을 부르기 시작할 때 <kbd>스페이스바</kbd>나 <b>지금!</b>을 누르세요.</li>
+          <li>틀린 줄은 아래 목록에서 −0.1 / +0.1 로 고치고 ▶ 로 들어 보세요.</li>
+        </ol>
+        <div class="row">
+          <button id="tap-start">처음부터 맞추기</button>
+          <button id="tap-now" class="big" disabled>지금!</button>
+          <button id="tap-stop" class="quiet" disabled>멈추기</button>
+        </div>
+        <p id="tap-next" class="note"></p>
+      </div>
+
+      <div class="tab-body" data-body="ai" hidden>
+        <ol class="help">
+          <li>먼저 2단계에서 가사를 넣으세요.</li>
+          <li><b>프롬프트 복사</b>를 누르고, 쓰고 있는 채팅 AI에 노래 파일과 함께 붙여 넣으세요.</li>
+          <li>AI가 준 답(SRT)을 아래 칸에 붙여 넣고 <b>답 넣기</b>를 누르세요.</li>
+        </ol>
+        <p class="warn">노래 파일이 그 AI 회사로 보내져요. 괜찮을 때만 쓰세요.</p>
+        <textarea id="prompt" rows="7" readonly></textarea>
+        <button id="prompt-copy">프롬프트 복사</button>
+        <textarea id="answer" rows="6" placeholder="AI의 답을 여기에 붙여 넣기"></textarea>
+        <button id="answer-apply">답 넣기</button>
+      </div>
+
+      <div class="tab-body" data-body="file" hidden>
+        <p class="help">SRT, LRC, VTT 자막 파일이 있으면 넣으세요. 줄과 시간이 아래 목록에 들어와요.</p>
+        <label class="file-button">자막 파일 고르기<input type="file" id="timing-file" accept=".srt,.lrc,.vtt,.txt"></label>
+      </div>
+
+      <div class="tab-body" data-body="auto" hidden>
+        <p class="help">컴퓨터 안에서 노래를 듣고 자동으로 맞추는 기능은 다음 버전에서 나와요.</p>
+      </div>
+
+      <audio id="player" controls preload="auto"></audio>
+      <p id="check" class="note"></p>
+      <div id="lines" class="lines"></div>
+      <div class="row">
+        <button id="line-add" class="quiet">줄 추가</button>
+        <a id="save-lrc" class="button quiet" href="/api/export?fmt=lrc">LRC로 저장</a>
+        <a id="save-srt" class="button quiet" href="/api/export?fmt=srt">SRT로 저장</a>
+      </div>
+    </details>
+
+    <details class="step" id="step-look">
+      <summary><b>4</b> 모양</summary>
+      <p class="help">오른쪽 그림에서 앨범, 가사, 제목을 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꿀 수 있어요.</p>
+      <fieldset class="row">
+        <legend>앨범</legend>
+        <label><input type="radio" name="layout" value="case" checked> CD 케이스</label>
+        <label><input type="radio" name="layout" value="disc"> 둥근 표지</label>
+        <label><input type="checkbox" id="show_cd" checked> CD 보이기</label>
+        <label><input type="checkbox" id="spin" checked> CD 돌기</label>
+      </fieldset>
+      <label class="field">글꼴
+        <select id="font"></select>
+      </label>
+      <label class="file-button small">다른 글꼴 파일...<input type="file" id="font-file" accept=".ttf,.otf,.ttc"></label>
+      <div class="grid">
+        <label>띠 색<input type="color" id="band"></label>
+        <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
+        <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
+        <label><input type="checkbox" id="show_title"> 제목·가수 보이기</label>
+        <label><input type="checkbox" id="bar"> 재생 바 넣기</label>
+      </div>
+      <table class="places">
+        <thead><tr><th></th><th>가로</th><th>세로</th><th>크기</th></tr></thead>
+        <tbody>
+          <tr data-el="album"><th>앨범</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
+          <tr data-el="panel"><th>가사</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
+          <tr data-el="title"><th>제목</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
+          <tr data-el="bar"><th>재생 바</th><td><input type="number" data-k="x" step="5"></td><td><input type="number" data-k="y" step="5"></td><td><input type="number" data-k="scale" step="0.05" min="0.3" max="2"></td></tr>
+        </tbody>
+      </table>
+      <button id="reset-look" class="quiet">위치·크기 처음대로</button>
+    </details>
+
+    <details class="step" id="step-make">
+      <summary><b>5</b> 영상 만들기</summary>
+      <p class="help">오른쪽 그림이 마음에 들면 만드세요. 노래 길이의 1~2배쯤 걸려요. 그동안 다른 일을 해도 돼요.</p>
+      <button id="make" class="big">이대로 영상 만들기</button>
+      <div id="progress" hidden>
+        <progress id="progress-bar" max="1" value="0"></progress>
+        <p id="progress-text" class="note"></p>
+        <button id="make-stop" class="quiet">그만 만들기</button>
+      </div>
+      <div id="done" hidden>
+        <p>다 만들었어요! <span id="done-name"></span></p>
+        <button id="open-folder">영상 폴더 열기</button>
+      </div>
+    </details>
+  </section>
+
+  <section class="preview">
+    <div id="stage">
+      <img id="still" alt="미리보기">
+      <div id="boxes"></div>
+      <p id="stage-empty">노래와 표지를 넣으면 여기에 미리보기가 나와요.</p>
+    </div>
+    <div class="row time">
+      <label>미리보기 시점 <span id="time-label">0:00</span>
+        <input type="range" id="time" min="0" max="60" step="0.1" value="0">
+      </label>
+      <button id="time-now" class="quiet">재생 위치로</button>
+    </div>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+<script src="/app.js"></script>
+</body>
+</html>

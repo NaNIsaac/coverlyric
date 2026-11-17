@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+/작업 중/
+/만든 영상/
+dist/
