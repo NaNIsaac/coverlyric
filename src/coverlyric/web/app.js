@@ -21,6 +21,7 @@ let syncTimer = null;
 let syncing = false;
 let again = false;
 let lastBoxes = {};
+let fits = [];  // per line: [size factor, rows] in the video, from the last preview
 let dragging = false;
 
 function toast(text, ms = 3500, action = null) {
@@ -84,6 +85,8 @@ async function sync() {
       $("still").hidden = false;
       $("stage-empty").hidden = true;
       lastBoxes = JSON.parse(res.headers.get("X-Boxes") || "{}");
+      fits = JSON.parse(res.headers.get("X-Fit") || "[]");
+      markFits();
       drawBoxes();
     }
   } catch (e) {
@@ -468,15 +471,34 @@ function drawLines() {
     });
     holder.appendChild(row);
   });
-  updateCheck();
+  markFits();
   markNow(Number($("time").value));
   const next = holder.querySelector(".line.next");
   if (next) next.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
+function fitKind(i) {
+  const f = fits[i];
+  if (!f || !state.lines[i] || !state.lines[i][1]) return "";
+  return f[1] > 1 ? "wrap" : f[0] < 1 ? "shrink" : "";
+}
+
+// Lines too wide for the lyric panel are drawn smaller, or on two rows; the list says which.
+function markFits() {
+  $("lines").querySelectorAll(".line").forEach((row, i) => {
+    const kind = fitKind(i);
+    if (kind) row.dataset.fit = kind; else delete row.dataset.fit;
+    const box = row.querySelector(".x");
+    if (box) box.title = kind === "wrap" ? "영상에서 두 줄로 나뉩니다." : kind === "shrink" ? "영상에서 글자가 작게 표시됩니다." : "";
+  });
+  updateCheck();
+}
+
 function updateCheck() {
   const timed = state.lines.filter(([t]) => t != null).length;
-  $("check").textContent = state.lines.length ? `시간 입력됨: ${timed} / ${state.lines.length}줄` : "";
+  const long = state.lines.filter((_, i) => fitKind(i)).length;
+  const note = long ? ` · 긴 줄 ${long}개 (영상에서 작게 또는 두 줄로 표시)` : "";
+  $("check").textContent = state.lines.length ? `시간 입력됨: ${timed} / ${state.lines.length}줄${note}` : "";
   updateStatus();
 }
 
