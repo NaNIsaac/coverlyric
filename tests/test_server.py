@@ -22,6 +22,7 @@ def base(tmp_path):
 
 def call(url, data=None, headers=None):
     body = data if isinstance(data, bytes) or data is None else json.dumps(data).encode()
+    headers = headers or {"Content-Type": "application/json"}
     req = urllib.request.Request(
         url, data=body, headers=headers or {}, method="POST" if body is not None else "GET"
     )

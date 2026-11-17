@@ -31,6 +31,25 @@ def resolve(choice: str) -> str:
     return choice
 
 
+def allowed(choice: str, work: Path) -> bool:
+    """A bundled key, or a font file in the work folder or a system or user font folder. The page
+    only ever offers those; anything else could come from another site, and a UNC path would make
+    Windows log in to that host with the user's hash, so it is refused before the path is touched."""
+    if choice in BUNDLED:
+        return True
+    if choice.startswith(("\\\\", "//")) or Path(choice).suffix.lower() not in SUFFIXES:
+        return False
+    path = os.path.normcase(os.path.abspath(choice))
+    for folder in [work, *font_dirs()]:
+        root = os.path.normcase(os.path.abspath(folder))
+        try:
+            if os.path.commonpath([path, root]) == root:
+                return True
+        except ValueError:  # another drive
+            continue
+    return False
+
+
 def font_dirs() -> list[Path]:
     if sys.platform == "win32":
         dirs = [Path(os.environ.get("WINDIR", "")) / "Fonts"]

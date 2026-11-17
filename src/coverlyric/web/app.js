@@ -31,6 +31,10 @@ function toast(text, ms = 3500) {
 }
 
 async function api(path, options = {}) {
+  // The server takes a POST only as JSON or as an upload with its name header.
+  if (options.method === "POST" && !(options.headers && options.headers["X-Name"])) {
+    options = { ...options, headers: { ...options.headers, "Content-Type": "application/json" } };
+  }
   const res = await fetch(path, options);
   if (!res.ok) {
     let message = `오류 (${res.status})`;

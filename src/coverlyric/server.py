@@ -10,6 +10,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -65,6 +66,30 @@ def start_log(home: Path) -> Path:
     return path
 
 
+def new_group() -> dict:
+    """Popen arguments that let kill_tree end the child and everything it starts."""
+    return {} if sys.platform == "win32" else {"start_new_session": True}
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """End a job child with its own children: `uv run` starts the transcriber, and the render
+    starts its workers and ffmpeg. Killing only the parent leaves those running."""
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+            check=False,
+            capture_output=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    if proc.poll() is None:
+        proc.kill()
+
+
 def safe_name(name: str) -> str:
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
     return name or "가사영상"
@@ -105,7 +130,12 @@ class App:
                 (None if t is None else round(float(t), 3), str(text)) for t, text in data["lines"]
             ]
         if "style" in data:
-            p.style = Style.from_dict(data["style"])
+            style = Style.from_dict(data["style"])
+            if not fonts.allowed(style.font, self.work):
+                raise ValueError(
+                    "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣으세요."
+                )
+            p.style = style
         if "anim" in data:
             # Reorder or remove the moving picture's files; new ones come through upload.
             kept = [str(name) for name in data["anim"] if str(name) in p.anim]
@@ -224,6 +254,9 @@ class App:
     def start_render(self) -> dict:
         if self.job.get("state") == "running":
             return self.job
+        if self.auto.get("state") == "running":
+            # Both at once need about 2 GB, more than a 4 GB PC has free.
+            raise ValueError("자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤 영상을 만드세요.")
         p = self.project
         if not p.audio or not p.art:
             raise ValueError("노래 파일과 앨범 표지가 필요합니다. 1단계에서 넣으세요.")
@@ -247,6 +280,7 @@ class App:
             encoding="utf-8",
             errors="replace",
             **media.below_normal(),
+            **new_group(),
         )
         self.job = {"state": "running", "done": 0.0, "total": p.duration, "started": time.time()}
         LOG.info("render started: %s (%.1f s)", out.name, p.duration)
@@ -260,6 +294,8 @@ class App:
         said = ""
         logged = 0
         for raw in proc.stdout:
+            if self.proc is not proc:
+                break
             line = raw.rstrip()
             if m := re.match(r"progress ([\d.]+) ([\d.]+)", line):
                 done, total = float(m[1]), float(m[2])
@@ -274,6 +310,8 @@ class App:
             elif line:
                 tail = (tail + [line])[-40:]
         code = proc.wait()
+        if self.proc is not proc:  # stopped and replaced by a newer render
+            return
         if code == 0 and out.exists():
             spent = time.time() - self.job.get("started", time.time())
             LOG.info("render done in %.0f s: %s", spent, out)
@@ -298,7 +336,7 @@ class App:
         if self.proc and self.proc.poll() is None:
             self.job = {"state": "stopped"}
             LOG.info("render stop requested")
-            self.proc.kill()
+            kill_tree(self.proc)
         return self.job
 
     def progress(self) -> dict:
@@ -349,6 +387,7 @@ class App:
             encoding="utf-8",
             errors="replace",
             **media.below_normal(),
+            **new_group(),
         )
         self.auto = {"state": "running", "phase": "install", "done": 0.0, "total": p.duration}
         self.auto["started"] = self.auto["phase_started"] = time.time()
@@ -358,6 +397,8 @@ class App:
     def watch_auto(self, proc: subprocess.Popen) -> None:
         tail = []
         for raw in proc.stdout:
+            if self.auto_proc is not proc:
+                break
             if m := re.match(r"phase (\w+) ([\d.]+) ([\d.]+)", raw):
                 if m[1] != self.auto.get("phase"):
                     self.auto["phase_started"] = time.time()
@@ -371,6 +412,8 @@ class App:
                 if self.auto.get("phase") == "install" and raw.strip():
                     self.auto["detail"] = raw.strip()[:80]
         code = proc.wait()
+        if self.auto_proc is not proc:  # cancelled and replaced by a newer run
+            return
         result = self.work / "auto-result.json"
         if code == 0 and result.exists():
             data = json.loads(result.read_text(encoding="utf-8"))
@@ -381,7 +424,7 @@ class App:
     def stop_auto(self) -> dict:
         if self.auto_proc and self.auto_proc.poll() is None:
             self.auto = {"state": "stopped"}
-            self.auto_proc.kill()
+            kill_tree(self.auto_proc)
         return self.auto
 
     def auto_progress(self) -> dict:
@@ -427,6 +470,24 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
         def json(self, data, code: int = 200) -> None:
             self.send(code, json.dumps(data, ensure_ascii=False).encode(), "application/json")
 
+        def trusted(self) -> bool:
+            """Only the page this server sent may use it. Another site in the same browser
+            reaches 127.0.0.1 too: a DNS-rebinding page names its own host, a cross-site
+            request carries its own Origin, and a form or no-cors fetch can only send simple
+            content types, so a POST must use JSON or the upload name header, which the
+            browser does not send cross-site without asking this server first."""
+            port = self.server.server_address[1]
+            own = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if self.headers.get("Host") not in own:
+                return False
+            origin = self.headers.get("Origin")
+            if origin is not None and origin not in {f"http://{h}" for h in own}:
+                return False
+            if self.command == "POST":
+                ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+                return ctype == "application/json" or "X-Name" in self.headers
+            return True
+
         def body(self) -> bytes:
             return self.rfile.read(int(self.headers.get("Content-Length") or 0))
 
@@ -458,6 +519,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 self.wfile.write(f.read(end - start + 1))
 
         def do_GET(self) -> None:
+            if not self.trusted():
+                self.send(403, b"forbidden", "text/plain")
+                return
             url = urlparse(self.path)
             query = parse_qs(url.query)
             try:
@@ -496,6 +560,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 self.json({"error": str(e)}, 400)
 
         def do_POST(self) -> None:
+            if not self.trusted():
+                self.send(403, b"forbidden", "text/plain")
+                return
             url = urlparse(self.path)
             query = parse_qs(url.query)
             try:
