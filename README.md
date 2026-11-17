@@ -233,7 +233,7 @@ uv run pytest
   `COVERLYRIC_ENCODER` 환경 변수로 지정할 수 있습니다.
 - 작업 프로세스 수는 영상 만들기를 시작할 때의 여유 메모리로 정합니다: 250 MB를 남기고
   150 MB당 1개, (코어 수 − 1) 이하, 최대 6개, 최소 1개. `COVERLYRIC_WORKERS` 환경 변수로 지정할
-  수 있습니다.
+  수 있습니다 (1~8).
 - 시작, 10% 단위 진행, 완료, 오류(종료 코드와 원인)는 터미널 창과 프로그램 폴더의
   `coverlyric.log` 에 기록됩니다.
 - 자동 맞추기는 선택 의존성 `auto` (faster-whisper)를 처음 쓸 때 `uv run --extra auto` 로

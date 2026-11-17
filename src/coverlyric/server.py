@@ -105,6 +105,7 @@ class App:
         self.output.mkdir(parents=True, exist_ok=True)
         self.file = self.work / "project.json"
         self.lock = threading.Lock()
+        self.starting = threading.Lock()  # a double click must not start two jobs
         self.project = Project.load(self.file) if self.file.exists() else Project(self.work)
         self.job: dict = {"state": "idle"}
         self.log = home / "coverlyric.log"
@@ -253,6 +254,10 @@ class App:
         return buf.getvalue(), render.boxes(p.style, t, song)
 
     def start_render(self) -> dict:
+        with self.starting:
+            return self.begin_render()
+
+    def begin_render(self) -> dict:
         if self.job.get("state") == "running":
             return self.job
         if self.auto.get("state") == "running":
@@ -378,6 +383,10 @@ class App:
                 )
 
     def start_auto(self, model: str) -> dict:
+        with self.starting:
+            return self.begin_auto(model)
+
+    def begin_auto(self, model: str) -> dict:
         if self.auto.get("state") == "running":
             return self.auto
         if self.job.get("state") == "running":
@@ -535,8 +544,14 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     start = int(m[1])
                     end = int(m[2]) if m[2] else end
                 else:
-                    start = size - int(m[2])
+                    start = max(0, size - int(m[2] or 0))
                 end = min(end, size - 1)
+                if start > end:
+                    self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 self.send_response(HTTPStatus.PARTIAL_CONTENT)
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             else:
@@ -548,7 +563,10 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             with path.open("rb") as f:
                 f.seek(start)
-                self.wfile.write(f.read(end - start + 1))
+                left = end - start + 1
+                while left > 0 and (chunk := f.read(min(left, 1 << 20))):
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
 
         def do_GET(self) -> None:
             if not self.trusted():

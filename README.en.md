@@ -170,7 +170,7 @@ uv run pytest
   libx264. The `COVERLYRIC_ENCODER` environment variable picks one.
 - The number of workers follows the memory free when the render starts: 250 MB kept back,
   then one worker per 150 MB, at most the cores minus one and 6, at least 1. The
-  `COVERLYRIC_WORKERS` environment variable sets it by hand.
+  `COVERLYRIC_WORKERS` environment variable sets it by hand (1 to 8).
 - Render start, progress every 10 %, the end and any error (with the exit code and reason) go to
   the terminal window and to `coverlyric.log` in the program folder.
 - Automatic timing installs the optional `auto` extra (faster-whisper) on first use with
