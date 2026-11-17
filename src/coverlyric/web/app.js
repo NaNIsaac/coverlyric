@@ -499,6 +499,8 @@ function updateStatus() {
   mark($("state-lyrics"), [[count ? `${count}줄` : "없음", count ? "" : "miss"]]);
   const timed = state.lines.filter(([t]) => t != null).length;
   mark($("state-timing"), count ? [[`${timed}/${count}`, timed === count ? "ok" : "miss"]] : []);
+  $("dot-files").classList.toggle("miss", !(state.has_audio && state.has_art));
+  $("dot-lyrics").classList.toggle("miss", !count || timed < count);
 }
 
 function lineAt(t) {
@@ -550,7 +552,7 @@ function followPlayer() {
 
 function togglePlay() {
   const p = $("player");
-  if (!state.has_audio) { toast("노래 파일이 없습니다. 1단계에서 넣으세요."); return; }
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣으세요."); return; }
   if (p.paused) p.play(); else p.pause();
 }
 
@@ -605,18 +607,18 @@ async function takeFiles(files, onAnim) {
     if (!kind) { toast(`${file.name}: 넣을 수 없는 파일입니다. 노래, 사진, 자막, 가사, 글꼴 파일을 놓으세요.`, 6000); continue; }
     (groups[kind] ||= []).push(file);
   }
-  if (groups.audio) { await upload("audio", groups.audio[0]); $("step-files").open = true; }
+  if (groups.audio) { await upload("audio", groups.audio[0]); openGroup("files"); }
   if (groups.font) await upload("font", groups.font[0]);
   if (groups.timing) {
     try { await importText(groups.timing[0].name, await groups.timing[0].text()); } catch (e) { toast(e.message); }
-    $("step-timing").open = true;
+    openGroup("lyrics");
   }
   if (groups.lyrics) {
     $("lyrics-text").value = await groups.lyrics[0].text();
-    $("step-lyrics").open = true;
+    openGroup("lyrics");
     $("lyrics-apply").click();
   }
-  if (groups.anim) { await addAnim(groups.anim); $("step-look").open = true; }
+  if (groups.anim) { await addAnim(groups.anim); openGroup("look"); }
   if (groups.art) openCrop(groups.art[0]);
 }
 
@@ -846,8 +848,34 @@ function stopTap(pause = true) {
   drawLines();
 }
 
-function showTiming() {
-  document.body.classList.toggle("timing-open", $("step-timing").open);
+// One group of controls at a time; the timing list under the preview belongs to the lyrics group.
+const GROUPS = ["files", "lyrics", "look", "colour"];
+const OLD_STEPS = { "step-files": "files", "step-lyrics": "lyrics", "step-timing": "lyrics", "step-look": "look" };
+
+function openGroup(name) {
+  for (const g of GROUPS) {
+    const on = g === name;
+    $(`g-${g}`).hidden = !on;
+    $(`tab-${g}`).setAttribute("aria-selected", String(on));
+    $(`tab-${g}`).tabIndex = on ? 0 : -1;
+  }
+  document.querySelector(".steps").scrollTop = 0;
+  document.body.classList.toggle("timing-open", name === "lyrics");
+}
+
+function bindRail() {
+  for (const b of document.querySelectorAll(".rail-tab")) {
+    b.addEventListener("click", () => openGroup(b.dataset.group));
+    b.addEventListener("keydown", (e) => {
+      const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const next = GROUPS[(GROUPS.indexOf(b.dataset.group) + step + GROUPS.length) % GROUPS.length];
+      openGroup(next);
+      $(`tab-${next}`).focus();
+    });
+  }
 }
 
 async function pollRender() {
@@ -903,13 +931,13 @@ async function pollClip() {
     return;
   }
   $("clip-make").disabled = false;
-  label.textContent = "10초 미리보기 영상";
+  label.textContent = "10초 미리보기";
   if (job.state === "done") {
     const video = $("clip");
     video.src = job.url;
     video.hidden = false;
     $("boxes").hidden = true;
-    label.textContent = "미리보기 영상 닫기";
+    label.textContent = "미리보기 닫기";
     video.play().catch(() => {});
   } else if (job.state === "error") {
     toast(`미리보기 영상 실패: ${job.message}`, 9000);
@@ -923,7 +951,7 @@ function closeClip() {
   video.load();
   video.hidden = true;
   $("boxes").hidden = false;
-  $("clip-label").textContent = "10초 미리보기 영상";
+  $("clip-label").textContent = "10초 미리보기";
 }
 
 // Progress in song terms: how far into the song the video is made, and the lyric sung there, so the
@@ -975,16 +1003,16 @@ function bind() {
     diff = [];
     drawLines();
     scheduleSync();
-    $("step-timing").open = true;
-    toast(`${state.lines.length}줄을 넣었습니다. 3단계에서 타이밍을 맞추세요.`);
+    $("state-timing").scrollIntoView({ block: "start", behavior: "smooth" });
+    toast(`${state.lines.length}줄을 넣었습니다. 아래 타이밍에서 시간을 맞추세요.`);
   });
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
-  $("step-timing").addEventListener("toggle", showTiming);
+  bindRail();
 
   $("tap-start").addEventListener("click", () => {
-    if (!state.has_audio) { toast("노래 파일이 없습니다. 1단계에서 넣으세요."); return; }
-    if (!state.lines.length) { toast("가사가 없습니다. 2단계에서 가사를 넣으세요."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣으세요."); return; }
+    if (!state.lines.length) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣으세요."); return; }
     tapIndex = 0;
     tapUndo = [];
     diff = [];
@@ -1018,7 +1046,7 @@ function bind() {
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       const data = await (await api("/api/prompt")).json();
-      if (!data.lines) { toast("가사가 없습니다. 2단계에서 가사를 넣으세요."); return; }
+      if (!data.lines) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣으세요."); return; }
       $("prompt").value = data.prompt;
       await navigator.clipboard.writeText(data.prompt);
       toast("복사했습니다. 채팅 AI에 노래 파일과 함께 붙여 넣으세요.", 5000);
@@ -1041,8 +1069,8 @@ function bind() {
   });
 
   $("auto-start").addEventListener("click", async () => {
-    if (!state.has_audio) { toast("노래 파일이 없습니다. 1단계에서 넣으세요."); return; }
-    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 2단계에서 가사를 넣으세요."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣으세요."); return; }
+    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣으세요."); return; }
     if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 새로 찾은 시간으로 바뀝니다. 계속하시겠습니까?")) return;
     const model = document.querySelector('input[name="model"]:checked').value;
     try {
@@ -1128,8 +1156,8 @@ function bind() {
   $("make").addEventListener("click", async () => {
     const untimed = state.lines.findIndex(([t]) => t == null);
     if (untimed >= 0) {
-      toast(`${untimed + 1}번째 줄에 시간이 없습니다. 3단계에서 시간을 넣거나 줄을 지우세요.`, 6000);
-      $("step-timing").open = true;
+      toast(`${untimed + 1}번째 줄에 시간이 없습니다. 타이밍 목록에서 시간을 넣거나 줄을 지우세요.`, 6000);
+      openGroup("lyrics");
       return;
     }
     const minutes = Math.max(1, Math.round((state.duration || 60) / 60));
@@ -1154,7 +1182,7 @@ function bind() {
     diff = [];
     $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
     fillAll();
-    $("step-look").open = true;
+    openGroup("look");
   });
   $("new").addEventListener("click", async () => {
     if (!confirm("지금 작업을 지우고 새로 시작하시겠습니까? 만든 영상은 남습니다.")) return;
@@ -1185,10 +1213,9 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   if (params.get("t")) showAt(Number(params.get("t")));
   setTab(document.querySelector(".tab:not(:disabled)").dataset.tab);
-  const step = params.get("step");
-  if (step && $(step)) {
-    for (const d of document.querySelectorAll(".step")) d.open = d.id === step;
-    showTiming();
+  const group = params.get("group") || OLD_STEPS[params.get("step")];
+  openGroup(GROUPS.includes(group) ? group : "files");
+  if (group) {
     if (params.get("tab")) setTab(params.get("tab"));
     if (params.get("tapping")) $("tap-start").click();
   }

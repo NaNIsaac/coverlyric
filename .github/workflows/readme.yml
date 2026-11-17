@@ -2,9 +2,9 @@ name: README
 on:
   push:
     branches: [main]
-    paths: [README.md, README.ko.md, .github/workflows/readme.yml]
+    paths: [README.md, README.ko.md, "docs/**", .github/workflows/readme.yml]
   pull_request:
-    paths: [README.md, README.ko.md, .github/workflows/readme.yml]
+    paths: [README.md, README.ko.md, "docs/**", .github/workflows/readme.yml]
   workflow_dispatch:
 jobs:
   readme:

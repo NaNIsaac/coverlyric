@@ -14,6 +14,7 @@
   <symbol id="i-lines" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.7-1.3-.7-2.2 0-.9.7-1.6 1.6-1.6H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></symbol>
   <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
@@ -41,9 +42,15 @@
 </header>
 
 <main>
+  <nav class="rail" role="tablist" aria-label="작업 묶음" aria-orientation="vertical">
+    <button class="rail-tab" role="tab" id="tab-files" data-group="files" aria-controls="g-files"><svg class="i"><use href="#i-song"/></svg><span>파일</span><i class="dot" id="dot-files"></i></button>
+    <button class="rail-tab" role="tab" id="tab-lyrics" data-group="lyrics" aria-controls="g-lyrics"><svg class="i"><use href="#i-lines"/></svg><span>가사</span><i class="dot" id="dot-lyrics"></i></button>
+    <button class="rail-tab" role="tab" id="tab-look" data-group="look" aria-controls="g-look"><svg class="i"><use href="#i-sliders"/></svg><span>모양</span><i class="dot" id="dot-look"></i></button>
+    <button class="rail-tab" role="tab" id="tab-colour" data-group="colour" aria-controls="g-colour"><svg class="i"><use href="#i-palette"/></svg><span>색</span><i class="dot" id="dot-colour"></i></button>
+  </nav>
   <section class="steps">
-    <details class="step" id="step-files" open>
-      <summary><svg class="i"><use href="#i-song"/></svg>노래와 표지<span class="state" id="state-files"></span><span class="num">1단계</span></summary>
+    <section class="pane" id="g-files" role="tabpanel" aria-labelledby="tab-files">
+      <h2 class="pane-head">노래와 표지<span class="state" id="state-files"></span></h2>
       <div class="pick">
         <label class="file-button"><svg class="i"><use href="#i-song"/></svg>노래 파일 고르기<input type="file" id="audio-file" accept=".mp3,.wav,.m4a,.flac,.ogg,.aac,audio/*"></label>
         <span id="audio-name" class="note">없음</span>
@@ -54,17 +61,13 @@
       </div>
       <label class="field">노래 제목<input type="text" id="title" placeholder="예: 비 오는 밤"></label>
       <label class="field"><span>가수 <span class="note">(비우면 표시 안 함)</span></span><input type="text" id="artist"></label>
-    </details>
-
-    <details class="step" id="step-lyrics">
-      <summary><svg class="i"><use href="#i-lines"/></svg>가사<span class="state" id="state-lyrics"></span><span class="num">2단계</span></summary>
+    </section>
+    <section class="pane" id="g-lyrics" role="tabpanel" aria-labelledby="tab-lyrics" hidden>
+      <h2 class="pane-head">가사<span class="state" id="state-lyrics"></span></h2>
       <p class="help">가사를 붙여 넣으세요. 한 줄이 화면의 한 줄이 됩니다. [후렴] 같은 표시는 빠집니다.</p>
-      <textarea id="lyrics-text" rows="9" placeholder="여기에 가사를 붙여 넣기"></textarea>
+      <textarea id="lyrics-text" rows="6" placeholder="여기에 가사를 붙여 넣기"></textarea>
       <button id="lyrics-apply"><svg class="i"><use href="#i-check"/></svg>가사 넣기</button>
-    </details>
-
-    <details class="step" id="step-timing">
-      <summary><svg class="i"><use href="#i-clock"/></svg>타이밍 <span class="note">(각 줄의 시작 시간)</span><span class="state" id="state-timing"></span><span class="num">3단계</span></summary>
+      <h2 class="pane-head sub">타이밍 <span class="note">(각 줄의 시작 시간)</span><span class="state" id="state-timing"></span></h2>
       <p class="help">맞추는 방법을 고르세요. 결과는 오른쪽 아래 목록에 들어갑니다.</p>
       <div class="methods" role="radiogroup" aria-label="맞추는 방법">
         <button class="tab method" data-tab="auto" role="radio">
@@ -115,10 +118,9 @@
           </details>
         </div>
       </div>
-    </details>
-
-    <details class="step" id="step-look">
-      <summary><svg class="i"><use href="#i-sliders"/></svg>모양<span class="num">4단계</span></summary>
+    </section>
+    <section class="pane" id="g-look" role="tabpanel" aria-labelledby="tab-look" hidden>
+      <h2 class="pane-head">모양</h2>
       <p class="help">오른쪽 그림에서 앨범, 가사, 제목을 끌어 옮기고, 오른쪽 아래 모서리를 끌어 크기를 바꿉니다.</p>
       <fieldset class="group">
         <legend>앨범</legend>
@@ -130,21 +132,13 @@
         <label class="check"><input type="checkbox" id="spin" checked> CD 돌기</label>
       </fieldset>
       <fieldset class="group">
-        <legend>글자</legend>
+        <legend>글자와 재생 바</legend>
         <label class="field">글꼴
           <select id="font"></select>
         </label>
         <label class="file-button small"><svg class="i"><use href="#i-open"/></svg>다른 글꼴 파일...<input type="file" id="font-file" accept=".ttf,.otf,.ttc"></label>
-        <label class="check"><input type="checkbox" id="show_title"> 제목·가수 보이기</label>
-      </fieldset>
-      <fieldset class="group">
-        <legend>색과 배경</legend>
-        <div class="grid">
-          <label class="color">띠 색<input type="color" id="band"></label>
-          <label class="check"><input type="checkbox" id="bar"> 재생 바 넣기</label>
-          <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
-          <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
-        </div>
+        <label class="check"><input type="checkbox" id="show_title"> 제목과 가수 보이기</label>
+        <label class="check"><input type="checkbox" id="bar"> 재생 바 넣기</label>
       </fieldset>
       <fieldset class="group" id="anim-group">
         <legend>움직이는 그림</legend>
@@ -171,12 +165,28 @@
         </table>
         <button id="reset-look" class="quiet"><svg class="i"><use href="#i-reset"/></svg>위치·크기 처음대로</button>
       </fieldset>
-    </details>
+    </section>
+    <section class="pane" id="g-colour" role="tabpanel" aria-labelledby="tab-colour" hidden>
+      <h2 class="pane-head">색</h2>
+      <fieldset class="group">
+        <legend>가사 띠와 배경</legend>
+        <div class="grid">
+          <label class="color">띠 색<input type="color" id="band"></label>
+          <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
+          <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
+        </div>
+      </fieldset>
+      <div id="colour-more"></div>
+    </section>
   </section>
 
-  <section class="make" id="step-make">
-    <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
-    <p class="note">걸리는 시간: 보통 노래 길이 이하, 느린 PC는 노래 길이 정도</p>
+  <section class="make" id="step-make" aria-label="영상 만들기">
+    <div class="output-options" id="output-options"></div>
+    <div class="make-row">
+      <button id="clip-make" title="미리보기 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-play"/></svg><span id="clip-label">10초 미리보기</span></button>
+      <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
+    </div>
+    <p class="note">걸리는 시간: 노래 길이 정도 또는 그보다 짧게</p>
     <div id="progress" hidden>
       <div class="progress-head">
         <span class="state">영상 만드는 중</span>
@@ -210,7 +220,6 @@
       <input type="range" id="time" min="0" max="60" step="0.1" value="0" aria-label="미리보기 시점">
       <span id="time-label" class="clock">0:00</span>
       <span class="keys note"><kbd>Space</kbd> 재생과 멈춤 <kbd>←</kbd><kbd>→</kbd> 5초 이동</span>
-      <button id="clip-make" class="quiet" title="이 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-film"/></svg><span id="clip-label">10초 미리보기 영상</span></button>
     </div>
     <div class="editor" id="timing-editor">
       <div class="editor-bar">
