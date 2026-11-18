@@ -15,6 +15,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -132,7 +133,9 @@ class App:
     def __init__(self, home: Path):
         self.home = home
         self.work = home / "작업 중"
-        self.output = home / "만든 영상"
+        self.default_output = home / "만든 영상"
+        self.settings = home / "settings.json"
+        self.output = self.saved_output() or self.default_output
         self.work.mkdir(parents=True, exist_ok=True)
         self.output.mkdir(parents=True, exist_ok=True)
         self.file = self.work / "project.json"
@@ -151,11 +154,53 @@ class App:
     def save(self) -> None:
         self.project.save(self.file)
 
+    def saved_output(self) -> Path | None:
+        """The folder the user picked for finished videos, while it is still there (a USB drive may
+        be gone); None for the default."""
+        try:
+            folder = json.loads(self.settings.read_text(encoding="utf-8")).get("output") or ""
+        except (OSError, ValueError, AttributeError):
+            return None
+        return Path(folder) if folder and Path(folder).is_dir() else None
+
+    def set_output(self, folder: str) -> dict:
+        """Finished videos and saved timing files go to this folder from now on, and after a restart;
+        an empty name goes back to the default."""
+        path = Path(folder).resolve() if folder else self.default_output
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            with tempfile.TemporaryFile(dir=path):
+                pass
+        except OSError as e:
+            raise ValueError("이 폴더에는 저장할 수 없습니다. 다른 폴더를 고릅니다.") from e
+        self.output = path
+        chosen = "" if path == self.default_output else str(path)
+        self.settings.write_text(
+            json.dumps({"output": chosen}, ensure_ascii=False), encoding="utf-8"
+        )
+        LOG.info("output folder: %s", path)
+        return self.state()
+
+    def pick_output(self) -> dict:
+        """Ask for the folder with the system's folder dialog; cancelled, nothing changes."""
+        picked = ask_folder(self.output)
+        return self.set_output(str(picked)) if picked else self.state()
+
+    def save_timing(self, fmt: str) -> dict:
+        """Write the timing list as SRT or LRC into the output folder, under the video's name."""
+        if not any(t is not None for t, _ in self.project.lines):
+            raise ValueError("시간이 맞춰진 줄이 없습니다. 먼저 타이밍을 맞춥니다.")
+        name, text = self.export(fmt)
+        path = self.output / name
+        path.write_text(text, encoding="utf-8")
+        return {"path": str(path), "name": name, "folder": str(self.output)}
+
     def state(self) -> dict:
         data = self.project.to_dict()
         data["has_audio"] = bool(self.project.audio)
         data["has_art"] = bool(self.project.art)
         data["output"] = str(self.output)
+        data["output_default"] = self.output == self.default_output
         return data
 
     def update(self, data: dict) -> None:
@@ -416,7 +461,13 @@ class App:
         if code == 0 and out.exists():
             spent = time.time() - self.job.get("started", time.time())
             LOG.info("render done in %.0f s: %s", spent, out)
-            self.job = {"state": "done", "out": str(out), "folder": str(self.output)}
+            files = [p.name for p in (out, out.with_suffix(".srt"), out.with_suffix(".lrc"))]
+            self.job = {
+                "state": "done",
+                "out": str(out),
+                "folder": str(out.parent),
+                "files": [name for name in files if (out.parent / name).exists()],
+            }
             if notice:
                 self.job["note"] = notice
             return
@@ -675,6 +726,20 @@ class App:
         return f"{name}.lrc", timing.to_lrc(p.lines, p.title, p.artist)
 
 
+def ask_folder(start: Path) -> Path | None:
+    """The system's folder dialog, in a child process: Tk wants the main thread of its own process,
+    and the server answers from worker threads."""
+    done = subprocess.run(
+        [sys.executable, "-m", "coverlyric", "pick-folder", str(start)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    picked = done.stdout.strip()
+    return Path(picked) if done.returncode == 0 and picked else None
+
+
 def open_folder(path: Path) -> None:
     if sys.platform == "win32":
         os.startfile(path)
@@ -866,6 +931,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 elif url.path == "/api/open":
                     open_folder(app.output)
                     self.json({"ok": True})
+                elif url.path == "/api/output":
+                    folder = json.loads(self.body() or b"{}").get("folder")
+                    self.json(app.pick_output() if folder is None else app.set_output(str(folder)))
+                elif url.path == "/api/save-timing":
+                    self.json(app.save_timing(query.get("fmt", ["srt"])[0]))
                 elif url.path == "/api/quit":
                     app.stop_render()
                     app.stop_auto()

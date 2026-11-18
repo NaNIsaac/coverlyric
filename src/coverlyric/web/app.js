@@ -384,12 +384,37 @@ function fillLook() {
   select.value = s.font;
 }
 
+// The folder's last two parts fit the footer; the whole path is in the tooltip.
+function showOutput() {
+  const parts = (state.output || "").split(/[\\/]/).filter(Boolean);
+  $("out-path").textContent = parts.slice(-2).join("\\");
+  $("out-path").title = state.output || "";
+  $("out-default").hidden = state.output_default !== false;
+}
+
+async function chooseOutput(body) {
+  try {
+    const s = await (await api("/api/output", { method: "POST", body: JSON.stringify(body) })).json();
+    state.output = s.output;
+    state.output_default = s.output_default;
+    showOutput();
+  } catch (e) { toast(e.message, 6000); }
+}
+
+async function saveTiming(fmt) {
+  try {
+    const saved = await (await api(`/api/save-timing?fmt=${fmt}`, { method: "POST" })).json();
+    toast(`저장했습니다: ${saved.path}`, 8000, { label: "폴더 열기", run: () => api("/api/open", { method: "POST" }) });
+  } catch (e) { toast(e.message, 6000); }
+}
+
 function fillAll() {
   $("title").value = state.title;
   $("artist").value = state.artist;
   $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
   $("art-name").textContent = state.has_art ? "표지 있음" : "정사각형 권장";
   updateStatus();
+  showOutput();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
   else $("player").removeAttribute("src");
   $("time").max = Math.max(1, state.duration || 60);
@@ -832,7 +857,10 @@ async function pollAuto() {
       const sung = lyricIndex.length;
       const bad = job.notes.filter((n) => n.kind !== "differs").length;
       const smaller = job.smaller ? ` 메모리가 부족해 더 작은 모델(${job.smaller})로 맞췄으니 시간을 한 번 더 확인합니다.` : "";
-      toast(`${sung}줄 중 ${sung - bad}줄의 시간을 찾았습니다.${bad ? ` 확인이 필요한 줄 ${bad}개를 표시했습니다.` : ""}${smaller}`, 10000);
+      const said = `${sung}줄 중 ${sung - bad}줄의 시간을 찾았습니다.${bad ? ` 확인이 필요한 줄 ${bad}개를 표시했습니다.` : ""}${smaller}`;
+      toast(said, 10000);
+      $("auto-done-text").textContent = said;
+      $("auto-done").hidden = false;
       loadModels();
     } else if (job.state === "error" && pollAuto.waiting) {
       pollAuto.waiting = false;
@@ -954,7 +982,7 @@ async function pollRender() {
   $("make").disabled = false;
   if (job.state === "done") {
     $("done").hidden = false;
-    $("done-name").textContent = job.out.split(/[\\/]/).pop();
+    $("done-name").textContent = (job.files || [job.out.split(/[\\/]/).pop()]).join(", ");
     $("done-note").textContent = job.note || "";
     $("done-note").hidden = !job.note;
   } else if (job.state === "error") {
@@ -1130,6 +1158,7 @@ function bind() {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       await api("/api/auto", { method: "POST", body: JSON.stringify({ model }) });
       $("auto-failed").hidden = true;
+      $("auto-done").hidden = true;
       pollAuto.before = state.lines.map((row) => [...row]);
       pollAuto.waiting = true;
       pollAuto();
@@ -1275,6 +1304,11 @@ function bind() {
     await api("/api/render/stop", { method: "POST" });
   });
   $("open-folder").addEventListener("click", () => api("/api/open", { method: "POST" }));
+  $("out-open").addEventListener("click", () => api("/api/open", { method: "POST" }));
+  $("out-pick").addEventListener("click", () => chooseOutput({}));
+  $("out-default").addEventListener("click", () => chooseOutput({ folder: "" }));
+  for (const id of ["save-lrc", "save-srt"]) $(id).addEventListener("click", (e) => saveTiming(e.currentTarget.dataset.fmt));
+  $("auto-save-srt").addEventListener("click", () => saveTiming("srt"));
 
   $("demo").addEventListener("click", async () => {
     if (state.has_audio && !confirm("지금 작업 대신 데모 노래를 불러오시겠습니까?")) return;
