@@ -775,7 +775,8 @@ function timeLeft(seconds) {
 async function loadModels() {
   const data = await (await api("/api/auto")).json();
   const m = data.models.small;
-  $("auto-size").textContent = m.ready ? "듣기 모델 준비됨." : `첫 사용 시 듣기 모델 ${size(m.size_mb)} 내려받기.`;
+  $("auto-size").textContent = m.ready ? "" : `처음 한 번 듣기 모델 ${size(m.size_mb)} 내려받기`;
+  $("auto-size").hidden = m.ready;
   return data;
 }
 
