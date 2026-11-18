@@ -1,5 +1,6 @@
-"""Command line: `coverlyric` opens the page; `render` and `still` work from a project file for scripts
-and tests."""
+"""Command line: `coverlyric` opens the page; `project`, `render` and `still` (in cli.py) work on
+project folders for people and agents; `render-job`, `auto-job` and `pick-folder` are the page's
+child processes."""
 
 from __future__ import annotations
 
@@ -11,60 +12,9 @@ import sys
 import traceback
 from pathlib import Path
 
-from PIL import Image
-
-from . import __version__, media, render, timing
+from . import __version__, cli, media, render, timing
+from .jobs import beside, failure, place, workers
 from .project import Project
-
-BASE_MB = 250  # kept free; encoder and main process measured about 320 MB with one worker
-WORKER_MB = 150  # each extra worker measured about 120 MB in a 60 s 1080p render (issue #3)
-# Under this much free memory at most two workers: the render is bound by the encoder, and on a
-# 16 GB PC a 60 s part took 65.6 s with two workers at 993 MB against 62.6 s with four at 1831 MB.
-LOW_MB, LOW_WORKERS = 2048, 2
-# For any failure memory could cause; the raw system text stays in coverlyric.log (#12).
-MEMORY_ERROR = "메모리가 부족해 영상을 만들지 못했습니다. 다른 프로그램을 닫고 다시 만듭니다."
-
-
-def workers() -> int:
-    """Render processes: one core is left for the encoder and the page, and the memory available
-    when the render starts must hold the encoder plus every worker. That is free physical memory,
-    or on Windows the commit still available when it is less (#12). Under LOW_MB there are at most
-    two, and with less than the encoder needs, one."""
-    try:
-        given = int(os.environ.get("COVERLYRIC_WORKERS") or 0)
-    except ValueError:
-        given = 0  # not a number: decide from this PC rather than fail every render
-    if given > 0:
-        return min(8, given)
-    _, available = media.memory_mb()
-    if (commit := media.commit_mb()) is not None:
-        available = min(available, commit) if available else commit
-    by_memory = int((available - BASE_MB) // WORKER_MB) if available else 6
-    if available and available < LOW_MB:
-        by_memory = min(by_memory, LOW_WORKERS)
-    return max(1, min(6, (os.cpu_count() or 2) - 1, by_memory))
-
-
-def failure(e: BaseException) -> str:
-    """One line for the page: what failed and what to do."""
-    if render.out_of_memory(e):
-        return MEMORY_ERROR
-    return str(e) or type(e).__name__
-
-
-def place(part: Path, out: Path) -> Path:
-    """Move the finished part file to `out`, or to `out (2)` and on when a player holds the old
-    video open, which on Windows blocks replacing it."""
-    for n in range(1, 100):
-        target = out if n == 1 else out.with_name(f"{out.stem} ({n}){out.suffix}")
-        try:
-            part.replace(target)
-        except PermissionError:
-            continue
-        return target
-    raise PermissionError(
-        f"{out.name} 파일을 쓸 수 없습니다. 영상을 연 프로그램을 닫고 다시 만듭니다."
-    )
 
 
 def run_job(path: Path) -> None:
@@ -112,15 +62,7 @@ def run_job(path: Path) -> None:
     print(f"out {out}", flush=True)
     if clip:
         return
-    first = next((t for t, text in lines if text), 0.0)
-    still = render.frame(min(song.duration, first + 0.6), lines, song, project.style)
-    still.resize((1280, 720), Image.LANCZOS).save(out.with_suffix(".png"))
-    # The timing files go with the video, so they are on its clock, after the silence before the song.
-    timed, video = render.padded(tuple(project.lines), song, project.style)
-    out.with_suffix(".lrc").write_text(
-        timing.to_lrc(list(timed), project.title, project.artist), encoding="utf-8"
-    )
-    out.with_suffix(".srt").write_text(timing.to_srt(list(timed), video.duration), encoding="utf-8")
+    beside(out, project, lines, song)
 
 
 def run_auto(path: Path) -> None:
@@ -186,26 +128,18 @@ def main(argv: list[str] | None = None) -> None:
     app.add_argument("--home", type=Path, help="folder for work and finished videos")
     app.add_argument("--port", type=int, default=0)
     app.add_argument("--no-browser", action="store_true")
-    r = sub.add_parser("render", help="render a project file to an mp4")
-    r.add_argument("project", type=Path)
-    r.add_argument("--out", type=Path, required=True)
-    r.add_argument("--clip", help="start,end in seconds")
-    s = sub.add_parser("still", help="one frame of a project file as a PNG")
-    s.add_argument("project", type=Path)
-    s.add_argument("--at", type=float, default=0.0, help="time in seconds")
-    s.add_argument("--out", type=Path, required=True)
+    cli.add_commands(sub)
     job = sub.add_parser("render-job")
     job.add_argument("job", type=Path)
     auto_job = sub.add_parser("auto-job")
     auto_job.add_argument("job", type=Path)
     pick = sub.add_parser("pick-folder")
     pick.add_argument("start", type=Path)
-    args = parser.parse_args(argv)
-    # A pipe or file gets the locale code page on Windows (cp1252 on many PCs), which cannot
-    # write Korean; the page reads the job pipes as UTF-8.
+    # A pipe, a file or an old console gets the locale code page on Windows (cp1252 or cp949),
+    # which cannot write every Korean line; the page reads the job pipes as UTF-8.
     for stream in (sys.stdout, sys.stderr):
-        if not stream.isatty():
-            stream.reconfigure(encoding="utf-8", errors="replace")
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    args = parser.parse_args(argv)
 
     if args.command in (None, "app"):
         from .server import serve
@@ -215,21 +149,8 @@ def main(argv: list[str] | None = None) -> None:
             "COVERLYRIC_NO_BROWSER"
         )
         serve(home.resolve(), getattr(args, "port", 0), browser)
-    elif args.command == "render":
-        project = Project.load(args.project)
-        span = tuple(float(x) for x in args.clip.split(",")) if args.clip else None
-        render.render(
-            args.out,
-            tuple(timing.ready(project.lines)),
-            project.song(),
-            project.style,
-            workers(),
-            span,
-            report=lambda done, total, *_: print(f"{done:6.1f}s of {total:.1f}s", flush=True),
-        )
-    elif args.command == "still":
-        project = Project.load(args.project)
-        render.frame(args.at, project.preview_lines(), project.song(), project.style).save(args.out)
+    elif args.command in ("render", "still", "project"):
+        sys.exit(cli.main(args))
     elif args.command == "auto-job":
         try:
             run_auto(args.job)

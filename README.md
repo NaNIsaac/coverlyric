@@ -64,13 +64,15 @@
 
 ## 명령줄
 
-[uv](https://docs.astral.sh/uv/)가 있으면 저장소 폴더에서 데모 노래의 한 장면을 그립니다.
+[uv](https://docs.astral.sh/uv/)가 있으면 페이지 없이 명령으로도 만듭니다. 데모 노래로 프로젝트
+폴더를 만들고 한 장면을 그립니다. 명령 전체는 [명령줄](docs/cli.md)에 있습니다.
 
 <!-- test -->
 ```sh
-uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
+uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
+uv run coverlyric still demo-song --at 7
 ```
 
 ## 더 보기
 
-[자세한 사용법](docs/guide.md) · [명령줄](docs/cli.md) · 라이선스: 코드 MIT, 글꼴 SIL OFL 1.1
+[자세한 사용법](docs/guide.md) · [명령줄](docs/cli.md) · [에이전트용](docs/agents.md) · 라이선스: 코드 MIT, 글꼴 SIL OFL 1.1
