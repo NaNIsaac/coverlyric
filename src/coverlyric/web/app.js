@@ -14,7 +14,8 @@ const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 
 
 let state = null;
 let diff = [];
-let notes = {};
+let notes = {}; // lines to check: not found, or within 1 s of the line before
+let heard = {}; // lines heard differently, shown only on hover
 let checkAt = -1; // the line the 확인할 줄 bar points at
 let tapIndex = -1;
 let tapUndo = [];
@@ -446,6 +447,7 @@ function drawLines() {
       <button class="quiet" data-a="del" title="이 줄 지우기">✕</button>`;
     row.querySelector(".x").value = text;
     if (i === checkAt) row.classList.add("checking");
+    if (heard[i]) row.title = `들린 글자: ${heard[i]}`;
     if (diff[i] != null) {
       const mine = document.createElement("div");
       mine.className = "mine";
@@ -496,6 +498,7 @@ function drawLines() {
         const [gone] = state.lines.splice(i, 1);
         const [goneDiff] = diff.splice(i, 1);
         notes = {};
+        heard = {};
         showCheck();
         drawLines();
         scheduleSync();
@@ -775,6 +778,7 @@ async function importText(name, text) {
   state.lines = data.lines;
   diff = data.diff;
   notes = {};
+  heard = {};
   showCheck();
   tapIndex = -1;
   drawLines();
@@ -868,13 +872,13 @@ async function pollAuto() {
       state.lines = job.lines;
       diff = [];
       notes = {};
+      heard = {};
       const lyricIndex = [];
       job.lines.forEach(([, text], i) => { if (text) lyricIndex.push(i); });
       for (const n of job.notes) {
         const at = lyricIndex[n.line];
-        notes[at] = n.kind === "unplaced" ? "못 찾음, 앞뒤 줄 사이에 둠"
-          : n.kind === "doubtful" ? "앞 줄과 1초 안"
-          : `다르게 들림: ${n.heard}`;
+        if (n.kind === "differs") heard[at] = n.heard;
+        else notes[at] = n.kind === "unplaced" ? "못 찾음, 앞뒤 줄 사이에 둠" : "앞 줄과 1초 안";
       }
       checkAt = -1;
       showCheck();
