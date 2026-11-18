@@ -47,6 +47,7 @@
     <button class="rail-tab" role="tab" id="tab-lyrics" data-group="lyrics" aria-controls="g-lyrics"><svg class="i"><use href="#i-lines"/></svg><span>가사</span><i class="dot" id="dot-lyrics"></i></button>
     <button class="rail-tab" role="tab" id="tab-look" data-group="look" aria-controls="g-look"><svg class="i"><use href="#i-sliders"/></svg><span>모양</span><i class="dot" id="dot-look"></i></button>
     <button class="rail-tab" role="tab" id="tab-colour" data-group="colour" aria-controls="g-colour"><svg class="i"><use href="#i-palette"/></svg><span>색</span><i class="dot" id="dot-colour"></i></button>
+    <button class="rail-tab" role="tab" id="tab-make" data-group="make" aria-controls="g-make"><svg class="i"><use href="#i-film"/></svg><span>만들기</span></button>
   </nav>
   <section class="steps">
     <section class="pane" id="g-files" role="tabpanel" aria-labelledby="tab-files">
@@ -238,59 +239,60 @@
         </fieldset>
       </div>
     </section>
-  </section>
 
-  <section class="make" id="step-make" aria-label="영상 만들기">
-    <div class="output-options" id="output-options">
-      <label class="field">화질
-        <select id="height">
-          <option value="1080">1080p</option>
-          <option value="720">720p (더 빠름)</option>
-        </select>
-      </label>
-      <label class="field">1초에 장면
-        <select id="fps">
-          <option value="24">24장</option>
-          <option value="30">30장</option>
-        </select>
-      </label>
-      <label class="field" title="노래가 시작하기 전에 소리 없이 표지와 제목만 보이는 시간">앞 공백 (초)
-        <input type="number" id="lead" min="0" max="10" step="0.5">
-      </label>
-      <label class="field" title="노래가 끝난 뒤 소리 없이 마지막 화면이 이어지는 시간">뒤 공백 (초)
-        <input type="number" id="tail" min="0" max="10" step="0.5">
-      </label>
-    </div>
-    <div class="out-dir">
-      <span class="out-label">저장 위치</span>
-      <span id="out-path" class="out-path"></span>
-      <button id="out-pick" class="quiet small" title="영상과 자막 파일을 저장할 폴더를 고릅니다">바꾸기</button>
-      <button id="out-open" class="quiet small" title="저장 위치 폴더를 엽니다">열기</button>
-      <button id="out-default" class="quiet small" title="프로그램 폴더의 '만든 영상'으로 되돌립니다" hidden>기본으로</button>
-    </div>
-    <div class="make-row">
-      <button id="clip-make" title="미리보기 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-play"/></svg><span id="clip-label">10초 미리보기</span></button>
-      <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
-    </div>
-    <p class="note">걸리는 시간: 노래 길이 정도 또는 그보다 짧게</p>
-    <div id="progress" hidden>
-      <div class="progress-head">
-        <span class="state">영상 만드는 중</span>
-        <span id="progress-song" class="clock"></span>
+    <section class="pane make" id="g-make" role="tabpanel" aria-labelledby="tab-make" hidden>
+      <h2 class="pane-head">만들기</h2>
+      <div class="output-options" id="output-options">
+        <label class="field">화질
+          <select id="height">
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+          </select>
+        </label>
+        <label class="field">1초에 장면
+          <select id="fps">
+            <option value="24">24장</option>
+            <option value="30">30장</option>
+          </select>
+        </label>
+        <label class="field">앞 공백 (초)
+          <input type="number" id="lead" min="0" max="10" step="0.5">
+        </label>
+        <label class="field">뒤 공백 (초)
+          <input type="number" id="tail" min="0" max="10" step="0.5">
+        </label>
       </div>
-      <progress id="progress-bar" max="1" value="0"></progress>
-      <p id="progress-line" class="progress-line" title="여기까지 만든 곳의 가사"></p>
-      <div class="progress-foot">
-        <span id="progress-text" class="note"></span>
-        <button id="make-stop" class="quiet"><svg class="i"><use href="#i-stop"/></svg>그만 만들기</button>
+      <div class="out-dir">
+        <span class="out-label">저장 위치</span>
+        <span id="out-path" class="out-path"></span>
+        <button id="out-pick" class="quiet small" title="영상과 자막 파일을 저장할 폴더를 고릅니다">바꾸기</button>
+        <button id="out-open" class="quiet small" title="저장 위치 폴더를 엽니다">열기</button>
+        <button id="out-default" class="quiet small" title="프로그램 폴더의 '만든 영상'으로 되돌립니다" hidden>기본으로</button>
       </div>
-    </div>
-    <p id="make-error" class="warn" role="alert" hidden></p>
-    <div id="done" hidden>
-      <p class="done-line"><svg class="i"><use href="#i-check"/></svg>완료: <span id="done-name"></span></p>
+      <div class="make-row">
+        <button id="clip-make" title="미리보기 시점부터 10초"><span id="clip-label">10초 미리보기</span></button>
+        <button id="make" class="primary">영상 만들기</button>
+      </div>
+      <div id="progress" hidden>
+        <div class="progress-head">
+          <span class="state">영상 만드는 중</span>
+          <span id="progress-song" class="clock"></span>
+        </div>
+        <progress id="progress-bar" max="1" value="0"></progress>
+        <p id="progress-line" class="progress-line" title="여기까지 만든 곳의 가사"></p>
+        <div class="progress-foot">
+          <span id="progress-text" class="note"></span>
+          <button id="make-stop" class="quiet">그만 만들기</button>
+        </div>
+      </div>
+      <p id="make-error" class="warn" role="alert" hidden></p>
+      <div id="done" class="done-line" hidden>
+        <span id="done-name"></span>
+        <button id="done-play" class="quiet small">재생</button>
+        <button id="open-folder" class="quiet small">폴더 열기</button>
+      </div>
       <p class="note" id="done-note" hidden></p>
-      <button id="open-folder"><svg class="i"><use href="#i-folder"/></svg>영상 폴더 열기</button>
-    </div>
+    </section>
   </section>
 
   <section class="preview">

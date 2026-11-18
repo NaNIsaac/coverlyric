@@ -751,6 +751,14 @@ def open_folder(path: Path) -> None:
         subprocess.Popen(["xdg-open", str(path)])
 
 
+def open_video(job: dict) -> None:
+    """The finished video in the computer's own player."""
+    out = Path(job["out"]) if job.get("state") == "done" else None
+    if not out or not out.exists():
+        raise ValueError("만든 영상이 없습니다.")
+    open_folder(out)
+
+
 def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args) -> None:
@@ -935,6 +943,9 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     self.json(app.reset())
                 elif url.path == "/api/open":
                     open_folder(app.output)
+                    self.json({"ok": True})
+                elif url.path == "/api/open-video":
+                    open_video(app.job)
                     self.json({"ok": True})
                 elif url.path == "/api/output":
                     folder = json.loads(self.body() or b"{}").get("folder")
