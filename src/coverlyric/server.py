@@ -345,7 +345,9 @@ class App:
         self.stop_clip()  # the video wins over a look at it
         if self.auto.get("state") == "running":
             # Both at once need about 2 GB, more than a 4 GB PC has free.
-            raise ValueError("자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤에 영상을 만들 수 있습니다.")
+            raise ValueError(
+                "자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤에 영상을 만들 수 있습니다."
+            )
         p = self.project
         if not p.audio or not p.art:
             raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")
@@ -436,7 +438,9 @@ class App:
         if self.clip.get("state") == "running":
             return self.clip
         if self.job.get("state") == "running" or self.auto.get("state") == "running":
-            raise ValueError("영상 만들기나 자동 맞추기가 끝난 뒤에 미리보기 영상을 만들 수 있습니다.")
+            raise ValueError(
+                "영상 만들기나 자동 맞추기가 끝난 뒤에 미리보기 영상을 만들 수 있습니다."
+            )
         p = self.project
         if not p.audio or not p.art:
             raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")

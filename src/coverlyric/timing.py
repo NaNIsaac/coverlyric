@@ -19,17 +19,24 @@ SECTION = re.compile(
     r"^\s*[\[(](?:verse|chorus|bridge|intro|outro|hook|pre-chorus|inst)[^\])]*[\])]\s*$",
     re.IGNORECASE,
 )
+BRACKETS = re.compile(r"\[[^\]]*\]")
+
+
+def sung(line: str) -> str:
+    """The words of a lyric line that are sung. Square-bracket notes such as Suno's
+    "[Verse 1 — Conversational, rhythmic]" are removed, a line starting with # is a comment and
+    becomes empty, and a whole-line section tag such as (Chorus) is dropped. Round brackets inside a
+    line, such as "(echo)", are sung and stay."""
+    line = line.strip()
+    if line.startswith("#") or SECTION.match(line):
+        return ""
+    return " ".join(BRACKETS.sub(" ", line).split())
 
 
 def from_text(text: str) -> list[Line]:
-    """One line per non-empty line of the pasted lyrics, without times. Section tags such as [Chorus]
-    are dropped: they are not sung."""
-    out = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if line and not SECTION.match(line):
-            out.append((None, line))
-    return out
+    """One line per sung line of the pasted lyrics, without times. Blank lines, # comments and lines
+    that are only [..] tags are dropped."""
+    return [(None, line) for raw in text.splitlines() if (line := sung(raw))]
 
 
 def parse_lrc(text: str) -> list[Line]:
@@ -38,8 +45,8 @@ def parse_lrc(text: str) -> list[Line]:
         stamps = list(STAMP.finditer(raw))
         if not stamps:
             continue
-        words = raw[stamps[-1].end() :].strip()
-        words = re.sub(r"<\d+:\d+(?:\.\d+)?>", "", words).strip()  # enhanced LRC word stamps
+        words = raw[stamps[-1].end() :]
+        words = sung(re.sub(r"<\d+:\d+(?:\.\d+)?>", "", words))  # enhanced LRC word stamps
         for m in stamps:
             rows.append((int(m[1]) * 60 + float(m[2].replace(":", ".")), words))
     return sorted(rows, key=lambda r: r[0])
@@ -61,7 +68,7 @@ def parse_cues(text: str) -> list[Line]:
             if m := CUE_TIME.search(raw):
                 start = cue_seconds(*m.groups()[:4])
                 end = cue_seconds(*m.groups()[4:])
-                words = " ".join(TAG.sub("", b).strip() for b in block[i + 1 :] if b.strip())
+                words = " ".join(w for b in block[i + 1 :] if (w := sung(TAG.sub("", b))))
                 if ends and start - ends[-1] > 1.0:
                     rows.append((ends[-1], ""))
                 rows.append((start, words))

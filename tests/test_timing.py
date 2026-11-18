@@ -84,3 +84,40 @@ def test_ready_rejects_untimed_lines():
 def test_prompt_holds_the_lyrics_and_the_count():
     text = timing.ai_prompt(["가", "나", "다"], "노래")
     assert "SRT" in text and "3개" in text and text.rstrip().endswith("가\n나\n다")
+
+
+SUNO = """[Intro]
+
+[Verse 1 — Conversational, rhythmic]
+창문을 열면 바람이 불어
+# 여기는 2절 앞에 쉬는 곳
+너의 이름을 불러 (echo)
+
+[Instrumental — Wistful guitar solo]
+
+[Chorus]
+우리 다시 만나 [softly] 그 길에서
+"""
+
+
+def test_suno_tags_and_hash_lines_are_not_lyrics():
+    assert timing.parse("lyrics.txt", SUNO) == [
+        (None, "창문을 열면 바람이 불어"),
+        (None, "너의 이름을 불러 (echo)"),
+        (None, "우리 다시 만나 그 길에서"),
+    ]
+
+
+def test_tags_in_a_pasted_chat_answer_leave_a_gap():
+    answer = (
+        "1\n00:00:03,000 --> 00:00:06,000\n[Verse 1 — Conversational, rhythmic]\n창문을 열면\n\n"
+        "2\n00:00:06,000 --> 00:00:09,000\n[Instrumental — Wistful guitar solo]\n"
+    )
+    assert timing.parse("answer.srt", answer) == [(3.0, "창문을 열면"), (6.0, "")]
+
+
+def test_tags_in_lrc_lines():
+    assert timing.parse("x.lrc", "[00:01.00][Chorus] 후렴\n[00:05.00]# 메모\n") == [
+        (1.0, "후렴"),
+        (5.0, ""),
+    ]
