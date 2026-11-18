@@ -102,10 +102,11 @@
       </div>
       <button class="next-step quiet" data-next="deco">꾸미기 →</button>
     </section>
-    <section class="pane" id="g-look" role="tabpanel" aria-labelledby="tab-deco" hidden>
-      <h2 class="pane-head">모양</h2>
-      <fieldset class="group">
-        <legend>앨범</legend>
+    <section class="pane" id="g-deco" role="tabpanel" aria-labelledby="tab-deco" hidden>
+      <h2 class="pane-head">꾸미기</h2>
+      <div class="looks" id="looks" role="radiogroup" aria-label="모양"></div>
+      <details class="fold">
+        <summary>앨범<small id="sum-album"></small></summary>
         <div class="seg">
           <label><input type="radio" name="layout" value="case" checked> CD 케이스</label>
           <label><input type="radio" name="layout" value="disc"> 둥근 표지</label>
@@ -115,17 +116,50 @@
         <label class="fps" title="앨범을 세로축으로 돌려 비스듬히 봅니다. 0이면 정면"><span>기울기 <b id="tilt-label">0</b>°</span><input type="range" id="tilt" min="-40" max="40" step="1"></label>
         <label class="slider">바닥 그림자<input type="range" id="floor" min="0" max="1" step="0.05"></label>
         <label class="check"><input type="checkbox" id="reflection"> 바닥에 비친 모습 (CD 케이스)</label>
-      </fieldset>
-      <fieldset class="group">
-        <legend>글자와 재생 바</legend>
+      </details>
+      <details class="fold">
+        <summary>글자<small id="sum-text"></small></summary>
         <label class="field">글꼴
           <select id="font"></select>
         </label>
         <label class="file-button small">다른 글꼴 파일...<input type="file" id="font-file" accept=".ttf,.otf,.ttc"></label>
         <label class="check"><input type="checkbox" id="show_title"> 제목과 가수 보이기</label>
         <label class="check"><input type="checkbox" id="bar"> 재생 바 넣기</label>
-        <label class="check" title="시작 0.5초, 끝 1.5초 동안 화면과 소리가 서서히 바뀝니다"><input type="checkbox" id="fade"> 시작·끝 페이드</label>
-        <label class="field" title="영상 처음에 제목과 가수를 크게 보여 준 뒤 평소 화면으로 바뀝니다. 첫 가사가 나오면 끝납니다">시작 제목 화면
+        <div class="grid">
+          <label class="color">글자 색<input type="color" id="lyric_colour"></label>
+          <label class="field">테두리
+            <select id="lyric_edge">
+              <option value="none">없음</option>
+              <option value="outline">외곽선</option>
+              <option value="shadow">그림자</option>
+            </select>
+          </label>
+          <label class="color" id="lyric-edge-colour-row">테두리 색<input type="color" id="lyric_edge_colour"></label>
+        </div>
+      </details>
+      <details class="fold">
+        <summary>색과 배경<small id="sum-colour"></small></summary>
+        <div class="grid">
+          <div class="band-row">
+            <label class="color">띠 색<input type="color" id="band"></label>
+            <button id="band-cover" class="quiet small" title="표지에서 가장 눈에 띄는 색을 띠 색으로 씁니다">표지 색으로</button>
+          </div>
+          <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
+          <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
+          <label>가장자리 어둡게<input type="range" id="vignette" min="0" max="1" step="0.05"></label>
+        </div>
+        <div class="seg tones">
+          <label><input type="radio" name="tone" value="none" checked> 그대로</label>
+          <label><input type="radio" name="tone" value="warm"> 따뜻하게</label>
+          <label><input type="radio" name="tone" value="cool"> 차갑게</label>
+          <label><input type="radio" name="tone" value="mono"> 흑백</label>
+          <label><input type="radio" name="tone" value="cover" title="표지에서 가장 눈에 띄는 색으로 배경을 물들입니다"> 표지 색</label>
+        </div>
+      </details>
+      <details class="fold">
+        <summary>시작과 끝<small id="sum-ends"></small></summary>
+        <label class="check"><input type="checkbox" id="fade"> 시작·끝 페이드</label>
+        <label class="field">시작 제목 화면
           <select id="intro">
             <option value="0">없음</option>
             <option value="2">2초</option>
@@ -134,9 +168,9 @@
             <option value="5">5초</option>
           </select>
         </label>
-      </fieldset>
-      <fieldset class="group" id="anim-group">
-        <legend>움직이는 그림</legend>
+      </details>
+      <details class="fold" id="anim-group">
+        <summary>움직이는 그림<small id="sum-anim"></small></summary>
         <label class="file-button small">움직이는 그림 추가<input type="file" id="anim-file" accept=".gif,.png,.jpg,.jpeg,.webp" multiple></label>
         <div id="anim-panel" hidden>
           <ol class="frames" id="anim-list"></ol>
@@ -144,9 +178,9 @@
           <label class="check"><input type="checkbox" id="anim_above"> 앨범과 가사 위에 보이기</label>
           <button id="anim-clear" class="quiet">움직이는 그림 빼기</button>
         </div>
-      </fieldset>
-      <fieldset class="group">
-        <legend>위치와 크기</legend>
+      </details>
+      <details class="fold">
+        <summary>위치와 크기<small id="sum-place"></small></summary>
         <table class="places">
           <thead><tr><th></th><th>가로</th><th>세로</th><th>크기</th></tr></thead>
           <tbody>
@@ -158,48 +192,8 @@
           </tbody>
         </table>
         <button id="reset-look" class="quiet">위치·크기 처음대로</button>
-      </fieldset>
-    </section>
-    <section class="pane" id="g-colour" role="tabpanel" aria-labelledby="tab-deco" hidden>
-      <h2 class="pane-head">색</h2>
-      <fieldset class="group">
-        <legend>가사 띠와 배경</legend>
-        <div class="grid">
-          <div class="band-row">
-            <label class="color">띠 색<input type="color" id="band"></label>
-            <button id="band-cover" class="quiet small" title="표지에서 가장 눈에 띄는 색을 띠 색으로 씁니다">표지 색으로</button>
-          </div>
-          <label>배경 흐림<input type="range" id="blur" min="0" max="60" step="1"></label>
-          <label>배경 어둡게<input type="range" id="dim" min="0" max="0.9" step="0.05"></label>
-          <label>가장자리 어둡게<input type="range" id="vignette" min="0" max="1" step="0.05"></label>
-        </div>
-      </fieldset>
-      <fieldset class="group">
-        <legend>배경 색감</legend>
-        <div class="seg tones">
-          <label><input type="radio" name="tone" value="none" checked> 그대로</label>
-          <label><input type="radio" name="tone" value="warm"> 따뜻하게</label>
-          <label><input type="radio" name="tone" value="cool"> 차갑게</label>
-          <label><input type="radio" name="tone" value="mono"> 흑백</label>
-          <label><input type="radio" name="tone" value="cover" title="표지에서 가장 눈에 띄는 색으로 배경을 물들입니다"> 표지 색</label>
-        </div>
-      </fieldset>
-      <div id="colour-more">
-        <fieldset class="group">
-          <legend>글자 (가사, 제목, 가수)</legend>
-          <div class="grid">
-            <label class="color">글자 색<input type="color" id="lyric_colour"></label>
-            <label class="field">테두리
-              <select id="lyric_edge">
-                <option value="none">없음</option>
-                <option value="outline">외곽선</option>
-                <option value="shadow">그림자</option>
-              </select>
-            </label>
-            <label class="color" id="lyric-edge-colour-row">테두리 색<input type="color" id="lyric_edge_colour"></label>
-          </div>
-        </fieldset>
-      </div>
+      </details>
+      <button class="fold-row" id="deco-clip">여기서 10초 재생<small>▶</small></button>
       <button class="next-step quiet" data-next="make">만들기 →</button>
     </section>
 

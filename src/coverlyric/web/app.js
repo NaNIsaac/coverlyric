@@ -61,6 +61,7 @@ function payload() {
 }
 
 function scheduleSync(delay = 150) {
+  sumDeco();
   clearTimeout(syncTimer);
   syncTimer = setTimeout(sync, delay);
 }
@@ -349,6 +350,63 @@ async function addAnim(files) {
   }
 }
 
+let looks = null; // {name: style keys} from the server, with the cards' stills
+
+// The value each folded 꾸미기 section holds now, shown on its closed header.
+function sumDeco() {
+  if (!state) return;
+  const s = state.style;
+  const font = $("font").selectedOptions[0];
+  const tone = document.querySelector(`input[name="tone"][value="${s.tone}"]`);
+  const moved = ["album", "panel", "title", "bar", "anim"].some((el) => s[`${el}_x`] || s[`${el}_y`] || s[`${el}_scale`] !== 1);
+  $("sum-album").textContent = s.layout === "case" ? "CD 케이스" : "둥근 표지";
+  $("sum-text").textContent = font ? font.textContent : "";
+  $("sum-colour").textContent = tone ? tone.parentElement.textContent.trim() : "";
+  $("sum-ends").textContent = [s.fade ? "페이드" : "", s.intro ? `제목 ${s.intro}초` : ""].filter(Boolean).join(" · ") || "없음";
+  $("sum-anim").textContent = state.anim && state.anim.length ? `${state.anim.length}장` : "없음";
+  $("sum-place").textContent = moved ? "바꿈" : "처음대로";
+  if (looks) {
+    for (const card of document.querySelectorAll(".look")) {
+      const on = Object.entries(looks[card.dataset.look]).every(([k, v]) => s[k] === v);
+      card.classList.toggle("on", on);
+      card.setAttribute("aria-checked", String(on));
+    }
+  }
+}
+
+async function loadLooks() {
+  if (!state || !state.has_art) return;
+  try {
+    const data = await (await api(`/api/looks?t=${Number($("time").value)}`, { method: "POST", body: JSON.stringify(payload()) })).json();
+    looks = data.looks;
+    const holder = $("looks");
+    holder.innerHTML = "";
+    for (const name of Object.keys(looks)) {
+      const card = document.createElement("button");
+      card.className = "look";
+      card.dataset.look = name;
+      card.setAttribute("role", "radio");
+      card.innerHTML = `<img alt=""><span></span>`;
+      card.querySelector("img").src = data.stills[name];
+      card.querySelector("span").textContent = name;
+      card.addEventListener("click", () => {
+        Object.assign(state.style, looks[name]);
+        fillLook();
+        scheduleSync(0);
+      });
+      holder.append(card);
+    }
+    sumDeco();
+  } catch (e) { toast(e.message); }
+}
+
+function clipLabel(text, busy) {
+  $("clip-label").textContent = text;
+  $("clip-make").disabled = busy;
+  $("deco-clip").firstChild.textContent = text === "10초 미리보기" ? "여기서 10초 재생" : text;
+  $("deco-clip").disabled = busy;
+}
+
 function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
@@ -386,6 +444,7 @@ function fillLook() {
     select.add(o);
   }
   select.value = s.font;
+  sumDeco();
 }
 
 // The folder's last two parts fit the footer; the whole path is in the tooltip.
@@ -1012,7 +1071,7 @@ function stopTap(pause = true) {
 
 // One step at a time; the line list under the preview belongs to the lyrics and timing steps.
 const GROUPS = ["files", "lyrics", "timing", "deco", "make"];
-const PANES = { files: ["g-files"], lyrics: ["g-lyrics"], timing: ["g-timing"], deco: ["g-look", "g-colour"], make: ["g-make"] };
+const PANES = { files: ["g-files"], lyrics: ["g-lyrics"], timing: ["g-timing"], deco: ["g-deco"], make: ["g-make"] };
 const OLD_GROUPS = { look: "deco", colour: "deco", "step-files": "files", "step-lyrics": "lyrics", "step-timing": "timing", "step-look": "deco" };
 
 function openGroup(name) {
@@ -1024,6 +1083,7 @@ function openGroup(name) {
   }
   document.querySelector(".steps").scrollTop = 0;
   document.body.classList.toggle("timing-open", name === "lyrics" || name === "timing");
+  if (name === "deco") loadLooks();
 }
 
 function bindRail() {
@@ -1089,22 +1149,19 @@ async function pollClip() {
     setTimeout(pollClip, 1000);
     return;
   }
-  const label = $("clip-label");
   if (job.state === "running") {
-    $("clip-make").disabled = true;
-    label.textContent = `만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`;
+    clipLabel(`만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`, true);
     showRenderPlace((job.at || 0) + (job.done || 0), videoLength());
     setTimeout(pollClip, 500);
     return;
   }
-  $("clip-make").disabled = false;
-  label.textContent = "10초 미리보기";
+  clipLabel("10초 미리보기", false);
   if (job.state === "done") {
     const video = $("clip");
     video.src = job.url;
     video.hidden = false;
     $("boxes").hidden = true;
-    label.textContent = "미리보기 닫기";
+    clipLabel("미리보기 닫기", false);
     video.play().catch(() => {});
     if (job.note) toast(job.note, 9000);
   } else if (job.state === "error") {
@@ -1191,6 +1248,7 @@ function bind() {
     showAt(t, 0);
   });
   $("check-prev").addEventListener("click", () => moveCheck(-1));
+  $("deco-clip").addEventListener("click", () => $("clip-make").click());
   $("check-next").addEventListener("click", () => moveCheck(1));
 
   $("tap-start").addEventListener("click", () => {

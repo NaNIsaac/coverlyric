@@ -3,6 +3,7 @@ folder, draws previews and runs the render in a child process."""
 
 from __future__ import annotations
 
+import base64
 import colorsys
 import importlib.util
 import io
@@ -28,7 +29,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import anim, auto, fonts, media, render, timing
+from . import anim, auto, fonts, looks, media, render, timing
 from .project import Project
 from .render import Style
 
@@ -353,6 +354,22 @@ class App:
         small.save(buf, "JPEG", quality=88)
         fits = render.line_fits(tuple(p.lines), p.style)
         return buf.getvalue(), render.boxes(p.style, t, song), fits
+
+    def look_stills(self, t: float, width: int = 320) -> dict:
+        """Each look's keys and a small JPEG of the frame at time t in it, for the 꾸미기 cards."""
+        p = self.project
+        if not p.art:
+            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
+        lines, song = render.padded(p.preview_lines(), p.song(), p.style)
+        t = render.video_time(t, p.style)
+        stills = {}
+        for name in looks.LOOKS:
+            with self.lock:
+                img = render.frame(t, lines, song, looks.apply(p.style, name))
+            buf = io.BytesIO()
+            img.resize((width, round(width * 9 / 16)), Image.LANCZOS).save(buf, "JPEG", quality=85)
+            stills[name] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        return {"looks": looks.LOOKS, "current": looks.current(p.style), "stills": stills}
 
     def band_from_cover(self) -> str:
         """The cover's own colour as #rrggbb for the lyric band, made darker (light lyrics) or lighter
@@ -924,6 +941,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     )
                     headers = {"X-Boxes": json.dumps(boxes), "X-Fit": json.dumps(fits)}
                     self.send(200, jpeg, "image/jpeg", headers)
+                elif url.path == "/api/looks":
+                    data = json.loads(self.body() or b"{}")
+                    if data:
+                        app.update(data)
+                    self.json(app.look_stills(float(query.get("t", ["0"])[0])))
                 elif url.path == "/api/render":
                     self.json(app.start_render())
                 elif url.path == "/api/auto":
