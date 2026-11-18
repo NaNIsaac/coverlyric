@@ -729,7 +729,8 @@ function markNear(x, width) {
 
 function bindWave() {
   const wave = $("wave");
-  let held = -1;
+  // A mark only moves once the pointer has gone 3 px, so a plain press never shifts a time by rounding.
+  let held = -1, downX = 0, from = null;
   const timeAt = (e) => Math.min(peaks.duration, Math.max(0, (e.offsetX / wave.clientWidth) * peaks.duration));
   wave.addEventListener("pointermove", (e) => {
     if (!peaks) return;
@@ -737,6 +738,8 @@ function bindWave() {
       wave.style.cursor = markNear(e.offsetX, wave.clientWidth) >= 0 ? "ew-resize" : "";
       return;
     }
+    if (from === null && Math.abs(e.offsetX - downX) < 3) return;
+    from ??= state.lines[held][0];
     const before = state.lines.slice(0, held).findLast(([t]) => t != null);
     const after = state.lines.slice(held + 1).find(([t]) => t != null);
     const low = before ? before[0] + 0.1 : 0;
@@ -750,6 +753,8 @@ function bindWave() {
     if (!peaks) return;
     held = markNear(e.offsetX, wave.clientWidth);
     if (held >= 0) {
+      downX = e.offsetX;
+      from = null;
       wave.setPointerCapture(e.pointerId);
       return;
     }
@@ -760,11 +765,17 @@ function bindWave() {
   });
   const release = () => {
     if (held < 0) return;
-    const i = held;
+    const i = held, t = state.lines[i][0];
     held = -1;
+    if (from === null || t === from) {
+      const p = $("player");
+      if (!p.paused) p.currentTime = t;
+      showAt(t, 0);
+      return;
+    }
     settle(i, $("lines").children[i]);
     updateCheck();
-    showAt(state.lines[i][0] + 0.3);
+    showAt(t + 0.3);
   };
   wave.addEventListener("pointerup", release);
   wave.addEventListener("pointercancel", release);
