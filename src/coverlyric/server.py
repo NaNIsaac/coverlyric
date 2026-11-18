@@ -51,8 +51,11 @@ TYPES = {
 }
 LOG = logging.getLogger("coverlyric")
 AUTO_NO_MEMORY = (
-    "메모리가 부족해 자동 맞추기를 하지 못했습니다. 다른 프로그램을 닫고 다시 해 보세요."
+    "메모리가 부족해 자동 맞추기를 하지 못했습니다. "
+    "채팅 AI로 맞추기나 재생하며 직접 맞추기를 쓰세요."
 )
+# The timing options the page offers instead when memory is short; neither needs memory here.
+AUTO_INSTEAD = ["chat", "tap"]
 AUTO_FAILED = (
     "자동 맞추기를 하지 못했습니다. 인터넷 연결을 확인하고 다시 해 보세요. "
     "자세한 내용은 프로그램 폴더의 coverlyric.log 에 있습니다."
@@ -558,7 +561,9 @@ class App:
         # says beforehand which one fits (#16).
         picked = auto.fitting(model, media.commit_mb())
         if picked is None:
-            raise ValueError(AUTO_NO_MEMORY)
+            # Polled by the page like a run that failed, so both show the same choices.
+            self.auto = {"state": "error", "message": AUTO_NO_MEMORY, "instead": AUTO_INSTEAD}
+            return self.auto
         self.check_disk(picked)
         if importlib.util.find_spec("faster_whisper"):
             # Already installed: started directly, without uv's own process in between.
@@ -636,7 +641,11 @@ class App:
             short = code == auto.NO_MEMORY_EXIT or any(
                 s in line for line in tail for s in NO_MEMORY_SIGNS
             )
-            self.auto = {"state": "error", "message": AUTO_NO_MEMORY if short else AUTO_FAILED}
+            self.auto = (
+                {"state": "error", "message": AUTO_NO_MEMORY, "instead": AUTO_INSTEAD}
+                if short
+                else {"state": "error", "message": AUTO_FAILED}
+            )
 
     def stop_auto(self) -> dict:
         if self.auto_proc and self.auto_proc.poll() is None:

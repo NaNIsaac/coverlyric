@@ -835,6 +835,11 @@ async function pollAuto() {
     } else if (job.state === "error" && pollAuto.waiting) {
       pollAuto.waiting = false;
       restoreLines();
+      const instead = job.instead || [];
+      $("auto-failed-text").textContent = job.message;
+      for (const b of document.querySelectorAll("[data-instead]")) b.hidden = !instead.includes(b.dataset.instead);
+      $("auto-failed").hidden = false;
+      $("auto-failed").scrollIntoView({ block: "nearest", behavior: "smooth" });
       toast(job.message, 10000);
     }
   } catch (e) {
@@ -1118,6 +1123,7 @@ function bind() {
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       await api("/api/auto", { method: "POST", body: JSON.stringify({ model }) });
+      $("auto-failed").hidden = true;
       pollAuto.before = state.lines.map((row) => [...row]);
       pollAuto.waiting = true;
       pollAuto();
@@ -1125,6 +1131,12 @@ function bind() {
       toast(e.message, 6000);
     }
   });
+  for (const b of document.querySelectorAll("[data-instead]")) {
+    b.addEventListener("click", () => {
+      setTab(b.dataset.instead);
+      document.querySelector(`.tab[data-tab="${b.dataset.instead}"]`).scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
   $("auto-stop").addEventListener("click", async () => {
     pollAuto.waiting = false;
     await api("/api/auto/stop", { method: "POST" });

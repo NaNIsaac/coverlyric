@@ -78,6 +78,10 @@
           <span class="method-title">재생하며 직접 맞추기</span>
           <span class="method-line">노래를 들으며 줄이 시작될 때 스페이스바를 누름.</span>
         </button>
+        <button class="tab method" data-tab="chat" role="radio">
+          <span class="method-title">채팅 AI로 맞추기</span>
+          <span class="method-line">프롬프트와 노래를 채팅 AI에 주고 받은 자막을 붙여 넣음. 메모리가 적은 PC에 맞음.</span>
+        </button>
         <button class="tab method" data-tab="file" role="radio">
           <span class="method-title">자막 파일 불러오기</span>
           <span class="method-line">SRT, LRC, VTT 파일 사용.</span>
@@ -97,6 +101,13 @@
           <progress id="auto-bar" max="1" value="0"></progress>
           <p id="auto-text" class="note"></p>
         </div>
+        <div id="auto-failed" class="instead" hidden>
+          <p id="auto-failed-text" class="note"></p>
+          <div class="row">
+            <button id="instead-chat" data-instead="chat" hidden>채팅 AI로 맞추기</button>
+            <button id="instead-tap" data-instead="tap" hidden>재생하며 직접 맞추기</button>
+          </div>
+        </div>
       </div>
 
       <div class="tab-body" data-body="tap" hidden>
@@ -107,16 +118,17 @@
       <div class="tab-body" data-body="file" hidden>
         <p class="help">줄과 시간이 오른쪽 아래 목록에 들어갑니다.</p>
         <label class="file-button"><svg class="i"><use href="#i-open"/></svg>자막 파일 고르기<input type="file" id="timing-file" accept=".srt,.lrc,.vtt,.txt"></label>
-        <div class="chat-ai">
-          <p class="note">자막 파일이 없으면 채팅 AI에게 만들게 할 수 있습니다. 노래 파일이 해당 AI 서비스로 전송됩니다.</p>
-          <button id="prompt-copy" class="quiet"><svg class="i"><use href="#i-copy"/></svg>채팅 AI용 프롬프트 복사</button>
-          <textarea id="prompt" rows="5" readonly hidden></textarea>
-          <details class="paste">
-            <summary>받은 자막을 붙여 넣기</summary>
-            <textarea id="answer" rows="5" placeholder="채팅 AI의 답(SRT)을 여기에 붙여 넣기"></textarea>
-            <button id="answer-apply">넣기</button>
-          </details>
-        </div>
+      </div>
+
+      <div class="tab-body" data-body="chat" hidden>
+        <p class="help">프롬프트를 복사해 채팅 AI에 노래 파일과 함께 붙여 넣고, 받은 자막(SRT)을 아래에 붙여 넣으세요.
+          줄과 시간이 오른쪽 아래 목록에 들어갑니다.</p>
+        <p class="note">노래 파일이 해당 AI 서비스로 전송됩니다.</p>
+        <button id="prompt-copy"><svg class="i"><use href="#i-copy"/></svg>채팅 AI용 프롬프트 복사</button>
+        <textarea id="prompt" rows="5" readonly hidden></textarea>
+        <label class="paste" for="answer">받은 자막</label>
+        <textarea id="answer" rows="5" placeholder="채팅 AI의 답(SRT)을 여기에 붙여 넣기"></textarea>
+        <button id="answer-apply">넣기</button>
       </div>
     </section>
     <section class="pane" id="g-look" role="tabpanel" aria-labelledby="tab-look" hidden>
