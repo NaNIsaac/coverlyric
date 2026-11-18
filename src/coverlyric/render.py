@@ -113,6 +113,8 @@ class Style:
     floor: float = 0.0  # 0 to 1: a soft shadow on the floor under the album
     reflection: bool = False  # the case mirrored on the floor under it (case layout)
     intro: float = 0.0  # seconds of a full-frame title card at the start, ended by the first line
+    lead: float = 0.0  # seconds of silence before the song starts
+    tail: float = 0.0  # seconds of silence after the song ends
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -137,6 +139,8 @@ class Song:
     artist: str = ""
     duration: float = 0.0
     anim: tuple[str, ...] = ()  # the moving picture: one GIF or images in order
+    lead: float = 0.0  # seconds of silence the video has before the audio starts; in duration
+    tail: float = 0.0  # seconds of silence after the audio; in duration
 
 
 def band_rgb(style: Style) -> tuple[int, int, int]:
@@ -1298,6 +1302,7 @@ def render(
     Returns what the user should know about the video: ANIM_DROPPED and SMALLER, or "" when it is
     as asked."""
     codec = "libx264" if quick else media.encoder()
+    lines, song = padded(lines, song, style)
     tries = steps(workers, bool(song.anim), not quick and not HEIGHTS.get(style.height))
     for k, (count, shared, moving, small) in enumerate(tries):
         part = song if moving else replace(song, anim=())
@@ -1394,6 +1399,24 @@ def room_for(mb: float) -> bool:
 FADE_IN, FADE_OUT = 0.5, 1.5  # seconds
 
 
+def padded(
+    lines: tuple[tuple[float, str], ...], song: Song, style: Style
+) -> tuple[tuple[tuple[float, str], ...], Song]:
+    """The lines and the song on the video's own clock: style.lead seconds of silence first, the lines
+    moved later by as much, and style.tail seconds of silence at the end. The project keeps song times."""
+    if song.lead or song.tail or (style.lead <= 0 and style.tail <= 0):
+        return lines, song
+    lead, tail = max(0.0, style.lead), max(0.0, style.tail)
+    moved = tuple((t + lead, text) for t, text in lines)
+    return moved, replace(song, duration=song.duration + lead + tail, lead=lead, tail=tail)
+
+
+def video_time(t: float, style: Style) -> float:
+    """Where a moment of the song falls in the video. The song's start shows the video's start, so a
+    preview at 0 shows the silence before the song."""
+    return t + max(0.0, style.lead) if t > 0 else 0.0
+
+
 def fades(style: Style, duration: float, first: float, last: float) -> tuple[list[str], list[str]]:
     """ffmpeg's video and audio filters for the fade from and to black and silence, on the part of
     the song from first to last: the fade in only when it holds the start, the fade out only when it
@@ -1429,6 +1452,11 @@ def encode(
     begin, total = round(first * fps), math.ceil(last * fps)
     step = QUICK_STEP if quick else 1
     vf, af = fades(style, song.duration, first, last)
+    # The audio's own clock is behind the video's by song.lead; the silence before it is a delay and
+    # the silence after it is padding up to the part's length.
+    heard = first - song.lead
+    if song.lead or song.tail:
+        af[:0] = [*([f"adelay={round(-heard * 1000)}:all=1"] if heard < 0 else []), "apad"]
     if not quick and HEIGHTS.get(style.height):
         vf.insert(0, "scale={}:{}".format(*HEIGHTS[style.height]))
     if quick:
@@ -1454,7 +1482,7 @@ def encode(
         "-i",
         "-",
         "-ss",
-        f"{first:.3f}",
+        f"{max(0.0, heard):.3f}",
         "-t",
         f"{last - first:.3f}",
         "-i",
@@ -1471,6 +1499,8 @@ def encode(
         "aac",
         "-b:a",
         "192k",
+        "-t",
+        f"{last - first:.3f}",
         "-movflags",
         "+faststart",
         str(out),

@@ -296,9 +296,10 @@ class App:
         p = self.project
         if not p.art:
             raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
-        song = p.song()
+        lines, song = render.padded(p.preview_lines(), p.song(), p.style)
+        t = render.video_time(t, p.style)
         with self.lock:
-            img = render.frame(t, p.preview_lines(), song, p.style)
+            img = render.frame(t, lines, song, p.style)
         width = min(1280, max(320, width))
         small = img.resize((width, round(width * 9 / 16)), Image.LANCZOS)
         buf = io.BytesIO()
@@ -373,7 +374,8 @@ class App:
             **media.below_normal(),
             **new_group(),
         )
-        self.job = {"state": "running", "done": 0.0, "total": p.duration, "started": time.time()}
+        total = p.duration + p.style.lead + p.style.tail
+        self.job = {"state": "running", "done": 0.0, "total": total, "started": time.time()}
         LOG.info("render started: %s (%.1f s)", out.name, p.duration)
         threading.Thread(target=self.watch, args=(self.proc, out), daemon=True).start()
         return self.job
@@ -444,8 +446,8 @@ class App:
         p = self.project
         if not p.audio or not p.art:
             raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")
-        song = p.song()
-        start = min(max(0.0, at), max(0.0, song.duration - 1.0))
+        _, song = render.padded((), p.song(), p.style)
+        start = min(render.video_time(max(0.0, at), p.style), max(0.0, song.duration - 1.0))
         end = min(song.duration, start + CLIP_S)
         out = self.work / "preview-clip.mp4"
         job = self.work / "clip-job.json"

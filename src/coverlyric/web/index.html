@@ -249,6 +249,12 @@
           <option value="30">30장</option>
         </select>
       </label>
+      <label class="field" title="노래가 시작하기 전에 소리 없이 표지와 제목만 보이는 시간">앞 공백 (초)
+        <input type="number" id="lead" min="0" max="10" step="0.5">
+      </label>
+      <label class="field" title="노래가 끝난 뒤 소리 없이 마지막 화면이 이어지는 시간">뒤 공백 (초)
+        <input type="number" id="tail" min="0" max="10" step="0.5">
+      </label>
     </div>
     <div class="make-row">
       <button id="clip-make" title="미리보기 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-play"/></svg><span id="clip-label">10초 미리보기</span></button>

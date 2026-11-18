@@ -372,6 +372,8 @@ function fillLook() {
   $("fade").checked = s.fade;
   $("height").value = String(s.height);
   $("fps").value = String(s.fps);
+  $("lead").value = String(s.lead);
+  $("tail").value = String(s.tail);
   drawAnim();
   fillPlaces();
   const select = $("font");
@@ -944,7 +946,7 @@ async function pollRender() {
     const share = job.total ? job.done / job.total : 0;
     $("progress-bar").value = share;
     $("progress-text").textContent = `${Math.round(share * 100)}%${job.eta != null ? timeLeft(job.eta) : " · 남은 시간 계산 중"}`;
-    showRenderPlace(job.done || 0, job.total || state.duration || 0);
+    showRenderPlace(job.done || 0, job.total || videoLength());
     setTimeout(pollRender, 1000);
     return;
   }
@@ -972,7 +974,7 @@ async function pollClip() {
   if (job.state === "running") {
     $("clip-make").disabled = true;
     label.textContent = `만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`;
-    showRenderPlace((job.at || 0) + (job.done || 0), state.duration || 0);
+    showRenderPlace((job.at || 0) + (job.done || 0), videoLength());
     setTimeout(pollClip, 500);
     return;
   }
@@ -1001,12 +1003,16 @@ function closeClip() {
   $("clip-label").textContent = "10초 미리보기";
 }
 
-// Progress in song terms: how far into the song the video is made, and the lyric sung there, so the
-// pace reads against the song itself.
+// The video is the song with the silence before and after it.
+function videoLength() {
+  return (state.duration || 0) + (state.style.lead || 0) + (state.style.tail || 0);
+}
+
+// Progress on the video's clock, and the lyric sung there, so the pace reads against the song itself.
 function showRenderPlace(done, total) {
   const short = (t) => clock(t).replace(/\.\d+$/, "");
   $("progress-song").textContent = `${short(done)} / ${short(total)}`;
-  const at = lineAt(done);
+  const at = lineAt(done - (state.style.lead || 0));
   const text = at < 0 ? "" : state.lines[at][1].trim();
   const el = $("progress-line");
   el.textContent = text || (at < 0 ? "전주" : "간주");
@@ -1194,6 +1200,14 @@ function bind() {
   $("fade").addEventListener("change", (e) => { state.style.fade = e.target.checked; scheduleSync(0); });
   $("height").addEventListener("change", (e) => { state.style.height = Number(e.target.value); scheduleSync(0); });
   $("fps").addEventListener("change", (e) => { state.style.fps = Number(e.target.value); scheduleSync(0); });
+  for (const key of ["lead", "tail"]) {
+    $(key).addEventListener("change", (e) => {
+      const seconds = Math.min(10, Math.max(0, Math.round((Number(e.target.value) || 0) * 2) / 2));
+      e.target.value = String(seconds);
+      state.style[key] = seconds;
+      scheduleSync(0);
+    });
+  }
   $("anim-file").addEventListener("change", (e) => { addAnim(e.target.files); e.target.value = ""; });
   $("anim_fps").addEventListener("input", (e) => {
     state.style.anim_fps = Number(e.target.value);

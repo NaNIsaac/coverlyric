@@ -138,6 +138,11 @@ are in the **색** group, the rest in **모양**.
 
 - **화질** (1080p or 720p) and **1초에 장면** (24 or 30 frames a second): size and frame rate of the
   video. A 720p file is smaller and a little faster to make.
+- **앞 공백** and **뒤 공백** (silence before and after, 0 to 10 s in 0.5 s steps): silent time
+  before and after the song. During the silence before, only the cover and the title show, and the
+  song and the lyrics start that much later. During the silence after, the last frame stays. The
+  fade is at the start and the end of the whole video, silence included. The saved lyric times do
+  not change; only the LRC and SRT files saved next to the video are moved to the video's clock.
 - **10초 미리보기** (10-second preview) makes 10 seconds from the preview time at small size and
   plays it in place of the still; **미리보기 닫기** closes it.
 - **이대로 영상 만들기** → **확인**. While it runs, the page shows how far into the song the video is
