@@ -16,6 +16,8 @@ let state = null;
 let diff = [];
 let notes = {};
 let checkAt = -1; // the line the 확인할 줄 bar points at
+let peaks = null; // loudest sample per slice of the song, for the strip above the line list
+const PEAK_SLICES = 4000;
 let tapIndex = -1;
 let tapUndo = [];
 let syncTimer = null;
@@ -418,6 +420,7 @@ function fillAll() {
   updateStatus();
   showOutput();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
+  loadWave();
   else $("player").removeAttribute("src");
   $("time").max = Math.max(1, state.duration || 60);
   fillLook();
@@ -426,6 +429,7 @@ function fillAll() {
 }
 
 function drawLines() {
+  drawWave();
   const holder = $("lines");
   holder.innerHTML = "";
   state.lines.forEach(([t, text], i) => {
@@ -598,6 +602,7 @@ function moveCheck(step) {
   row.classList.add("checking");
   row.scrollIntoView({ block: "nearest" });
   showCheck();
+  drawWave();
   goLine(checkAt);
 }
 
@@ -620,7 +625,60 @@ function showAt(t, delay = 150) {
   $("time").value = t;
   $("time-label").textContent = clock(t).replace(/\.\d+$/, "");
   markNow(t);
+  drawWave();
   scheduleSync(delay);
+}
+
+// Decoded at 8 kHz in one channel: a four-minute song takes about 8 MB while it is read, then only
+// the slices are kept.
+async function loadWave() {
+  peaks = null;
+  drawWave();
+  if (!state.has_audio) return;
+  try {
+    const data = await (await fetch(`/media/audio?v=${Date.now()}`)).arrayBuffer();
+    const song = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(data);
+    const samples = song.getChannelData(0);
+    const step = Math.max(1, Math.floor(samples.length / PEAK_SLICES));
+    peaks = new Float32Array(Math.ceil(samples.length / step));
+    for (let k = 0; k < peaks.length; k++) {
+      let top = 0;
+      for (let j = k * step, end = Math.min(samples.length, j + step); j < end; j++) top = Math.max(top, Math.abs(samples[j]));
+      peaks[k] = top;
+    }
+    peaks.duration = song.duration;
+  } catch (e) {
+    peaks = null; // a format the browser cannot decode: the list works without the strip
+  }
+  drawWave();
+}
+
+function drawWave() {
+  const wave = $("wave");
+  wave.hidden = !peaks;
+  if (!peaks || !wave.clientWidth) return;
+  const ratio = window.devicePixelRatio || 1;
+  const w = (wave.width = Math.round(wave.clientWidth * ratio));
+  const h = (wave.height = Math.round(wave.clientHeight * ratio));
+  const g = wave.getContext("2d");
+  const css = getComputedStyle(document.documentElement);
+  const x = (t) => (t / peaks.duration) * w;
+  g.fillStyle = css.getPropertyValue("--line");
+  for (let px = 0; px < w; px++) {
+    const top = peaks[Math.floor((px / w) * peaks.length)] || 0;
+    g.fillRect(px, h / 2 - (top * h) / 2, 1, Math.max(1, top * h));
+  }
+  g.font = `${11 * ratio}px sans-serif`;
+  state.lines.forEach(([t, text], i) => {
+    if (t == null || !text) return;
+    g.fillStyle = css.getPropertyValue(i === checkAt ? "--warn" : notes[i] ? "--warn" : "--muted");
+    g.globalAlpha = i === checkAt || !notes[i] ? 1 : 0.6;
+    g.fillRect(Math.round(x(t)), 0, ratio, h);
+    g.fillText(String(i + 1), x(t) + 3 * ratio, 12 * ratio);
+  });
+  g.globalAlpha = 1;
+  g.fillStyle = css.getPropertyValue("--accent");
+  g.fillRect(Math.round(x(Number($("time").value))), 0, 2 * ratio, h);
 }
 
 // While the song plays the still follows it about once a second; a pause or a seek shows that moment.
@@ -1120,6 +1178,14 @@ function bind() {
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   bindRail();
+  new ResizeObserver(() => drawWave()).observe($("wave"));
+  $("wave").addEventListener("click", (e) => {
+    if (!peaks) return;
+    const t = (e.offsetX / e.currentTarget.clientWidth) * peaks.duration;
+    const p = $("player");
+    if (!p.paused) p.currentTime = t;
+    showAt(t, 0);
+  });
   $("check-prev").addEventListener("click", () => moveCheck(-1));
   $("check-next").addEventListener("click", () => moveCheck(1));
 
