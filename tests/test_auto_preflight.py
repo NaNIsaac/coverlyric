@@ -79,9 +79,10 @@ def test_a_pc_with_room_for_small_gets_no_note(started, monkeypatch):
 def test_no_room_even_for_tiny_is_said_at_once(started, monkeypatch):
     app, runs = started
     monkeypatch.setattr(media, "commit_mb", lambda: 250.0)
-    with pytest.raises(ValueError, match="메모리가 부족해"):
-        app.start_auto("small")
-    assert runs == [] and app.auto.get("state") != "running"
+    state = app.start_auto("small")
+    # The page polls this like a run that failed and offers the chat-AI and tap-along options.
+    assert state == {"state": "error", "message": server.AUTO_NO_MEMORY, "instead": ["chat", "tap"]}
+    assert runs == [] and app.auto_progress() == state
 
 
 def test_an_installed_transcriber_starts_without_uv(started, monkeypatch):

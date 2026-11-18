@@ -197,13 +197,9 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 .badge.soon { background: var(--raised); color: var(--muted); }
 .method:disabled .badge:not(.soon) { display: none; }
 #tap-start { width: 100%; }
-.chat-ai { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
-.chat-ai .note { margin: 0 0 4px; font-size: 12px; }
-.chat-ai > button { padding: 0 6px; margin-left: -6px; }
-.pane .paste summary { display: list-item; height: auto; margin: 0; padding: 4px 0; color: var(--muted); font-size: 13px; font-weight: 400; list-style: disclosure-closed inside; }
-.pane .paste[open] summary { list-style: disclosure-open inside; }
-.pane .paste summary::after { display: none; }
-.pane .paste summary:hover { background: none; color: var(--ink); }
+.pane label.paste { display: block; margin: 12px 0 4px; color: var(--muted); font-size: 13px; }
+.instead { margin-top: 10px; }
+.instead .note { margin: 0 0 6px; }
 
 .editor { display: none; flex-direction: column; height: var(--editor-h); background: var(--panel); border-top: 1px solid var(--line); }
 body.timing-open .editor { display: flex; }

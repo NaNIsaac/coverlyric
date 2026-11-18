@@ -32,6 +32,9 @@ In **가사** (lyrics), paste the lyrics and click **가사 넣기** (add lyrics
 Lower in **가사**, under **타이밍**, click **자동 맞추기** → **자동으로 맞추기** (auto timing). When it ends, listen to the lines marked
 with a dashed border with **▶** and fix them.
 
+On a PC with little memory, pick **채팅 AI로 맞추기** (time it with a chat AI): copy the prompt, give it to a chat AI
+with the song file, and paste the subtitles it returns. The song file goes to that AI service.
+
 ## 5. Look
 
 ![Look](docs/screenshots/4-look.png)
@@ -49,8 +52,9 @@ the video folder). Videos are saved in `만든 영상` in the program folder.
 - **"디스크 공간 부족"** (not enough disk space): free space on the drive it names and start again.
 - **"내려받기 실패"** or **"설치 실패"** (download or install failed): check the internet connection
   and start again.
-- **"메모리가 부족해 자동 맞추기를 하지 못했습니다"** (not enough memory for auto timing): close other
-  programs and try again; tap-along timing works meanwhile.
+- **"메모리가 부족해 자동 맞추기를 하지 못했습니다"** (not enough memory for auto timing): press
+  **채팅 AI로 맞추기** (chat AI) or **재생하며 직접 맞추기** (tap along) under the message. Closing other
+  programs lets auto timing try again.
 - **"메모리가 부족해 영상을 만들지 못했습니다"** (not enough memory to make the video): close other
   programs and make it again; 720p uses less memory.
 - **"영상 만들기 실패"** (video failed): read the reason shown under the button.

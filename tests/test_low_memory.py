@@ -87,7 +87,11 @@ def test_the_page_says_memory_ran_out_without_the_logs(tmp_path, caplog):
     lines = [*LOG_LINES, "smaller base", "smaller tiny", "error memory"]
     with caplog.at_level(logging.ERROR, logger="coverlyric"):
         app = run_watch(tmp_path, lines, auto.NO_MEMORY_EXIT)
-    assert app.auto == {"state": "error", "message": server.AUTO_NO_MEMORY}
+    assert app.auto == {
+        "state": "error",
+        "message": server.AUTO_NO_MEMORY,
+        "instead": ["chat", "tap"],  # the page offers these two options
+    }
     assert "HF_TOKEN" in caplog.text  # the log file keeps what the page leaves out
 
 
@@ -96,6 +100,7 @@ def test_other_failures_get_a_plain_message_too(tmp_path, caplog):
         app = run_watch(tmp_path, [*LOG_LINES, "Traceback (most recent call last):"], 1)
     message = app.auto["message"]
     assert message.startswith("자동 맞추기를 하지 못했습니다")
+    assert "instead" not in app.auto  # not a memory problem: the other options are not pushed
     assert "HF_TOKEN" not in message and "Installed" not in message
     assert "Traceback" in caplog.text
 
