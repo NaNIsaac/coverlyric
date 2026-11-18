@@ -23,6 +23,9 @@ class Project:
     style: Style = field(default_factory=Style)
     anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
     clean_tags: bool = True  # lyrics put in lose [..] notes and # lines (timing.sung)
+    # What automatic timing said about a line: {"n": line number from 1, "kind": unplaced | doubtful
+    # | differs, "heard": the words heard, for differs}. Kept so a later look can list them.
+    notes: list[dict] = field(default_factory=list)
 
     @classmethod
     def load(cls, path: Path) -> Project:
@@ -43,6 +46,7 @@ class Project:
             style=Style.from_dict(data.get("style", {})),
             anim=[str(name) for name in data.get("anim", [])],
             clean_tags=bool(data.get("clean_tags", True)),
+            notes=[dict(note) for note in data.get("notes", [])],
         )
 
     def to_dict(self) -> dict:
@@ -56,6 +60,7 @@ class Project:
             "style": self.style.to_dict(),
             "anim": list(self.anim),
             "clean_tags": self.clean_tags,
+            "notes": list(self.notes),
         }
 
     def save(self, path: Path) -> None:

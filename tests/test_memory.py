@@ -13,7 +13,7 @@ from typing import ClassVar
 import pytest
 
 from coverlyric import __main__ as cli
-from coverlyric import media, render, server
+from coverlyric import jobs, media, render, server
 from coverlyric.project import Project
 
 DEMO = Path(render.__file__).parent / "demo" / "demo.json"
@@ -93,7 +93,7 @@ def test_when_nothing_is_left_to_try_the_error_goes_up(monkeypatch, tmp_path):
         render.render(tmp_path / "out.mp4", (), demo.song(), render.Style(), 2, note=notes.append)
     assert calls == [(2, True, False), (1, True, False), (1, False, False), (1, False, False, 720)]
     message = cli.failure(caught.value)
-    assert message == cli.MEMORY_ERROR
+    assert message == jobs.MEMORY_ERROR
     assert "paging" not in message.lower() and "1455" not in message
 
 
@@ -244,14 +244,14 @@ def test_a_failed_clip_shows_words_not_the_traceback(tmp_path):
     script = (
         "print('Traceback (most recent call last):'); "
         "print('OSError: [WinError 1455] The paging file is too small'); "
-        f"print('error: {cli.MEMORY_ERROR}'); import sys; sys.exit(1)"
+        f"print('error: {jobs.MEMORY_ERROR}'); import sys; sys.exit(1)"
     )
     proc, run = watched(app, app.watch_clip, script, tmp_path / "clip.mp4", 0.0)
     app.clip_proc = proc
     app.clip = {"state": "running"}
     run()
     assert app.clip["state"] == "error"
-    assert app.clip["message"].startswith(cli.MEMORY_ERROR) and "1455" not in app.clip["message"]
+    assert app.clip["message"].startswith(jobs.MEMORY_ERROR) and "1455" not in app.clip["message"]
 
 
 @pytest.mark.parametrize(
