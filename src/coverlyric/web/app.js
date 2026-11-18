@@ -421,8 +421,8 @@ function fillAll() {
   updateStatus();
   showOutput();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
-  loadWave();
   else $("player").removeAttribute("src");
+  loadWave();
   $("time").max = Math.max(1, state.duration || 60);
   fillLook();
   drawLines();
