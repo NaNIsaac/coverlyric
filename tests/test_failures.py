@@ -9,7 +9,7 @@ from concurrent.futures.process import BrokenProcessPool
 import pytest
 
 from coverlyric import __main__ as cli
-from coverlyric import media, render, server
+from coverlyric import jobs, media, render, server
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +59,7 @@ def test_a_killed_worker_names_memory(tmp_path, monkeypatch, capsys):
     assert end.value.code == 1
     out = capsys.readouterr().out
     assert "start workers" in out
-    assert f"error: {cli.MEMORY_ERROR}" in out
+    assert f"error: {jobs.MEMORY_ERROR}" in out
 
 
 def test_a_child_that_dies_without_a_word_still_gives_a_reason(tmp_path):
@@ -77,7 +77,7 @@ def test_a_child_that_dies_without_a_word_still_gives_a_reason(tmp_path):
 
 
 def test_an_empty_memory_error_gets_words():
-    assert cli.failure(MemoryError()) == cli.MEMORY_ERROR
+    assert cli.failure(MemoryError()) == jobs.MEMORY_ERROR
     assert cli.failure(ValueError("")) == "ValueError"
 
 
