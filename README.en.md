@@ -48,8 +48,9 @@ in **모양** (look), band colour and background in **색** (colour).
 
 ## Video
 
-Click **이대로 영상 만들기** (make the video) → **확인**. Videos are saved in `만든 영상` in the
-program folder; **영상 폴더 열기** (open the video folder) opens it. If the song starts on its very
+Click **이대로 영상 만들기** (make the video) → **확인**. The video and its subtitle files (SRT, LRC)
+are saved in the **저장 위치** (save folder): `만든 영상` in the program folder at first; **바꾸기**
+(change) picks another folder and **열기** (open) opens it. If the song starts on its very
 first sound, put a number of seconds such as 1 in **앞 공백** (silence before).
 
 ## Troubleshooting

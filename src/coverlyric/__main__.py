@@ -158,6 +158,26 @@ def run_auto(path: Path) -> None:
     )
 
 
+def pick_folder(start: Path) -> str:
+    """The folder the user picks in the system's dialog, or "" when cancelled. Called by the page in
+    a child process."""
+    import tkinter
+    from tkinter import filedialog
+
+    root = tkinter.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)  # over the browser that asked for it
+    try:
+        return (
+            filedialog.askdirectory(
+                parent=root, initialdir=str(start), mustexist=True, title="영상을 저장할 폴더"
+            )
+            or ""
+        )
+    finally:
+        root.destroy()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="coverlyric", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
@@ -178,6 +198,8 @@ def main(argv: list[str] | None = None) -> None:
     job.add_argument("job", type=Path)
     auto_job = sub.add_parser("auto-job")
     auto_job.add_argument("job", type=Path)
+    pick = sub.add_parser("pick-folder")
+    pick.add_argument("start", type=Path)
     args = parser.parse_args(argv)
     # A pipe or file gets the locale code page on Windows (cp1252 on many PCs), which cannot
     # write Korean; the page reads the job pipes as UTF-8.
@@ -214,6 +236,8 @@ def main(argv: list[str] | None = None) -> None:
         except Exception as e:  # noqa: BLE001 - any failure is shown to the user on the page
             print(f"error: {e}", flush=True)
             sys.exit(1)
+    elif args.command == "pick-folder":
+        print(pick_folder(args.start), flush=True)
     elif args.command == "render-job":
         try:
             run_job(args.job)

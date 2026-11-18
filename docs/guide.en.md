@@ -92,8 +92,9 @@ the preview, where they can be edited.
 
 ### Saving the timing
 
-**LRC로 저장** and **SRT로 저장** save the timing as a file. The same files are saved next to each
-video.
+**LRC로 저장** and **SRT로 저장** save the timing as a file in the save folder and show the path.
+When automatic timing finishes, **SRT로 저장** next to its result line does the same. The same files
+are saved next to each video.
 
 ## Look and colour (모양, 색)
 
@@ -149,8 +150,12 @@ are in the **색** group, the rest in **모양**.
   made, the lyric there and the time left. **그만 만들기** stops it.
 - It usually takes no longer than the song.
 - If a video of the same name is open in a player, the new one is saved as `title (2).mp4`.
+- **저장 위치** (save folder): where videos and timing files go. A folder picked with **바꾸기**
+  (change) stays for the next run; **기본으로** (default) goes back to `만든 영상`. If the picked folder
+  is gone (an unplugged USB drive), files go to `만든 영상`. When the video is done, the done line
+  names the files it made.
 
-Files in `만든 영상`:
+Files in the save folder:
 
 | File | Content |
 |---|---|

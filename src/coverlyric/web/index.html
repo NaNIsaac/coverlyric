@@ -101,6 +101,10 @@
           <progress id="auto-bar" max="1" value="0"></progress>
           <p id="auto-text" class="note"></p>
         </div>
+        <div id="auto-done" class="auto-done" hidden>
+          <p id="auto-done-text" class="note"></p>
+          <button id="auto-save-srt" class="quiet"><svg class="i"><use href="#i-save"/></svg>SRT로 저장</button>
+        </div>
         <div id="auto-failed" class="instead" hidden>
           <p id="auto-failed-text" class="note"></p>
           <div class="row">
@@ -256,6 +260,13 @@
         <input type="number" id="tail" min="0" max="10" step="0.5">
       </label>
     </div>
+    <div class="out-dir">
+      <span class="out-label">저장 위치</span>
+      <span id="out-path" class="out-path"></span>
+      <button id="out-pick" class="quiet small" title="영상과 자막 파일을 저장할 폴더를 고릅니다">바꾸기</button>
+      <button id="out-open" class="quiet small" title="저장 위치 폴더를 엽니다">열기</button>
+      <button id="out-default" class="quiet small" title="프로그램 폴더의 '만든 영상'으로 되돌립니다" hidden>기본으로</button>
+    </div>
     <div class="make-row">
       <button id="clip-make" title="미리보기 시점부터 10초를 작게 만들어 바로 재생합니다"><svg class="i"><use href="#i-play"/></svg><span id="clip-label">10초 미리보기</span></button>
       <button id="make" class="primary"><svg class="i"><use href="#i-film"/></svg>이대로 영상 만들기</button>
@@ -301,8 +312,8 @@
         <audio id="player" controls preload="auto"></audio>
         <p id="check" class="note"></p>
         <button id="line-add" class="quiet"><svg class="i"><use href="#i-plus"/></svg>줄 추가</button>
-        <a id="save-lrc" class="button quiet" href="/api/export?fmt=lrc"><svg class="i"><use href="#i-save"/></svg>LRC로 저장</a>
-        <a id="save-srt" class="button quiet" href="/api/export?fmt=srt"><svg class="i"><use href="#i-save"/></svg>SRT로 저장</a>
+        <button id="save-lrc" class="quiet" data-fmt="lrc" title="저장 위치 폴더에 저장합니다"><svg class="i"><use href="#i-save"/></svg>LRC로 저장</button>
+        <button id="save-srt" class="quiet" data-fmt="srt" title="저장 위치 폴더에 저장합니다"><svg class="i"><use href="#i-save"/></svg>SRT로 저장</button>
       </div>
       <div class="tap-bar" id="tap-bar" hidden>
         <div class="tap-next"><span class="note">다음 줄</span><strong id="tap-next"></strong></div>
