@@ -98,3 +98,16 @@ def test_a_finished_render_names_the_files_beside_the_video(tmp_path):
     assert app.job["state"] == "done"
     assert app.job["files"] == ["봄 노래.mp4", "봄 노래.srt", "봄 노래.lrc"]
     assert app.job["folder"] == str(app.output)
+
+
+def test_play_opens_the_finished_video_only(tmp_path, monkeypatch):
+    opened = []
+    monkeypatch.setattr(server, "open_folder", opened.append)
+    out = tmp_path / "봄 노래.mp4"
+    with pytest.raises(ValueError):
+        server.open_video({"state": "running"})
+    with pytest.raises(ValueError):
+        server.open_video({"state": "done", "out": str(out)})
+    out.write_bytes(b"x")
+    server.open_video({"state": "done", "out": str(out)})
+    assert opened == [out]

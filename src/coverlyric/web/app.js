@@ -924,7 +924,7 @@ function stopTap(pause = true) {
 }
 
 // One group of controls at a time; the timing list under the preview belongs to the lyrics group.
-const GROUPS = ["files", "lyrics", "look", "colour"];
+const GROUPS = ["files", "lyrics", "look", "colour", "make"];
 const OLD_STEPS = { "step-files": "files", "step-lyrics": "lyrics", "step-timing": "lyrics", "step-look": "look" };
 
 function openGroup(name) {
@@ -983,7 +983,8 @@ async function pollRender() {
   $("make").disabled = false;
   if (job.state === "done") {
     $("done").hidden = false;
-    $("done-name").textContent = (job.files || [job.out.split(/[\\/]/).pop()]).join(", ");
+    $("done-name").textContent = job.out.split(/[\\/]/).pop();
+    $("done-name").title = job.out;
     $("done-note").textContent = job.note || "";
     $("done-note").hidden = !job.note;
   } else if (job.state === "error") {
@@ -1306,6 +1307,7 @@ function bind() {
     await api("/api/render/stop", { method: "POST" });
   });
   $("open-folder").addEventListener("click", () => api("/api/open", { method: "POST" }));
+  $("done-play").addEventListener("click", () => api("/api/open-video", { method: "POST" }));
   $("out-open").addEventListener("click", () => api("/api/open", { method: "POST" }));
   $("out-pick").addEventListener("click", () => chooseOutput({}));
   $("out-default").addEventListener("click", () => chooseOutput({ folder: "" }));
