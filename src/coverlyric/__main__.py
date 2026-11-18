@@ -115,12 +115,12 @@ def run_job(path: Path) -> None:
     first = next((t for t, text in lines if text), 0.0)
     still = render.frame(min(song.duration, first + 0.6), lines, song, project.style)
     still.resize((1280, 720), Image.LANCZOS).save(out.with_suffix(".png"))
+    # The timing files go with the video, so they are on its clock, after the silence before the song.
+    timed, video = render.padded(tuple(project.lines), song, project.style)
     out.with_suffix(".lrc").write_text(
-        timing.to_lrc(project.lines, project.title, project.artist), encoding="utf-8"
+        timing.to_lrc(list(timed), project.title, project.artist), encoding="utf-8"
     )
-    out.with_suffix(".srt").write_text(
-        timing.to_srt(project.lines, song.duration), encoding="utf-8"
-    )
+    out.with_suffix(".srt").write_text(timing.to_srt(list(timed), video.duration), encoding="utf-8")
 
 
 def run_auto(path: Path) -> None:
