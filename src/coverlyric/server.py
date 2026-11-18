@@ -166,6 +166,8 @@ class App:
             p.lines = [
                 (None if t is None else round(float(t), 3), str(text)) for t, text in data["lines"]
             ]
+        if "clean_tags" in data:
+            p.clean_tags = bool(data["clean_tags"])
         if "style" in data:
             style = Style.from_dict(data["style"])
             if not fonts.allowed(style.font, self.work):
@@ -827,7 +829,10 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 elif url.path == "/api/import":
                     name = unquote(self.headers.get("X-Name", "lyrics.txt"))
                     text = self.body().decode("utf-8-sig", errors="replace")
-                    lines = timing.parse(name, text)
+                    clean = self.headers.get("X-Clean")
+                    if clean is not None:
+                        app.project.clean_tags = clean != "0"
+                    lines = timing.parse(name, text, app.project.clean_tags)
                     if not lines:
                         raise ValueError(
                             "이 파일에서 가사 줄을 찾지 못했습니다. SRT, LRC, VTT 파일인지 확인합니다."

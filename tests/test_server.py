@@ -171,3 +171,17 @@ def test_the_preview_says_which_lines_are_too_wide(base):
     fits = json.loads(headers["X-Fit"])
     assert len(fits) == len(lines)
     assert fits[0] == [1.0, 1] and fits[1][1] == 2
+
+
+def test_import_follows_the_tag_switch(base):
+    text = "[Verse 1]\n첫 줄 [softly]\n# 메모\n".encode()
+    on = json.loads(call(f"{base}/api/import", text, {"X-Name": "lyrics.txt"})[0])
+    assert on["lines"] == [[None, "첫 줄"]]
+    off = call(f"{base}/api/import", text, {"X-Name": "lyrics.txt", "X-Clean": "0"})[0]
+    assert json.loads(off)["lines"] == [
+        [None, "[Verse 1]"],
+        [None, "첫 줄 [softly]"],
+        [None, "# 메모"],
+    ]
+    state = json.loads(call(f"{base}/api/state", {})[0])
+    assert state["clean_tags"] is False

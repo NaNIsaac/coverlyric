@@ -53,7 +53,7 @@ async function api(path, options = {}) {
 }
 
 function payload() {
-  return { title: state.title, artist: state.artist, lines: state.lines, style: state.style, anim: state.anim };
+  return { title: state.title, artist: state.artist, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
 }
 
 function scheduleSync(delay = 150) {
@@ -387,6 +387,7 @@ function fillLook() {
 function fillAll() {
   $("title").value = state.title;
   $("artist").value = state.artist;
+  $("clean_tags").checked = state.clean_tags !== false;
   $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
   $("art-name").textContent = state.has_art ? "표지 있음" : "정사각형 권장";
   updateStatus();
@@ -720,7 +721,7 @@ async function loadFonts() {
 async function importText(name, text) {
   const res = await api("/api/import", {
     method: "POST",
-    headers: { "X-Name": encodeURIComponent(name) },
+    headers: { "X-Name": encodeURIComponent(name), "X-Clean": state.clean_tags === false ? "0" : "1" },
     body: text,
   });
   const data = await res.json();
@@ -1046,12 +1047,13 @@ function bind() {
   $("font-file").addEventListener("change", (e) => upload("font", e.target.files[0]));
   $("title").addEventListener("input", (e) => { state.title = e.target.value; scheduleSync(500); });
   $("artist").addEventListener("input", (e) => { state.artist = e.target.value; scheduleSync(500); });
+  $("clean_tags").addEventListener("change", (e) => { state.clean_tags = e.target.checked; scheduleSync(0); });
 
   $("lyrics-apply").addEventListener("click", async () => {
     const text = $("lyrics-text").value;
     if (!text.trim()) { toast("가사 칸이 비어 있습니다. 가사를 붙여 넣습니다."); return; }
     if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 지워집니다. 새 가사로 바꾸시겠습니까?")) return;
-    const res = await api("/api/import", { method: "POST", headers: { "X-Name": "lyrics.txt" }, body: text });
+    const res = await api("/api/import", { method: "POST", headers: { "X-Name": "lyrics.txt", "X-Clean": state.clean_tags === false ? "0" : "1" }, body: text });
     state.lines = (await res.json()).lines;
     diff = [];
     drawLines();

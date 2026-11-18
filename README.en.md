@@ -25,8 +25,8 @@ pick cover), then type the title and the artist.
 ## Lyrics
 
 In **가사** (lyrics), paste the lyrics and click **가사 넣기** (add lyrics). Each line becomes one line
-on screen. Blank lines, lines starting with `#` and square-bracket marks such as `[Verse 1]` are
-left out.
+on screen. Blank lines are left out; with **대괄호 표시와 # 줄 빼기** (drop bracket marks and # lines)
+on, lines starting with `#` and square-bracket marks such as `[Verse 1]` are left out too.
 
 ## Timing
 

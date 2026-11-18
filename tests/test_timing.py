@@ -121,3 +121,18 @@ def test_tags_in_lrc_lines():
         (1.0, "후렴"),
         (5.0, ""),
     ]
+
+
+def test_with_cleaning_off_the_lyrics_stay_as_typed():
+    assert timing.parse("lyrics.txt", SUNO, clean=False) == [
+        (None, "[Intro]"),
+        (None, "[Verse 1 — Conversational, rhythmic]"),
+        (None, "창문을 열면 바람이 불어"),
+        (None, "# 여기는 2절 앞에 쉬는 곳"),
+        (None, "너의 이름을 불러 (echo)"),
+        (None, "[Instrumental — Wistful guitar solo]"),
+        (None, "[Chorus]"),
+        (None, "우리 다시 만나 [softly] 그 길에서"),
+    ]
+    answer = "1\n00:00:03,000 --> 00:00:06,000\n[Verse 1] 창문을 열면\n"
+    assert timing.parse("answer.srt", answer, clean=False) == [(3.0, "[Verse 1] 창문을 열면")]
