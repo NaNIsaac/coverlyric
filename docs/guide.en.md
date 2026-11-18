@@ -79,8 +79,13 @@ the preview, where they can be edited.
 
 - Open an SRT, LRC or VTT file with **자막 파일 고르기**.
 - Lines whose text differs from the lyrics are outlined; **내 가사로** replaces their text with yours.
-- **채팅 AI용 프롬프트 복사** copies a prompt that asks a chat AI for an SRT. The song is sent to that
-  service, and its times are often wrong.
+
+### Chat AI (채팅 AI로 맞추기)
+
+- It uses almost no memory on this PC, so it suits a PC with little memory.
+- **채팅 AI용 프롬프트 복사** copies the prompt; give it to a chat AI with the song file, paste the
+  SRT it returns into **받은 자막** and click **넣기**.
+- The song file is sent to that AI service. Its times are often wrong, so check the list.
 
 ### Saving the timing
 
@@ -94,7 +99,7 @@ video.
 The preview is one frame of the video and redraws on every change. Band, background and lyric colours
 are in the **색** group, the rest in **모양**.
 
-- **Move and resize:** drag the dashed boxes in the preview; drag the lower-right corner to resize.
+- Move and resize: drag the dashed boxes in the preview; drag the lower-right corner to resize.
   The **위치와 크기** table takes numbers; **위치·크기 처음대로** resets the layout.
 - **Album:** **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
   **CD 돌기** hide or stop the CD. **기울기** (tilt, -40° to 40°) turns the album about its upright axis.
@@ -171,7 +176,7 @@ Files in `만든 영상`:
 | The browser does not open | Paste the `http://127.0.0.1:...` address from the terminal window into the browser. |
 | Letters show as boxes | The font has no Korean; pick another. |
 | "N번째 줄에 시간이 없습니다" (line N has no time) | Give that line a time in the list or remove it with ✕. |
-| "메모리가 부족해 자동 맞추기를 하지 못했습니다" (not enough memory for auto timing) | Close other programs and try again; tap-along timing works meanwhile. |
+| "메모리가 부족해 자동 맞추기를 하지 못했습니다" (not enough memory for auto timing) | Click **채팅 AI로 맞추기** (chat AI) or **재생하며 직접 맞추기** (tap along) under the message. With other programs closed, auto timing can run again. |
 | "자동 맞추기를 하지 못했습니다" (auto timing failed) | Check the internet connection and try again. The details are in `coverlyric.log`. |
 | "노래 파일을 읽을 수 없습니다", "그림 파일을 읽을 수 없습니다" (file cannot be read) | Pick another file. The song and cover already in place stay. |
 | "메모리가 부족해 영상을 만들지 못했습니다" (not enough memory to make the video) | Close other programs and make it again; 720p uses less memory. |

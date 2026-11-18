@@ -52,12 +52,12 @@ TYPES = {
 LOG = logging.getLogger("coverlyric")
 AUTO_NO_MEMORY = (
     "메모리가 부족해 자동 맞추기를 하지 못했습니다. "
-    "채팅 AI로 맞추기나 재생하며 직접 맞추기를 쓰세요."
+    "채팅 AI로 맞추기나 재생하며 직접 맞추기를 쓸 수 있습니다."
 )
 # The timing options the page offers instead when memory is short; neither needs memory here.
 AUTO_INSTEAD = ["chat", "tap"]
 AUTO_FAILED = (
-    "자동 맞추기를 하지 못했습니다. 인터넷 연결을 확인하고 다시 해 보세요. "
+    "자동 맞추기를 하지 못했습니다. 인터넷 연결을 확인하고 다시 합니다. "
     "자세한 내용은 프로그램 폴더의 coverlyric.log 에 있습니다."
 )
 # What a process that ran out of memory leaves in its output when it dies before Python can
@@ -170,7 +170,7 @@ class App:
             style = Style.from_dict(data["style"])
             if not fonts.allowed(style.font, self.work):
                 raise ValueError(
-                    "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣으세요."
+                    "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣습니다."
                 )
             p.style = style
         if "anim" in data:
@@ -192,7 +192,7 @@ class App:
         if kind == "audio":
             if suffix not in AUDIO:
                 raise ValueError(
-                    "지원하지 않는 노래 파일 형식입니다. mp3, wav, m4a, flac, ogg 파일을 고르세요."
+                    "지원하지 않는 노래 파일 형식입니다. mp3, wav, m4a, flac, ogg 파일을 고릅니다."
                 )
             # Read the new file under another name first: a file that is not a song must not cost
             # the song already in the project.
@@ -203,7 +203,7 @@ class App:
             except ValueError:
                 trial.unlink()
                 raise ValueError(
-                    "노래 파일을 읽을 수 없습니다. 다른 파일을 고르세요 (mp3, wav, m4a, flac, ogg)."
+                    "노래 파일을 읽을 수 없습니다. 다른 파일을 고릅니다 (mp3, wav, m4a, flac, ogg)."
                 ) from None
             for old in self.work.glob("song.*"):
                 old.unlink()
@@ -215,12 +215,12 @@ class App:
                 self.project.title = Path(name).stem
         elif kind == "art":
             if suffix not in IMAGES:
-                raise ValueError("지원하지 않는 그림 형식입니다. png, jpg, webp 파일을 고르세요.")
+                raise ValueError("지원하지 않는 그림 형식입니다. png, jpg, webp 파일을 고릅니다.")
             try:
                 with Image.open(io.BytesIO(body)) as picture:
                     picture.load()
             except (OSError, SyntaxError, Image.DecompressionBombError):
-                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고르세요.") from None
+                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.") from None
             for old in self.work.glob("cover.*"):
                 old.unlink()
             target = self.work / f"cover{suffix}"
@@ -228,7 +228,7 @@ class App:
             self.project.art = target.name
         elif kind == "font":
             if suffix not in fonts.SUFFIXES:
-                raise ValueError("지원하지 않는 글꼴 형식입니다. ttf, otf, ttc 파일을 고르세요.")
+                raise ValueError("지원하지 않는 글꼴 형식입니다. ttf, otf, ttc 파일을 고릅니다.")
             folder = self.work / "fonts"
             folder.mkdir(exist_ok=True)
             target = folder / safe_name(Path(name).name)
@@ -241,7 +241,7 @@ class App:
             try:
                 Image.open(io.BytesIO(body)).verify()
             except (OSError, SyntaxError) as e:
-                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고르세요.") from e
+                raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.") from e
             p = self.project
             if suffix == ".gif" or any(name.lower().endswith(".gif") for name in p.anim):
                 self.drop_anim(set(p.anim))
@@ -279,7 +279,7 @@ class App:
     def reset(self) -> dict:
         if self.job.get("state") == "running":
             raise ValueError(
-                "영상을 만드는 중에는 새로 시작할 수 없습니다. 완료되거나 멈춘 뒤 다시 하세요."
+                "영상을 만드는 중에는 새로 시작할 수 없습니다. 끝나거나 멈춘 뒤 다시 합니다."
             )
         self.drop_anim(set(self.project.anim))
         for old in self.work.iterdir():
@@ -295,7 +295,7 @@ class App:
         the page can drag, and how each lyric line fits the panel."""
         p = self.project
         if not p.art:
-            raise ValueError("앨범 표지가 없습니다. 1단계에서 표지를 넣으세요.")
+            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
         song = p.song()
         with self.lock:
             img = render.frame(t, p.preview_lines(), song, p.style)
@@ -311,7 +311,7 @@ class App:
         (dark lyrics) until the lyric colour on it reads at least as well as white on the default band."""
         p = self.project
         if not p.art:
-            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣으세요.")
+            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
         song = p.song()
         with self.lock:
             cover = render.cover_colour(song.art, render.stamp(song.art))
@@ -345,12 +345,12 @@ class App:
         self.stop_clip()  # the video wins over a look at it
         if self.auto.get("state") == "running":
             # Both at once need about 2 GB, more than a 4 GB PC has free.
-            raise ValueError("자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤 영상을 만드세요.")
+            raise ValueError("자동 맞추기가 진행 중입니다. 끝나거나 취소한 뒤에 영상을 만들 수 있습니다.")
         p = self.project
         if not p.audio or not p.art:
-            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 1단계에서 넣으세요.")
+            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")
         if not p.lines:
-            raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
+            raise ValueError("가사가 없습니다. 가사 묶음에서 가사를 넣습니다.")
         timing.ready(p.lines)
         name = safe_name(p.title)
         out = self.output / f"{name}.mp4"
@@ -436,10 +436,10 @@ class App:
         if self.clip.get("state") == "running":
             return self.clip
         if self.job.get("state") == "running" or self.auto.get("state") == "running":
-            raise ValueError("영상 만들기나 자동 맞추기가 끝난 뒤 미리보기 영상을 만드세요.")
+            raise ValueError("영상 만들기나 자동 맞추기가 끝난 뒤에 미리보기 영상을 만들 수 있습니다.")
         p = self.project
         if not p.audio or not p.art:
-            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 1단계에서 넣으세요.")
+            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")
         song = p.song()
         start = min(max(0.0, at), max(0.0, song.duration - 1.0))
         end = min(song.duration, start + CLIP_S)
@@ -537,7 +537,7 @@ class App:
                 raise ValueError(
                     f"디스크 공간 부족: 자동 맞추기를 처음 쓰려면 {folder.anchor or folder}에 "
                     f"여유 공간 {mb} MB가 필요합니다 (현재 {free:.0f} MB). "
-                    "공간을 늘린 뒤 다시 누르세요."
+                    "공간을 늘린 뒤 다시 누릅니다."
                 )
 
     def start_auto(self, model: str) -> dict:
@@ -548,13 +548,13 @@ class App:
         if self.auto.get("state") == "running":
             return self.auto
         if self.job.get("state") == "running":
-            raise ValueError("영상을 만드는 중입니다. 완료된 뒤 다시 하세요.")
+            raise ValueError("영상을 만드는 중입니다. 끝난 뒤 다시 합니다.")
         p = self.project
         if not p.audio:
-            raise ValueError("노래 파일이 없습니다. 1단계에서 넣으세요.")
+            raise ValueError("노래 파일이 없습니다. 파일 묶음에서 넣습니다.")
         lyrics = [text for _, text in p.lines if text]
         if not lyrics:
-            raise ValueError("가사가 없습니다. 2단계에서 가사를 넣으세요.")
+            raise ValueError("가사가 없습니다. 가사 묶음에서 가사를 넣습니다.")
         if model not in auto.MODELS:
             raise ValueError(f"unknown model {model}")
         # A model that cannot get memory fails only after a minute of loading; the free commit
@@ -571,7 +571,7 @@ class App:
         else:
             uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
             if not uv:
-                raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행하세요.")
+                raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행합니다.")
             cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
             cmd += ["python"]
         cmd += ["-m", "coverlyric", "auto-job"]
@@ -824,7 +824,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     lines = timing.parse(name, text)
                     if not lines:
                         raise ValueError(
-                            "이 파일에서 가사 줄을 찾지 못했습니다. SRT, LRC, VTT 파일인지 확인하세요."
+                            "이 파일에서 가사 줄을 찾지 못했습니다. SRT, LRC, VTT 파일인지 확인합니다."
                         )
                     own = [text for _, text in app.project.lines if text]
                     diff = timing.check(own, lines) if own else [None] * len(lines)
@@ -882,7 +882,7 @@ def serve(home: Path, port: int = 0, browser: bool = True) -> None:
     ref.append(server)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"coverlyric 가사 영상 만들기: {url}")
-    print("프로그램을 끝내려면 이 창을 닫거나 페이지의 [끝내기]를 누르세요.", flush=True)
+    print("프로그램을 끝내려면 이 창을 닫거나 페이지의 [끝내기]를 누릅니다.", flush=True)
     if browser:
         webbrowser.open(url)
     try:

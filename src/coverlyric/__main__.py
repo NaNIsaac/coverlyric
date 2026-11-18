@@ -22,7 +22,7 @@ WORKER_MB = 150  # each extra worker measured about 120 MB in a 60 s 1080p rende
 # 16 GB PC a 60 s part took 65.6 s with two workers at 993 MB against 62.6 s with four at 1831 MB.
 LOW_MB, LOW_WORKERS = 2048, 2
 # For any failure memory could cause; the raw system text stays in coverlyric.log (#12).
-MEMORY_ERROR = "메모리가 부족해 영상을 만들지 못했습니다. 다른 프로그램을 닫고 다시 만들어 보세요."
+MEMORY_ERROR = "메모리가 부족해 영상을 만들지 못했습니다. 다른 프로그램을 닫고 다시 만듭니다."
 
 
 def workers() -> int:
@@ -63,7 +63,7 @@ def place(part: Path, out: Path) -> Path:
             continue
         return target
     raise PermissionError(
-        f"{out.name} 파일을 쓸 수 없습니다. 영상을 연 프로그램을 닫고 다시 만드세요."
+        f"{out.name} 파일을 쓸 수 없습니다. 영상을 연 프로그램을 닫고 다시 만듭니다."
     )
 
 

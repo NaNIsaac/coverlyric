@@ -189,7 +189,7 @@ function openCrop(file) {
     $("crop").showModal();
     placeCrop();
   };
-  img.onerror = () => { URL.revokeObjectURL(url); toast("이 그림을 열 수 없습니다. png 또는 jpg 파일을 고르세요."); };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("이 그림을 열 수 없습니다. png 또는 jpg 파일을 고릅니다."); };
   const old = img.src;
   img.src = url;
   if (old.startsWith("blob:")) URL.revokeObjectURL(old);
@@ -589,7 +589,7 @@ function followPlayer() {
 
 function togglePlay() {
   const p = $("player");
-  if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣으세요."); return; }
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
   if (p.paused) p.play(); else p.pause();
 }
 
@@ -641,7 +641,7 @@ async function takeFiles(files, onAnim) {
   const groups = {};
   for (const file of files) {
     const kind = kindOf(file, onAnim);
-    if (!kind) { toast(`${file.name}: 넣을 수 없는 파일입니다. 노래, 사진, 자막, 가사, 글꼴 파일을 놓으세요.`, 6000); continue; }
+    if (!kind) { toast(`${file.name}: 넣을 수 없는 파일입니다. 넣을 수 있는 파일: 노래, 사진, 자막, 가사, 글꼴.`, 6000); continue; }
     (groups[kind] ||= []).push(file);
   }
   if (groups.audio) { await upload("audio", groups.audio[0]); openGroup("files"); }
@@ -733,7 +733,7 @@ async function importText(name, text) {
   if (data.own && bad) {
     toast(`${sung}줄을 넣었습니다. 내 가사와 다른 줄 ${bad}개는 테두리로 표시됩니다.`, 6000);
   } else if (data.own && sung !== data.own) {
-    toast(`${sung}줄을 넣었습니다. 내 가사(${data.own}줄)와 줄 수가 다르니 목록을 확인하세요.`, 6000);
+    toast(`${sung}줄을 넣었습니다. 내 가사(${data.own}줄)와 줄 수가 다르니 목록을 확인합니다.`, 6000);
   } else {
     toast(`${sung}줄을 넣었습니다.`);
   }
@@ -821,15 +821,15 @@ async function pollAuto() {
       for (const n of job.notes) {
         const at = lyricIndex[n.line];
         notes[at] = n.kind === "unplaced"
-          ? "찾지 못한 줄: 앞뒤 줄 사이 시간으로 넣었습니다. 듣고 고치세요."
-          : n.kind === "doubtful" ? "앞 줄과 1초 안으로 붙어 있습니다. 듣고 고치세요."
+          ? "찾지 못한 줄: 앞뒤 줄 사이 시간으로 넣었습니다. 듣고 고칩니다."
+          : n.kind === "doubtful" ? "앞 줄과 1초 안으로 붙어 있습니다. 듣고 고칩니다."
           : `다르게 들림: ${n.heard}`;
       }
       drawLines();
       scheduleSync();
       const sung = lyricIndex.length;
       const bad = job.notes.filter((n) => n.kind !== "differs").length;
-      const smaller = job.smaller ? ` 메모리가 부족해 더 작은 모델(${job.smaller})로 맞췄으니 시간을 한 번 더 확인하세요.` : "";
+      const smaller = job.smaller ? ` 메모리가 부족해 더 작은 모델(${job.smaller})로 맞췄으니 시간을 한 번 더 확인합니다.` : "";
       toast(`${sung}줄 중 ${sung - bad}줄의 시간을 찾았습니다.${bad ? ` 확인이 필요한 줄 ${bad}개를 표시했습니다.` : ""}${smaller}`, 10000);
       loadModels();
     } else if (job.state === "error" && pollAuto.waiting) {
@@ -859,7 +859,7 @@ function setTab(name) {
 function tapNextLabel() {
   if (tapIndex < 0) { $("tap-next").textContent = ""; return; }
   $("tap-next").textContent = tapIndex >= state.lines.length
-    ? "모든 줄에 시간이 들어갔습니다. 목록에서 다듬으세요."
+    ? "모든 줄에 시간이 들어갔습니다. 목록에서 다듬습니다."
     : state.lines[tapIndex][1] || "(빈 줄)";
 }
 
@@ -931,7 +931,7 @@ async function pollRender() {
     // One lost request must not end the watch: the render keeps running in its own process.
     pollRender.failed = (pollRender.failed || 0) + 1;
     if (pollRender.failed === 5) {
-      showRenderError("프로그램에 연결할 수 없습니다. 터미널 창이 열려 있는지 확인하세요.");
+      showRenderError("프로그램에 연결할 수 없습니다. 터미널 창이 열려 있는지 확인합니다.");
     }
     setTimeout(pollRender, 2000);
     return;
@@ -1043,7 +1043,7 @@ function bind() {
 
   $("lyrics-apply").addEventListener("click", async () => {
     const text = $("lyrics-text").value;
-    if (!text.trim()) { toast("가사 칸이 비어 있습니다. 가사를 붙여 넣으세요."); return; }
+    if (!text.trim()) { toast("가사 칸이 비어 있습니다. 가사를 붙여 넣습니다."); return; }
     if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 지워집니다. 새 가사로 바꾸시겠습니까?")) return;
     const res = await api("/api/import", { method: "POST", headers: { "X-Name": "lyrics.txt" }, body: text });
     state.lines = (await res.json()).lines;
@@ -1051,15 +1051,15 @@ function bind() {
     drawLines();
     scheduleSync();
     $("state-timing").scrollIntoView({ block: "start", behavior: "smooth" });
-    toast(`${state.lines.length}줄을 넣었습니다. 아래 타이밍에서 시간을 맞추세요.`);
+    toast(`${state.lines.length}줄을 넣었습니다. 아래 타이밍에서 시간을 맞춥니다.`);
   });
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   bindRail();
 
   $("tap-start").addEventListener("click", () => {
-    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣으세요."); return; }
-    if (!state.lines.length) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣으세요."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
+    if (!state.lines.length) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣습니다."); return; }
     tapIndex = 0;
     tapUndo = [];
     diff = [];
@@ -1093,19 +1093,19 @@ function bind() {
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       const data = await (await api("/api/prompt")).json();
-      if (!data.lines) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣으세요."); return; }
+      if (!data.lines) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣습니다."); return; }
       $("prompt").value = data.prompt;
       await navigator.clipboard.writeText(data.prompt);
-      toast("복사했습니다. 채팅 AI에 노래 파일과 함께 붙여 넣으세요.", 5000);
+      toast("복사했습니다. 채팅 AI에 노래 파일과 함께 붙여 넣습니다.", 5000);
     } catch (e) {
       $("prompt").hidden = false;
       $("prompt").select();
-      toast("Ctrl+C 를 눌러 복사하세요.");
+      toast("Ctrl+C 를 눌러 복사합니다.");
     }
   });
   $("answer-apply").addEventListener("click", async () => {
     const text = $("answer").value;
-    if (!text.trim()) { toast("붙여 넣기 칸이 비어 있습니다. 받은 자막을 붙여 넣으세요."); return; }
+    if (!text.trim()) { toast("붙여 넣기 칸이 비어 있습니다. 받은 자막을 붙여 넣습니다."); return; }
     try { await importText("answer.srt", text); } catch (e) { toast(e.message); }
   });
   $("timing-file").addEventListener("change", async (e) => {
@@ -1116,8 +1116,8 @@ function bind() {
   });
 
   $("auto-start").addEventListener("click", async () => {
-    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣으세요."); return; }
-    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣으세요."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
+    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣습니다."); return; }
     if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 새로 찾은 시간으로 바뀝니다. 계속하시겠습니까?")) return;
     const model = document.querySelector('input[name="model"]:checked').value;
     try {
@@ -1242,7 +1242,7 @@ function bind() {
   $("make").addEventListener("click", async () => {
     const untimed = state.lines.findIndex(([t]) => t == null);
     if (untimed >= 0) {
-      toast(`${untimed + 1}번째 줄에 시간이 없습니다. 타이밍 목록에서 시간을 넣거나 줄을 지우세요.`, 6000);
+      toast(`${untimed + 1}번째 줄에 시간이 없습니다. 타이밍 목록에서 시간을 넣거나 줄을 지웁니다.`, 6000);
       openGroup("lyrics");
       return;
     }
@@ -1284,7 +1284,7 @@ function bind() {
   $("quit").addEventListener("click", async () => {
     if (!confirm("프로그램을 끝내시겠습니까? 작업은 저장되어 있습니다.")) return;
     await api("/api/quit", { method: "POST" });
-    document.body.innerHTML = "<p style='padding:40px;font-size:20px'>프로그램을 끝냈습니다. 이 탭을 닫으세요.</p>";
+    document.body.innerHTML = "<p style='padding:40px;font-size:20px'>프로그램을 끝냈습니다. 이 탭은 닫아도 됩니다.</p>";
   });
 }
 

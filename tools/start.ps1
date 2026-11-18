@@ -134,14 +134,14 @@ if ($short) {
     Write-Host ''
     Write-Host ('디스크 공간 부족: 아래 드라이브에 {0} MB 이상의 여유 공간이 필요합니다.' -f ($need / 1MB))
     $short | ForEach-Object { Write-Host "  $_" }
-    Write-Host '공간을 확보한 뒤 다시 실행하세요.'
+    Write-Host '공간을 확보한 뒤 다시 실행합니다.'
     exit 1
 }
 if ($first) {
     Write-Host ''
     Write-Host '첫 실행: 필요한 프로그램을 내려받아 설치합니다.'
     Write-Host '내려받기 약 150 MB, 디스크 사용 약 300 MB.'
-    Write-Host '보통 1~3분 걸립니다. 끝날 때까지 이 창을 닫지 마세요.'
+    Write-Host '보통 1~3분 걸립니다. 끝날 때까지 이 창은 열어 둡니다.'
     Write-Host ''
 }
 
@@ -158,7 +158,7 @@ if (-not $uv) {
             Write-Host "내려받기 실패: $_"
         }
         if (-not (Test-Path $uv)) {
-            Write-Host '설치 실패. 인터넷 연결을 확인하고 다시 실행하세요.'
+            Write-Host '설치 실패. 인터넷 연결을 확인하고 다시 실행합니다.'
             exit 1
         }
     }
@@ -166,11 +166,11 @@ if (-not $uv) {
 
 $env:COVERLYRIC_UV = $uv
 Write-Host '프로그램을 시작합니다. 잠시 뒤 브라우저에 페이지가 열립니다.'
-Write-Host '사용하는 동안 이 창을 열어 두세요. 끝내려면 페이지의 [끝내기]를 누르세요.'
+Write-Host '사용하는 동안 이 창은 열어 둡니다. 끝내려면 페이지의 [끝내기]를 누릅니다.'
 Start-Program $uv (Join-Path $root '.venv')
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
-    Write-Host "프로그램이 오류로 끝났습니다 (종료 코드 $LASTEXITCODE). 위 메시지를 확인하세요."
-    Write-Host '해결되지 않으면 이 창의 내용을 https://github.com/NaNIsaac/coverlyric/issues 에 올리세요.'
+    Write-Host "프로그램이 오류로 끝났습니다 (종료 코드 $LASTEXITCODE). 위 메시지를 확인합니다."
+    Write-Host '해결되지 않으면 이 창의 내용을 https://github.com/NaNIsaac/coverlyric/issues 에 올립니다.'
     exit 1
 }
