@@ -544,28 +544,16 @@ function updateCheck() {
   updateStatus();
 }
 
-function mark(holder, parts) {
-  holder.innerHTML = "";
-  for (const [text, cls] of parts) {
-    const span = document.createElement("span");
-    span.className = cls;
-    span.textContent = text;
-    holder.append(span);
-  }
-}
-
-// What each step still lacks, readable from the closed headers before pressing make.
+// A finished step shows a check in place of its number; 꾸미기 and 만들기 have nothing to finish.
 function updateStatus() {
-  mark($("state-files"), [
-    [state.has_audio ? "노래" : "노래 없음", state.has_audio ? "ok" : "miss"],
-    [state.has_art ? "표지" : "표지 없음", state.has_art ? "ok" : "miss"],
-  ]);
   const count = state.lines.length;
-  mark($("state-lyrics"), [[count ? `${count}줄` : "없음", count ? "" : "miss"]]);
   const timed = state.lines.filter(([t]) => t != null).length;
-  mark($("state-timing"), count ? [[`${timed}/${count}`, timed === count ? "ok" : "miss"]] : []);
-  $("dot-files").classList.toggle("miss", !(state.has_audio && state.has_art));
-  $("dot-lyrics").classList.toggle("miss", !count || timed < count);
+  const done = { files: state.has_audio && state.has_art, lyrics: count > 0, timing: count > 0 && timed === count };
+  for (const [key, ok] of Object.entries(done)) {
+    const n = $(`n-${key}`);
+    n.textContent = ok ? "✓" : String(GROUPS.indexOf(key) + 1);
+    n.classList.toggle("done", ok);
+  }
 }
 
 function lineAt(t) {
@@ -676,14 +664,14 @@ async function takeFiles(files, onAnim) {
   if (groups.font) await upload("font", groups.font[0]);
   if (groups.timing) {
     try { await importText(groups.timing[0].name, await groups.timing[0].text()); } catch (e) { toast(e.message); }
-    openGroup("lyrics");
+    openGroup("timing");
   }
   if (groups.lyrics) {
     $("lyrics-text").value = await groups.lyrics[0].text();
     openGroup("lyrics");
     $("lyrics-apply").click();
   }
-  if (groups.anim) { await addAnim(groups.anim); openGroup("look"); }
+  if (groups.anim) { await addAnim(groups.anim); openGroup("deco"); }
   if (groups.art) openCrop(groups.art[0]);
 }
 
@@ -923,22 +911,24 @@ function stopTap(pause = true) {
   drawLines();
 }
 
-// One group of controls at a time; the timing list under the preview belongs to the lyrics group.
-const GROUPS = ["files", "lyrics", "look", "colour", "make"];
-const OLD_STEPS = { "step-files": "files", "step-lyrics": "lyrics", "step-timing": "lyrics", "step-look": "look" };
+// One step at a time; the line list under the preview belongs to the lyrics and timing steps.
+const GROUPS = ["files", "lyrics", "timing", "deco", "make"];
+const PANES = { files: ["g-files"], lyrics: ["g-lyrics"], timing: ["g-timing"], deco: ["g-look", "g-colour"], make: ["g-make"] };
+const OLD_GROUPS = { look: "deco", colour: "deco", "step-files": "files", "step-lyrics": "lyrics", "step-timing": "timing", "step-look": "deco" };
 
 function openGroup(name) {
   for (const g of GROUPS) {
     const on = g === name;
-    $(`g-${g}`).hidden = !on;
+    for (const id of PANES[g]) $(id).hidden = !on;
     $(`tab-${g}`).setAttribute("aria-selected", String(on));
     $(`tab-${g}`).tabIndex = on ? 0 : -1;
   }
   document.querySelector(".steps").scrollTop = 0;
-  document.body.classList.toggle("timing-open", name === "lyrics");
+  document.body.classList.toggle("timing-open", name === "lyrics" || name === "timing");
 }
 
 function bindRail() {
+  for (const b of document.querySelectorAll(".next-step")) b.addEventListener("click", () => openGroup(b.dataset.next));
   for (const b of document.querySelectorAll(".rail-tab")) {
     b.addEventListener("click", () => openGroup(b.dataset.group));
     b.addEventListener("keydown", (e) => {
@@ -1087,8 +1077,8 @@ function bind() {
     diff = [];
     drawLines();
     scheduleSync();
-    $("state-timing").scrollIntoView({ block: "start", behavior: "smooth" });
-    toast(`${state.lines.length}줄을 넣었습니다. 아래 타이밍에서 시간을 맞춥니다.`);
+    openGroup("timing");
+    toast(`${state.lines.length}줄을 넣었습니다.`);
   });
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
@@ -1289,7 +1279,7 @@ function bind() {
     const untimed = state.lines.findIndex(([t]) => t == null);
     if (untimed >= 0) {
       toast(`${untimed + 1}번째 줄에 시간이 없습니다. 타이밍 목록에서 시간을 넣거나 줄을 지웁니다.`, 6000);
-      openGroup("lyrics");
+      openGroup("timing");
       return;
     }
     const minutes = Math.max(1, Math.round((state.duration || 60) / 60));
@@ -1320,7 +1310,7 @@ function bind() {
     diff = [];
     $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
     fillAll();
-    openGroup("look");
+    openGroup("deco");
   });
   $("new").addEventListener("click", async () => {
     if (!confirm("지금 작업을 지우고 새로 시작하시겠습니까? 만든 영상은 남습니다.")) return;
@@ -1351,7 +1341,8 @@ async function boot() {
   const params = new URLSearchParams(location.search);
   if (params.get("t")) showAt(Number(params.get("t")));
   setTab(document.querySelector(".tab:not(:disabled)").dataset.tab);
-  const group = params.get("group") || OLD_STEPS[params.get("step")];
+  const asked = params.get("group") || params.get("step");
+  const group = OLD_GROUPS[asked] || asked;
   openGroup(GROUPS.includes(group) ? group : "files");
   if (group) {
     if (params.get("tab")) setTab(params.get("tab"));
