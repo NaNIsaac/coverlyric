@@ -715,6 +715,61 @@ async function loadWave() {
   drawWave();
 }
 
+// On the strip a line's mark can be dragged to a new start; anywhere else a press moves the preview.
+// A dragged line stays between its neighbours, so the order of the lines never changes.
+function markNear(x, width) {
+  let best = -1, gap = 6;
+  state.lines.forEach(([t, text], i) => {
+    if (t == null || !text) return;
+    const d = Math.abs((t / peaks.duration) * width - x);
+    if (d <= gap) { best = i; gap = d; }
+  });
+  return best;
+}
+
+function bindWave() {
+  const wave = $("wave");
+  let held = -1;
+  const timeAt = (e) => Math.min(peaks.duration, Math.max(0, (e.offsetX / wave.clientWidth) * peaks.duration));
+  wave.addEventListener("pointermove", (e) => {
+    if (!peaks) return;
+    if (held < 0) {
+      wave.style.cursor = markNear(e.offsetX, wave.clientWidth) >= 0 ? "ew-resize" : "";
+      return;
+    }
+    const before = state.lines.slice(0, held).findLast(([t]) => t != null);
+    const after = state.lines.slice(held + 1).find(([t]) => t != null);
+    const low = before ? before[0] + 0.1 : 0;
+    const high = after ? after[0] - 0.1 : peaks.duration;
+    const t = Math.round(Math.min(high, Math.max(low, timeAt(e))) * 10) / 10;
+    state.lines[held][0] = t;
+    $("lines").children[held].querySelector(".t").value = clockTenth(t);
+    drawWave();
+  });
+  wave.addEventListener("pointerdown", (e) => {
+    if (!peaks) return;
+    held = markNear(e.offsetX, wave.clientWidth);
+    if (held >= 0) {
+      wave.setPointerCapture(e.pointerId);
+      return;
+    }
+    const t = timeAt(e);
+    const p = $("player");
+    if (!p.paused) p.currentTime = t;
+    showAt(t, 0);
+  });
+  const release = () => {
+    if (held < 0) return;
+    const i = held;
+    held = -1;
+    settle(i, $("lines").children[i]);
+    updateCheck();
+    showAt(state.lines[i][0] + 0.3);
+  };
+  wave.addEventListener("pointerup", release);
+  wave.addEventListener("pointercancel", release);
+}
+
 function drawWave() {
   const wave = $("wave");
   wave.hidden = !peaks;
@@ -1240,13 +1295,7 @@ function bind() {
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   bindRail();
   new ResizeObserver(() => drawWave()).observe($("wave"));
-  $("wave").addEventListener("click", (e) => {
-    if (!peaks) return;
-    const t = (e.offsetX / e.currentTarget.clientWidth) * peaks.duration;
-    const p = $("player");
-    if (!p.paused) p.currentTime = t;
-    showAt(t, 0);
-  });
+  bindWave();
   $("check-prev").addEventListener("click", () => moveCheck(-1));
   $("deco-clip").addEventListener("click", () => $("clip-make").click());
   $("check-next").addEventListener("click", () => moveCheck(1));
