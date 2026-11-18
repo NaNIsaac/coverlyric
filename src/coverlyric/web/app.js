@@ -14,7 +14,11 @@ const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 
 
 let state = null;
 let diff = [];
-let notes = {};
+let notes = {}; // lines to check: not found, or within 1 s of the line before
+let heard = {}; // lines heard differently, shown only on hover
+let checkAt = -1; // the line the 확인할 줄 bar points at
+let peaks = null; // loudest sample per slice of the song, for the strip above the line list
+const PEAK_SLICES = 4000;
 let tapIndex = -1;
 let tapUndo = [];
 let syncTimer = null;
@@ -57,6 +61,7 @@ function payload() {
 }
 
 function scheduleSync(delay = 150) {
+  sumDeco();
   clearTimeout(syncTimer);
   syncTimer = setTimeout(sync, delay);
 }
@@ -345,6 +350,63 @@ async function addAnim(files) {
   }
 }
 
+let looks = null; // {name: style keys} from the server, with the cards' stills
+
+// The value each folded 꾸미기 section holds now, shown on its closed header.
+function sumDeco() {
+  if (!state) return;
+  const s = state.style;
+  const font = $("font").selectedOptions[0];
+  const tone = document.querySelector(`input[name="tone"][value="${s.tone}"]`);
+  const moved = ["album", "panel", "title", "bar", "anim"].some((el) => s[`${el}_x`] || s[`${el}_y`] || s[`${el}_scale`] !== 1);
+  $("sum-album").textContent = s.layout === "case" ? "CD 케이스" : "둥근 표지";
+  $("sum-text").textContent = font ? font.textContent : "";
+  $("sum-colour").textContent = tone ? tone.parentElement.textContent.trim() : "";
+  $("sum-ends").textContent = [s.fade ? "페이드" : "", s.intro ? `제목 ${s.intro}초` : ""].filter(Boolean).join(" · ") || "없음";
+  $("sum-anim").textContent = state.anim && state.anim.length ? `${state.anim.length}장` : "없음";
+  $("sum-place").textContent = moved ? "바꿈" : "처음대로";
+  if (looks) {
+    for (const card of document.querySelectorAll(".look")) {
+      const on = Object.entries(looks[card.dataset.look]).every(([k, v]) => s[k] === v);
+      card.classList.toggle("on", on);
+      card.setAttribute("aria-checked", String(on));
+    }
+  }
+}
+
+async function loadLooks() {
+  if (!state || !state.has_art) return;
+  try {
+    const data = await (await api(`/api/looks?t=${Number($("time").value)}`, { method: "POST", body: JSON.stringify(payload()) })).json();
+    looks = data.looks;
+    const holder = $("looks");
+    holder.innerHTML = "";
+    for (const name of Object.keys(looks)) {
+      const card = document.createElement("button");
+      card.className = "look";
+      card.dataset.look = name;
+      card.setAttribute("role", "radio");
+      card.innerHTML = `<img alt=""><span></span>`;
+      card.querySelector("img").src = data.stills[name];
+      card.querySelector("span").textContent = name;
+      card.addEventListener("click", () => {
+        Object.assign(state.style, looks[name]);
+        fillLook();
+        scheduleSync(0);
+      });
+      holder.append(card);
+    }
+    sumDeco();
+  } catch (e) { toast(e.message); }
+}
+
+function clipLabel(text, busy) {
+  $("clip-label").textContent = text;
+  $("clip-make").disabled = busy;
+  $("deco-clip").firstChild.textContent = text === "10초 미리보기" ? "여기서 10초 재생" : text;
+  $("deco-clip").disabled = busy;
+}
+
 function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
@@ -382,6 +444,7 @@ function fillLook() {
     select.add(o);
   }
   select.value = s.font;
+  sumDeco();
 }
 
 // The folder's last two parts fit the footer; the whole path is in the tooltip.
@@ -418,6 +481,7 @@ function fillAll() {
   showOutput();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
   else $("player").removeAttribute("src");
+  loadWave();
   $("time").max = Math.max(1, state.duration || 60);
   fillLook();
   drawLines();
@@ -425,6 +489,7 @@ function fillAll() {
 }
 
 function drawLines() {
+  drawWave();
   const holder = $("lines");
   holder.innerHTML = "";
   state.lines.forEach(([t, text], i) => {
@@ -444,12 +509,8 @@ function drawLines() {
       </span>
       <button class="quiet" data-a="del" title="이 줄 지우기">✕</button>`;
     row.querySelector(".x").value = text;
-    if (notes[i]) {
-      const doubt = document.createElement("div");
-      doubt.className = "mine";
-      doubt.textContent = notes[i];
-      row.appendChild(doubt);
-    }
+    if (i === checkAt) row.classList.add("checking");
+    if (heard[i]) row.title = `들린 글자: ${heard[i]}`;
     if (diff[i] != null) {
       const mine = document.createElement("div");
       mine.className = "mine";
@@ -474,6 +535,7 @@ function drawLines() {
       }
       state.lines[i][0] = box.value.trim() === "" ? null : parseClock(box.value);
       box.value = clockTenth(state.lines[i][0]);
+      settle(i, row);
       updateCheck();
       scheduleSync();
     });
@@ -489,6 +551,7 @@ function drawLines() {
         state.lines[i][0] = Math.max(0, Math.round((state.lines[i][0] + (a === "plus" ? 0.1 : -0.1)) * 100) / 100);
         row.querySelector(".t").value = clockTenth(state.lines[i][0]);
         row.querySelector(".t").classList.remove("invalid");
+        settle(i, row);
         showAt(state.lines[i][0] + 0.3);
       } else if (a === "play") {
         const p = $("player");
@@ -498,6 +561,8 @@ function drawLines() {
         const [gone] = state.lines.splice(i, 1);
         const [goneDiff] = diff.splice(i, 1);
         notes = {};
+        heard = {};
+        showCheck();
         drawLines();
         scheduleSync();
         toast("줄을 지웠습니다.", 6000, {
@@ -574,6 +639,42 @@ function markNow(t) {
   }
 }
 
+// Lines automatic timing was unsure of, in order; a line whose time is changed by hand is settled.
+function checkLines() {
+  return Object.keys(notes).map(Number).sort((a, b) => a - b);
+}
+
+function showCheck() {
+  const list = checkLines();
+  $("check-bar").hidden = !list.length;
+  if (!list.length) { checkAt = -1; return; }
+  if (!list.includes(checkAt)) checkAt = list[0];
+  $("check-count").textContent = `확인할 줄 ${list.length}`;
+  $("check-why").textContent = `${checkAt + 1} · ${notes[checkAt]}`;
+  $("check-at").textContent = `${list.indexOf(checkAt) + 1}/${list.length}`;
+}
+
+function moveCheck(step) {
+  const list = checkLines();
+  if (!list.length) return;
+  const at = list.indexOf(checkAt);
+  checkAt = list[(at + step + list.length) % list.length];
+  for (const row of document.querySelectorAll(".line.checking")) row.classList.remove("checking");
+  const row = $("lines").children[checkAt];
+  row.classList.add("checking");
+  row.scrollIntoView({ block: "nearest" });
+  showCheck();
+  drawWave();
+  goLine(checkAt);
+}
+
+function settle(i, row) {
+  if (!notes[i]) return;
+  delete notes[i];
+  row.classList.remove("doubt", "checking");
+  showCheck();
+}
+
 function goLine(i) {
   const start = state.lines[i][0];
   if (start == null || tapIndex >= 0) return;
@@ -586,7 +687,126 @@ function showAt(t, delay = 150) {
   $("time").value = t;
   $("time-label").textContent = clock(t).replace(/\.\d+$/, "");
   markNow(t);
+  drawWave();
   scheduleSync(delay);
+}
+
+// Decoded at 8 kHz in one channel: a four-minute song takes about 8 MB while it is read, then only
+// the slices are kept.
+async function loadWave() {
+  peaks = null;
+  drawWave();
+  if (!state.has_audio) return;
+  try {
+    const data = await (await fetch(`/media/audio?v=${Date.now()}`)).arrayBuffer();
+    const song = await new OfflineAudioContext(1, 1, 8000).decodeAudioData(data);
+    const samples = song.getChannelData(0);
+    const step = Math.max(1, Math.floor(samples.length / PEAK_SLICES));
+    peaks = new Float32Array(Math.ceil(samples.length / step));
+    for (let k = 0; k < peaks.length; k++) {
+      let top = 0;
+      for (let j = k * step, end = Math.min(samples.length, j + step); j < end; j++) top = Math.max(top, Math.abs(samples[j]));
+      peaks[k] = top;
+    }
+    peaks.duration = song.duration;
+  } catch (e) {
+    peaks = null; // a format the browser cannot decode: the list works without the strip
+  }
+  drawWave();
+}
+
+// On the strip a line's mark can be dragged to a new start; anywhere else a press moves the preview.
+// A dragged line stays between its neighbours, so the order of the lines never changes.
+function markNear(x, width) {
+  let best = -1, gap = 6;
+  state.lines.forEach(([t, text], i) => {
+    if (t == null || !text) return;
+    const d = Math.abs((t / peaks.duration) * width - x);
+    if (d <= gap) { best = i; gap = d; }
+  });
+  return best;
+}
+
+function bindWave() {
+  const wave = $("wave");
+  // A mark only moves once the pointer has gone 3 px, so a plain press never shifts a time by rounding.
+  let held = -1, downX = 0, from = null;
+  const timeAt = (e) => Math.min(peaks.duration, Math.max(0, (e.offsetX / wave.clientWidth) * peaks.duration));
+  wave.addEventListener("pointermove", (e) => {
+    if (!peaks) return;
+    if (held < 0) {
+      wave.style.cursor = markNear(e.offsetX, wave.clientWidth) >= 0 ? "ew-resize" : "";
+      return;
+    }
+    if (from === null && Math.abs(e.offsetX - downX) < 3) return;
+    from ??= state.lines[held][0];
+    const before = state.lines.slice(0, held).findLast(([t]) => t != null);
+    const after = state.lines.slice(held + 1).find(([t]) => t != null);
+    const low = before ? before[0] + 0.1 : 0;
+    const high = after ? after[0] - 0.1 : peaks.duration;
+    const t = Math.round(Math.min(high, Math.max(low, timeAt(e))) * 10) / 10;
+    state.lines[held][0] = t;
+    $("lines").children[held].querySelector(".t").value = clockTenth(t);
+    drawWave();
+  });
+  wave.addEventListener("pointerdown", (e) => {
+    if (!peaks) return;
+    held = markNear(e.offsetX, wave.clientWidth);
+    if (held >= 0) {
+      downX = e.offsetX;
+      from = null;
+      wave.setPointerCapture(e.pointerId);
+      return;
+    }
+    const t = timeAt(e);
+    const p = $("player");
+    if (!p.paused) p.currentTime = t;
+    showAt(t, 0);
+  });
+  const release = () => {
+    if (held < 0) return;
+    const i = held, t = state.lines[i][0];
+    held = -1;
+    if (from === null || t === from) {
+      const p = $("player");
+      if (!p.paused) p.currentTime = t;
+      showAt(t, 0);
+      return;
+    }
+    settle(i, $("lines").children[i]);
+    updateCheck();
+    showAt(t + 0.3);
+  };
+  wave.addEventListener("pointerup", release);
+  wave.addEventListener("pointercancel", release);
+}
+
+function drawWave() {
+  const wave = $("wave");
+  wave.hidden = !peaks;
+  if (!peaks || !wave.clientWidth) return;
+  const ratio = window.devicePixelRatio || 1;
+  const w = (wave.width = Math.round(wave.clientWidth * ratio));
+  const h = (wave.height = Math.round(wave.clientHeight * ratio));
+  const g = wave.getContext("2d");
+  const css = getComputedStyle(document.documentElement);
+  const x = (t) => (t / peaks.duration) * w;
+  g.fillStyle = css.getPropertyValue("--line");
+  for (let px = 0; px < w; px++) {
+    const top = peaks[Math.floor((px / w) * peaks.length)] || 0;
+    g.fillRect(px, h / 2 - (top * h) / 2, 1, Math.max(1, top * h));
+  }
+  g.font = `${11 * ratio}px sans-serif`;
+  state.lines.forEach(([t, text], i) => {
+    if (t == null || !text) return;
+    g.fillStyle = css.getPropertyValue(i === checkAt ? "--warn" : notes[i] ? "--warn" : "--muted");
+    g.globalAlpha = i === checkAt || !notes[i] ? 1 : 0.6;
+    g.fillRect(Math.round(x(t)), 0, ratio, h);
+    g.fillText(String(i + 1), x(t) + 3 * ratio, 12 * ratio);
+  });
+  g.globalAlpha = 1;
+  g.fillStyle = css.getPropertyValue("--accent");
+  g.fillRect(Math.round(x(Number($("time").value))), 0, 2 * ratio, h);
 }
 
 // While the song plays the still follows it about once a second; a pause or a seek shows that moment.
@@ -741,6 +961,8 @@ async function importText(name, text) {
   state.lines = data.lines;
   diff = data.diff;
   notes = {};
+  heard = {};
+  showCheck();
   tapIndex = -1;
   drawLines();
   scheduleSync();
@@ -775,7 +997,8 @@ function timeLeft(seconds) {
 async function loadModels() {
   const data = await (await api("/api/auto")).json();
   const m = data.models.small;
-  $("auto-size").textContent = m.ready ? "듣기 모델 준비됨." : `첫 사용 시 듣기 모델 ${size(m.size_mb)} 내려받기.`;
+  $("auto-size").textContent = m.ready ? "" : `처음 한 번 듣기 모델 ${size(m.size_mb)} 내려받기`;
+  $("auto-size").hidden = m.ready;
   return data;
 }
 
@@ -832,15 +1055,16 @@ async function pollAuto() {
       state.lines = job.lines;
       diff = [];
       notes = {};
+      heard = {};
       const lyricIndex = [];
       job.lines.forEach(([, text], i) => { if (text) lyricIndex.push(i); });
       for (const n of job.notes) {
         const at = lyricIndex[n.line];
-        notes[at] = n.kind === "unplaced"
-          ? "찾지 못한 줄: 앞뒤 줄 사이 시간으로 넣었습니다. 듣고 고칩니다."
-          : n.kind === "doubtful" ? "앞 줄과 1초 안으로 붙어 있습니다. 듣고 고칩니다."
-          : `다르게 들림: ${n.heard}`;
+        if (n.kind === "differs") heard[at] = n.heard;
+        else notes[at] = n.kind === "unplaced" ? "못 찾음, 앞뒤 줄 사이에 둠" : "앞 줄과 1초 안";
       }
+      checkAt = -1;
+      showCheck();
       drawLines();
       scheduleSync();
       const sung = lyricIndex.length;
@@ -913,7 +1137,7 @@ function stopTap(pause = true) {
 
 // One step at a time; the line list under the preview belongs to the lyrics and timing steps.
 const GROUPS = ["files", "lyrics", "timing", "deco", "make"];
-const PANES = { files: ["g-files"], lyrics: ["g-lyrics"], timing: ["g-timing"], deco: ["g-look", "g-colour"], make: ["g-make"] };
+const PANES = { files: ["g-files"], lyrics: ["g-lyrics"], timing: ["g-timing"], deco: ["g-deco"], make: ["g-make"] };
 const OLD_GROUPS = { look: "deco", colour: "deco", "step-files": "files", "step-lyrics": "lyrics", "step-timing": "timing", "step-look": "deco" };
 
 function openGroup(name) {
@@ -925,6 +1149,7 @@ function openGroup(name) {
   }
   document.querySelector(".steps").scrollTop = 0;
   document.body.classList.toggle("timing-open", name === "lyrics" || name === "timing");
+  if (name === "deco") loadLooks();
 }
 
 function bindRail() {
@@ -990,22 +1215,19 @@ async function pollClip() {
     setTimeout(pollClip, 1000);
     return;
   }
-  const label = $("clip-label");
   if (job.state === "running") {
-    $("clip-make").disabled = true;
-    label.textContent = `만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`;
+    clipLabel(`만드는 중 ${Math.round((job.total ? job.done / job.total : 0) * 100)}%`, true);
     showRenderPlace((job.at || 0) + (job.done || 0), videoLength());
     setTimeout(pollClip, 500);
     return;
   }
-  $("clip-make").disabled = false;
-  label.textContent = "10초 미리보기";
+  clipLabel("10초 미리보기", false);
   if (job.state === "done") {
     const video = $("clip");
     video.src = job.url;
     video.hidden = false;
     $("boxes").hidden = true;
-    label.textContent = "미리보기 닫기";
+    clipLabel("미리보기 닫기", false);
     video.play().catch(() => {});
     if (job.note) toast(job.note, 9000);
   } else if (job.state === "error") {
@@ -1083,6 +1305,11 @@ function bind() {
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   bindRail();
+  new ResizeObserver(() => drawWave()).observe($("wave"));
+  bindWave();
+  $("check-prev").addEventListener("click", () => moveCheck(-1));
+  $("deco-clip").addEventListener("click", () => $("clip-make").click());
+  $("check-next").addEventListener("click", () => moveCheck(1));
 
   $("tap-start").addEventListener("click", () => {
     if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
