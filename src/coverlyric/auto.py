@@ -8,6 +8,7 @@ faster-whisper is the optional "auto" extra, installed the first time the user a
 from __future__ import annotations
 
 import difflib
+import gc
 import os
 import re
 import threading
@@ -41,6 +42,10 @@ def fitting(model: str, free_mb: float | None) -> str | None:
     while name and PEAK_MB[name] + MARGIN_MB > free_mb:
         name = SMALLER.get(name)
     return name
+
+
+class NoMemory(Exception):
+    """No listening model, down to the smallest, could get the memory it needs."""
 
 
 def out_of_memory(error: BaseException) -> bool:
@@ -173,10 +178,12 @@ def transcribe(
     language: str = "ko",
     report: Callable[[str, float, float], None] = lambda phase, done, total: None,
     heard: Callable[[list[dict], float], None] = lambda words, until: None,
+    clip: tuple[float, float] | None = None,
 ) -> list[dict]:
-    """Words heard in the song, each {start, end, word}. VAD stays off: on sung vocals it drops most
-    lines. `report` gets (phase, done, total): MB while the model downloads, seconds of the song
-    while listening; `heard` gets the words so far after each segment."""
+    """Words heard in the song, each {start, end, word, prob}. VAD stays off: on sung vocals it drops
+    most lines. `report` gets (phase, done, total): MB while the model downloads, seconds of the song
+    while listening; `heard` gets the words so far after each segment. `clip` listens to that stretch
+    only (seconds)."""
     from faster_whisper import WhisperModel
 
     done = threading.Event()
@@ -212,14 +219,46 @@ def transcribe(
         vad_filter=False,
         no_speech_threshold=0.9,
         condition_on_previous_text=False,
+        **({"clip_timestamps": [clip[0], clip[1]]} if clip else {}),
     )
     report("listen", 0.0, info.duration)
     words = []
     for s in segments:
         words.extend(
-            {"start": round(w.start, 2), "end": round(w.end, 2), "word": w.word}
+            {
+                "start": round(w.start, 2),
+                "end": round(w.end, 2),
+                "word": w.word,
+                "prob": round(w.probability, 2),
+            }
             for w in s.words or []
         )
         report("listen", s.end, info.duration)
         heard(words, s.end)
     return words
+
+
+def listen(
+    audio: str,
+    model: str = "small",
+    report: Callable[[str, float, float], None] = lambda phase, done, total: None,
+    heard: Callable[[list[dict], float], None] = lambda words, until: None,
+    smaller: Callable[[str], None] = lambda name: None,
+    clip: tuple[float, float] | None = None,
+) -> tuple[list[dict], str]:
+    """The words heard and the model that heard them. A model that cannot get memory gives way to the
+    next smaller one (`smaller` is told which); when none can, NoMemory."""
+    name = model
+    while True:
+        try:
+            extra = {"clip": clip} if clip else {}
+            return transcribe(audio, name, report=report, heard=heard, **extra), name
+        except (MemoryError, RuntimeError) as e:
+            if not out_of_memory(e):
+                raise
+            gc.collect()  # let the model that failed go before a smaller one loads
+            following = SMALLER.get(name)
+            if following is None:
+                raise NoMemory(f"no listening model could get memory (last tried: {name})") from e
+            name = following
+            smaller(name)

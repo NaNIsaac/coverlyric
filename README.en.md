@@ -80,6 +80,12 @@ uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --c
 uv run coverlyric still demo-song --at 7
 ```
 
+To make the video in one go from a song, a cover and a lyrics file:
+
+```sh
+uv run --extra auto coverlyric make --audio song.mp3 --cover cover.png --lyrics lyrics.txt --title "Title" --out videos
+```
+
 ## More
 
 [Full guide](docs/guide.en.md) · [Command line](docs/cli.en.md) · [For agents](docs/agents.md) · Licence: code MIT, fonts SIL OFL 1.1

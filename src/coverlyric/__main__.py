@@ -1,11 +1,10 @@
-"""Command line: `coverlyric` opens the page; `project`, `render` and `still` (in cli.py) work on
-project folders for people and agents; `render-job`, `auto-job` and `pick-folder` are the page's
-child processes."""
+"""Command line: `coverlyric` opens the page; `make`, `project`, `auto`, `words`, `render` and `still`
+(in cli.py) work on project folders for people and agents; `render-job`, `auto-job` and
+`pick-folder` are the page's child processes."""
 
 from __future__ import annotations
 
 import argparse
-import gc
 import json
 import os
 import sys
@@ -78,20 +77,14 @@ def run_auto(path: Path) -> None:
     def heard(words: list[dict], until: float) -> None:
         print(f"lines {json.dumps(auto.found(data['lyrics'], words, until))}", flush=True)
 
-    name = data["model"]
-    while True:
-        try:
-            words = auto.transcribe(data["audio"], name, report=report, heard=heard)
-            break
-        except (MemoryError, RuntimeError) as e:
-            if not auto.out_of_memory(e):
-                raise
-            gc.collect()  # let the model that failed go before a smaller one loads
-            name = auto.SMALLER.get(name)
-            if name is None:
-                print("error memory", flush=True)
-                raise SystemExit(auto.NO_MEMORY_EXIT) from e
-            print(f"smaller {name}", flush=True)
+    def smaller(name: str) -> None:
+        print(f"smaller {name}", flush=True)
+
+    try:
+        words, _ = auto.listen(data["audio"], data["model"], report, heard, smaller)
+    except auto.NoMemory as e:
+        print("error memory", flush=True)
+        raise SystemExit(auto.NO_MEMORY_EXIT) from e
     report("align", 0.0, 0.0)
     lines, notes = auto.align(data["lyrics"], words)
     result = {"lines": [list(line) for line in lines], "notes": notes, "heard": len(words)}
@@ -149,7 +142,7 @@ def main(argv: list[str] | None = None) -> None:
             "COVERLYRIC_NO_BROWSER"
         )
         serve(home.resolve(), getattr(args, "port", 0), browser)
-    elif args.command in ("render", "still", "project"):
+    elif args.command in ("render", "still", "project", "auto", "words", "make"):
         sys.exit(cli.main(args))
     elif args.command == "auto-job":
         try:

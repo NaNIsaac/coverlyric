@@ -12,6 +12,33 @@ uv run coverlyric app --home <폴더>       # 작업과 영상을 <폴더>에 �
 uv run coverlyric app --port 8765 --no-browser
 ```
 
+## 한 번에 만들기
+
+```sh
+uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyrics 가사.txt --title "제목" --out 영상
+```
+
+`영상/제목/` 폴더 하나에 노래와 표지 복사본, `project.json`, `제목.mp4`, `.srt`, `.lrc`, `.png` 가
+저장됩니다. 가사는 노래를 듣고 자동으로 맞춥니다. 시간이 있는 자막이 있으면 `--lyrics` 대신
+`--timing <자막>` 을 쓰고, 이때는 듣지 않습니다.
+
+| 선택 | 뜻 |
+|---|---|
+| `--artist ..` | 가수 |
+| `--lead 1` / `--tail 2` | 영상 앞과 뒤의 공백(초) |
+| `--height 720` / `--fps 30` | 화질(1080, 720)과 1초에 장면 수(24, 30) |
+| `--style <JSON 또는 파일>` | 모양 설정, 예 `'{"fade": false}'` |
+| `--model small` | 듣기 모델 (`small`, `base`, `tiny`). 메모리가 모자라면 더 작은 모델로 바꿉니다. |
+| `--keep-tags` | 대괄호 표시와 `#` 줄을 남김 |
+| `--strict` | 찾지 못한 줄이나 확인할 줄이 있으면 종료 코드 4 |
+
+끝나면 요약을 출력합니다: 파일 경로, 가사 줄 수(`sung`), 들어서 찾은 줄 수(`placed`), 찾지 못해
+앞뒤 줄 사이에 둔 줄(`unplaced`)과 앞 줄과 1초 안인 줄(`doubtful`)의 번호와 시간, 쓴 모델, 단계별
+걸린 초.
+
+자동 맞추기는 `auto` 추가 패키지(faster-whisper)가 필요합니다. `uv run --extra auto` 가 처음 한 번
+설치하고, 듣기 모델은 처음 쓸 때 내려받습니다(`small` 약 460 MB). 노래는 이 PC 안에서만 듣습니다.
+
 ## 프로젝트 폴더로 만들기
 
 프로젝트는 폴더 하나입니다. `project.json`, 노래(`song.*`), 표지(`cover.*`)가 들어 있고, 영상과
@@ -26,6 +53,8 @@ uv run coverlyric app --port 8765 --no-browser
 | `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
 | `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
 | `project lines <프로젝트> --import <자막>` / `--from-lyrics <가사>` | 줄과 시간을 자막 파일에서, 또는 시간 없이 가사 파일에서 다시 넣습니다. |
+| `auto <프로젝트> [--model ..] [--apply] [--strict]` | 노래를 듣고 줄마다 시간을 정합니다. 결과와 확인할 줄만 보여 주고, `--apply` 를 붙이면 프로젝트에 저장합니다. |
+| `words <노래 또는 프로젝트> --from 1:10 --to 1:20 [--model ..]` | 그 구간에서 들린 낱말과 시작, 끝 시간. 찾지 못한 줄의 시간을 직접 정할 때 씁니다. |
 | `render <프로젝트> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | 영상을 만듭니다. 영상 전체를 만들면 옆에 `.srt`, `.lrc`, `.png` 도 저장합니다. 기본 파일 이름은 프로젝트 폴더의 `<제목>.mp4`. |
 | `still <프로젝트> [--at 1:05] [--out <png>]` | 한 장면을 그림으로 저장합니다. |
 
@@ -38,8 +67,9 @@ uv run coverlyric app --port 8765 --no-browser
 | 1 | 실패 (이유는 표준 오류와 `--json` 의 `error`) |
 | 2 | 명령을 잘못 씀 (없는 키, 시간이 아닌 값, 없는 줄 번호) |
 | 3 | 메모리 부족 |
+| 4 | 만들었지만 확인할 줄이 있음 (`--strict` 일 때만) |
 
-예 (데모 노래):
+데모 노래로 해 보기 (자막 `timing.srt` 는 직접 만든 것):
 
 ```sh
 uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
