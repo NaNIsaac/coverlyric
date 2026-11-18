@@ -45,6 +45,9 @@ line without a time).
   `[Verse 1 — Conversational, rhythmic]` are dropped. A mark inside a line is removed and the rest of
   the line stays. Round brackets such as `(echo)` stay. The same applies to pasted and loaded
   subtitles.
+- **대괄호 표시와 # 줄 빼기** (drop bracket marks and # lines), next to **가사 넣기**, turns this on and
+  off (on at first, saved with the work). Off, the lyrics go in as typed, with only blank lines left
+  out. It applies to pasted lyrics, the pasted chat-AI answer and subtitle files alike.
 
 ## Timing
 

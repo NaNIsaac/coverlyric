@@ -22,31 +22,33 @@ SECTION = re.compile(
 BRACKETS = re.compile(r"\[[^\]]*\]")
 
 
-def sung(line: str) -> str:
+def sung(line: str, clean: bool = True) -> str:
     """The words of a lyric line that are sung. Square-bracket notes such as Suno's
     "[Verse 1 — Conversational, rhythmic]" are removed, a line starting with # is a comment and
     becomes empty, and a whole-line section tag such as (Chorus) is dropped. Round brackets inside a
-    line, such as "(echo)", are sung and stay."""
+    line, such as "(echo)", are sung and stay. With `clean` off the line is kept as typed."""
     line = line.strip()
+    if not clean:
+        return line
     if line.startswith("#") or SECTION.match(line):
         return ""
     return " ".join(BRACKETS.sub(" ", line).split())
 
 
-def from_text(text: str) -> list[Line]:
+def from_text(text: str, clean: bool = True) -> list[Line]:
     """One line per sung line of the pasted lyrics, without times. Blank lines, # comments and lines
     that are only [..] tags are dropped."""
-    return [(None, line) for raw in text.splitlines() if (line := sung(raw))]
+    return [(None, line) for raw in text.splitlines() if (line := sung(raw, clean))]
 
 
-def parse_lrc(text: str) -> list[Line]:
+def parse_lrc(text: str, clean: bool = True) -> list[Line]:
     rows = []
     for raw in text.splitlines():
         stamps = list(STAMP.finditer(raw))
         if not stamps:
             continue
         words = raw[stamps[-1].end() :]
-        words = sung(re.sub(r"<\d+:\d+(?:\.\d+)?>", "", words))  # enhanced LRC word stamps
+        words = sung(re.sub(r"<\d+:\d+(?:\.\d+)?>", "", words), clean)  # enhanced LRC word stamps
         for m in stamps:
             rows.append((int(m[1]) * 60 + float(m[2].replace(":", ".")), words))
     return sorted(rows, key=lambda r: r[0])
@@ -56,7 +58,7 @@ def cue_seconds(h: str | None, m: str, s: str, ms: str) -> float:
     return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(ms.ljust(3, "0")) / 1000
 
 
-def parse_cues(text: str) -> list[Line]:
+def parse_cues(text: str, clean: bool = True) -> list[Line]:
     """SRT and WebVTT: each cue's start and its text joined on one line; a gap between cues longer than
     a second becomes an empty line, so the band leaves the last line when the singing stops."""
     rows: list[Line] = []
@@ -68,7 +70,7 @@ def parse_cues(text: str) -> list[Line]:
             if m := CUE_TIME.search(raw):
                 start = cue_seconds(*m.groups()[:4])
                 end = cue_seconds(*m.groups()[4:])
-                words = " ".join(w for b in block[i + 1 :] if (w := sung(TAG.sub("", b))))
+                words = " ".join(w for b in block[i + 1 :] if (w := sung(TAG.sub("", b), clean)))
                 if ends and start - ends[-1] > 1.0:
                     rows.append((ends[-1], ""))
                 rows.append((start, words))
@@ -85,17 +87,17 @@ def parse_cues(text: str) -> list[Line]:
     return rows
 
 
-def parse(name: str, text: str) -> list[Line]:
+def parse(name: str, text: str, clean: bool = True) -> list[Line]:
     """Read a timing file by its extension, or by its look when the extension says nothing."""
     text = text.lstrip("﻿")
     lower = name.lower()
     if lower.endswith(".lrc"):
-        return parse_lrc(text)
+        return parse_lrc(text, clean)
     if lower.endswith((".srt", ".vtt")) or "-->" in text:
-        return parse_cues(text)
+        return parse_cues(text, clean)
     if STAMP.search(text):
-        return parse_lrc(text)
-    return from_text(text)
+        return parse_lrc(text, clean)
+    return from_text(text, clean)
 
 
 def stamp(seconds: float) -> str:
