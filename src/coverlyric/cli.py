@@ -4,14 +4,16 @@ command can answer in JSON."""
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import os
 import shutil
 import sys
 import time
 from dataclasses import fields
 from pathlib import Path
 
-from . import jobs, media, render, timing
+from . import auto, jobs, media, render, timing
 from .project import Project
 
 NOTE_TEXT = {
@@ -19,6 +21,7 @@ NOTE_TEXT = {
     "doubtful": "within 1 s of the line before",
     "differs": "heard differently",
 }
+CHECK = ("unplaced", "doubtful")  # notes that make --strict exit 4; "differs" only reports
 TEXT_KEYS = ("title", "artist")
 STYLE_KEYS = tuple(f.name for f in fields(render.Style))
 
@@ -239,7 +242,11 @@ def video_name(project: Project) -> str:
     return f"{safe_name(project.title)}.mp4"
 
 
-def progress(phase: str):
+def say(text: str) -> None:
+    print(text, file=sys.stderr, flush=True)
+
+
+def progress(phase: str, unit=clock):
     """A report function that writes a line to stderr every 5 percent."""
     last = [-1]
 
@@ -247,11 +254,151 @@ def progress(phase: str):
         share = int(done / total * 20) if total else 0
         if share != last[0]:
             last[0] = share
-            print(
-                f"{phase} {clock(done)} / {clock(total)} {share * 5}%", file=sys.stderr, flush=True
-            )
+            say(f"{phase} {unit(done)} / {unit(total)} {share * 5}%")
 
     return report
+
+
+def listening():
+    """The report function for automatic timing: model download in MB, then the song in time."""
+    shown = {
+        "download": progress("download", lambda mb: f"{mb:.0f} MB"),
+        "listen": progress("listen"),
+    }
+
+    def report(phase: str, done: float, total: float) -> None:
+        if phase in shown:
+            shown[phase](done, total)
+        else:
+            say(phase)
+
+    return report
+
+
+def hear(audio: str, model: str, clip: tuple[float, float] | None = None) -> tuple[list[dict], str]:
+    """Words heard in the song and the model used: the largest from `model` down that fits."""
+    if model not in auto.MODELS:
+        raise Usage(f"unknown model {model!r}; models: {', '.join(auto.MODELS)}")
+    if not importlib.util.find_spec("faster_whisper"):
+        raise ValueError(
+            "automatic timing needs the 'auto' extra: uv run --extra auto coverlyric ..."
+            " or pip install 'coverlyric[auto]'"
+        )
+    picked = auto.fitting(model, media.commit_mb())
+    if picked is None:
+        raise auto.NoMemory("not enough free memory for even the smallest listening model")
+    if picked != model:
+        say(f"smaller {picked}")
+    # The public models need no token; the plain download shows progress as the file grows.
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+    return auto.listen(
+        audio, picked, listening(), smaller=lambda name: say(f"smaller {name}"), clip=clip
+    )
+
+
+def auto_time(project: Project, model: str) -> dict:
+    """Time the project's lyrics from its song: the lines get times and the unsure ones a note.
+    Returns the model used and the seconds it took; the caller saves."""
+    lyrics = [text for _, text in project.lines if text]
+    if not lyrics:
+        raise ValueError("the project has no lyrics; add them with 'project lines --from-lyrics'")
+    started = time.monotonic()
+    words, used = hear(project.path(project.audio), model)
+    say("align")
+    lines, notes = auto.align(lyrics, words)
+    number = [n for n, (_, text) in enumerate(lines, 1) if text]
+    project.lines = lines
+    project.notes = [
+        {"n": number[note["line"]], "kind": note["kind"], "heard": note["heard"]} for note in notes
+    ]
+    return {"model": used, "heard": len(words), "seconds": round(time.monotonic() - started, 1)}
+
+
+def to_check(project: Project) -> dict:
+    """The lines automatic timing was unsure of, by kind."""
+    found = {kind: [] for kind in CHECK}
+    for note in project.notes:
+        if note["kind"] in found:
+            t, text = project.lines[note["n"] - 1]
+            found[note["kind"]].append({"n": note["n"], "time": t, "text": text})
+    return found
+
+
+def words_in(path: Path, start: float, end: float, model: str) -> dict:
+    """Word timestamps for one stretch of a song file or of a project's song."""
+    if path.is_dir() or path.suffix == ".json":
+        project, _ = load(path)
+        path = Path(project.path(project.audio))
+    elif not path.is_file():
+        raise FileNotFoundError(f"no file at {path}")
+    if end <= start:
+        raise Usage("--to must be after --from")
+    words, used = hear(str(path), model, (start, end))
+    inside = [
+        {**w, "word": w["word"].strip()} for w in words if start - 0.5 <= w["start"] <= end + 0.5
+    ]
+    return {"audio": str(path), "from": start, "to": end, "model": used, "words": inside}
+
+
+def style_from(text: str) -> dict:
+    """Style keys from JSON text or a JSON file."""
+    path = Path(text)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8") if path.is_file() else text)
+    except json.JSONDecodeError as e:
+        raise Usage(f"--style is not JSON: {e}") from None
+    if not isinstance(data, dict):
+        raise Usage("--style takes a JSON object or a file holding one")
+    if unknown := sorted(set(data) - set(STYLE_KEYS)):
+        raise Usage(f"unknown style key {unknown[0]!r}; keys: {', '.join(STYLE_KEYS)}")
+    return data
+
+
+def make(args: argparse.Namespace) -> dict:
+    """Project, timing, video and timing files together in OUT/<title>/."""
+    from .server import safe_name
+
+    style = style_from(args.style) if args.style else {}
+    pairs = [
+        f"{key}={value}"
+        for key in ("lead", "tail", "height", "fps")
+        if (value := getattr(args, key)) is not None
+    ]
+    set_keys(Project(args.out), pairs)  # a wrong value stops before any folder is made
+    folder = args.out / safe_name(args.title)
+    project = new_project(
+        folder,
+        args.audio,
+        args.cover,
+        args.timing or args.lyrics,
+        args.title,
+        args.artist,
+        not args.keep_tags,
+    )
+    file = folder / "project.json"
+    project.style = render.Style.from_dict({**project.style.to_dict(), **style})
+    set_keys(project, pairs)
+    project.save(file)
+    summary = {"folder": str(folder), "project": str(file)}
+    took = {}
+    if any(t is None for t, _ in project.lines):
+        heard = auto_time(project, args.model)
+        project.save(file)
+        summary["model"] = heard["model"]
+        took["auto"] = heard["seconds"]
+    made = make_video(project, None)
+    took["render"] = made.pop("seconds")
+    check = to_check(project)
+    sung = sum(1 for _, text in project.lines if text)
+    return {
+        **made,
+        **summary,
+        "sung": sung,
+        "placed": sung - len(check["unplaced"]),
+        **check,
+        "seconds": took,
+    }
 
 
 def make_video(
@@ -334,8 +481,54 @@ def add_commands(sub) -> None:
     )
     lines.add_argument("--from-lyrics", type=Path, help="new lines from a text file, without times")
 
+    strict = argparse.ArgumentParser(add_help=False)
+    strict.add_argument(
+        "--strict", action="store_true", help="exit 4 when lines were not found or are doubtful"
+    )
+    model = argparse.ArgumentParser(add_help=False)
+    model.add_argument("--model", default="small", choices=tuple(auto.MODELS))
+
+    a = sub.add_parser(
+        "auto", parents=[common, strict, model], help="time a project's lyrics from its song"
+    )
+    a.add_argument("project", type=Path)
+    a.add_argument("--apply", action="store_true", help="save the times into the project")
+
+    w = sub.add_parser("words", parents=[common, model], help="the words heard in one stretch")
+    w.add_argument("audio", type=Path, help="a song file, or a project folder for its song")
+    w.add_argument("--from", dest="start", required=True, help="e.g. 1:10")
+    w.add_argument("--to", dest="end", required=True, help="e.g. 1:20")
+
+    m = sub.add_parser(
+        "make", parents=[common, strict, model], help="a project, its timing and the video at once"
+    )
+    m.add_argument("--audio", type=Path, required=True)
+    m.add_argument("--cover", type=Path, required=True)
+    given = m.add_mutually_exclusive_group(required=True)
+    given.add_argument("--lyrics", type=Path, help="lyrics text, timed by listening to the song")
+    given.add_argument("--timing", type=Path, help="lines with times (SRT, LRC or VTT)")
+    m.add_argument("--title", required=True, help="also the folder and file name")
+    m.add_argument("--artist", default="")
+    m.add_argument("--lead", help="seconds of silence before the song")
+    m.add_argument("--tail", help="seconds of silence after the song")
+    m.add_argument("--height", help="1080 or 720")
+    m.add_argument("--fps", help="24 or 30")
+    m.add_argument("--style", help="style keys as JSON, or a JSON file")
+    m.add_argument("--keep-tags", action="store_true", help="keep [..] marks and # lines")
+    m.add_argument("--out", type=Path, required=True, help="the song's folder is made in here")
+
 
 def run(args: argparse.Namespace) -> dict:
+    if args.command == "make":
+        return make(args)
+    if args.command == "words":
+        return words_in(args.audio, seconds(args.start), seconds(args.end), args.model)
+    if args.command == "auto":
+        project, file = load(args.project)
+        heard = auto_time(project, args.model)
+        if args.apply:
+            project.save(file)
+        return {**show(project, file), **heard, **to_check(project), "applied": args.apply}
     if args.command == "render":
         project, _ = load(args.project)
         clip = None
@@ -376,7 +569,9 @@ def run(args: argparse.Namespace) -> dict:
 
 
 def text(result: dict) -> str:
-    if "lines" in result:
+    if "words" in result:
+        return "\n".join(f"{clock(w['start'])}  {w['word']}" for w in result["words"])
+    if "timed" in result:
         said = show_text(result)
         return "\n".join(result.get("changed", [])) + ("\n" if result.get("changed") else "") + said
     return "\n".join(f"{k}: {v}" for k, v in result.items())
@@ -388,10 +583,14 @@ def main(args: argparse.Namespace) -> int:
         result = run(args)
     except Usage as e:
         return fail(args, str(e), 2)
+    except auto.NoMemory as e:
+        return fail(args, str(e), 3)
     except Exception as e:  # noqa: BLE001 - the command line says what failed, and how
         code = 3 if jobs.failure(e) == jobs.MEMORY_ERROR else 1
         return fail(args, jobs.failure(e), code)
     print(json.dumps(result, ensure_ascii=False) if args.json else text(result), flush=True)
+    if getattr(args, "strict", False) and any(result.get(kind) for kind in CHECK):
+        return 4
     return 0
 
 

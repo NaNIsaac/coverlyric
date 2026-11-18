@@ -73,6 +73,12 @@ uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --c
 uv run coverlyric still demo-song --at 7
 ```
 
+노래와 표지, 가사 파일로 영상까지 한 번에 만들려면:
+
+```sh
+uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyrics 가사.txt --title "제목" --out 영상
+```
+
 ## 더 보기
 
 [자세한 사용법](docs/guide.md) · [명령줄](docs/cli.md) · [에이전트용](docs/agents.md) · 라이선스: 코드 MIT, 글꼴 SIL OFL 1.1

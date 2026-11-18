@@ -2,10 +2,42 @@
 
 Exact commands for the common jobs. Run them from the repository folder with `uv run`, or with
 `coverlyric` once installed. Add `--json` to get one JSON object on stdout; progress goes to stderr.
-Exit codes: 0 done, 1 failed (`error` in the JSON), 2 wrong arguments, 3 not enough memory.
+Exit codes: 0 done, 1 failed (`error` in the JSON), 2 wrong arguments, 3 not enough memory, 4 made
+but lines need a check (only with `--strict`).
 
 A project is a folder: `project.json`, `song.*`, `cover.*`, and after a render `<title>.mp4`, `.srt`,
 `.lrc`, `.png`.
+
+## Make a video in one go
+
+```sh
+uv run --extra auto coverlyric make --audio song.wav --cover cover.png --lyrics lyrics.txt --title "Demo" --lead 1 --out videos --json
+```
+
+Everything goes into `videos/Demo/`. The summary has `video`, `srt`, `lrc`, `png`, `project`,
+`model`, `sung`, `placed`, `unplaced` and `doubtful` (each `[{"n", "time", "text"}]`) and `seconds`
+per step. With subtitles that already have times, `--timing file.srt` replaces `--lyrics` and nothing
+is listened to.
+
+## Fix a line that was not found
+
+```sh
+uv run --extra auto coverlyric words videos/Demo --from 1:10 --to 1:20 --json
+uv run coverlyric project lines videos/Demo --set 12=1:11.8 --json
+uv run coverlyric render videos/Demo --json
+```
+
+`words` lists `{"word", "start", "end", "prob"}` in song time. Find the line's first word and set its
+start.
+
+## Time an existing project again
+
+```sh
+uv run --extra auto coverlyric auto videos/Demo --apply --json
+```
+
+Without `--apply` it only shows the times. The notes are saved with the project, so `project show`
+lists them later.
 
 ## Make a project
 
