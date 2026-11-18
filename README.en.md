@@ -70,14 +70,16 @@ The log is `coverlyric.log` in the program folder. If the problem stays, attach 
 
 ## Command line
 
-With [uv](https://docs.astral.sh/uv/), this draws one frame of the demo song from the repository
-folder.
+With [uv](https://docs.astral.sh/uv/), videos can also be made by commands, without the page. This
+makes a project folder from the demo song and draws one frame. All commands are in
+[Command line](docs/cli.en.md).
 
 <!-- test -->
 ```sh
-uv run coverlyric still src/coverlyric/demo/demo.json --at 7 --out demo-still.png
+uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "Demo song"
+uv run coverlyric still demo-song --at 7
 ```
 
 ## More
 
-[Full guide](docs/guide.en.md) · [Command line](docs/cli.en.md) · Licence: code MIT, fonts SIL OFL 1.1
+[Full guide](docs/guide.en.md) · [Command line](docs/cli.en.md) · [For agents](docs/agents.md) · Licence: code MIT, fonts SIL OFL 1.1
