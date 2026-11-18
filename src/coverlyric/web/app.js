@@ -15,6 +15,7 @@ const NAMES = { album: "앨범", panel: "가사", title: "제목", bar: "재생 
 let state = null;
 let diff = [];
 let notes = {};
+let checkAt = -1; // the line the 확인할 줄 bar points at
 let tapIndex = -1;
 let tapUndo = [];
 let syncTimer = null;
@@ -444,12 +445,7 @@ function drawLines() {
       </span>
       <button class="quiet" data-a="del" title="이 줄 지우기">✕</button>`;
     row.querySelector(".x").value = text;
-    if (notes[i]) {
-      const doubt = document.createElement("div");
-      doubt.className = "mine";
-      doubt.textContent = notes[i];
-      row.appendChild(doubt);
-    }
+    if (i === checkAt) row.classList.add("checking");
     if (diff[i] != null) {
       const mine = document.createElement("div");
       mine.className = "mine";
@@ -474,6 +470,7 @@ function drawLines() {
       }
       state.lines[i][0] = box.value.trim() === "" ? null : parseClock(box.value);
       box.value = clockTenth(state.lines[i][0]);
+      settle(i, row);
       updateCheck();
       scheduleSync();
     });
@@ -489,6 +486,7 @@ function drawLines() {
         state.lines[i][0] = Math.max(0, Math.round((state.lines[i][0] + (a === "plus" ? 0.1 : -0.1)) * 100) / 100);
         row.querySelector(".t").value = clockTenth(state.lines[i][0]);
         row.querySelector(".t").classList.remove("invalid");
+        settle(i, row);
         showAt(state.lines[i][0] + 0.3);
       } else if (a === "play") {
         const p = $("player");
@@ -498,6 +496,7 @@ function drawLines() {
         const [gone] = state.lines.splice(i, 1);
         const [goneDiff] = diff.splice(i, 1);
         notes = {};
+        showCheck();
         drawLines();
         scheduleSync();
         toast("줄을 지웠습니다.", 6000, {
@@ -572,6 +571,41 @@ function markNow(t) {
   if (row && !$("player").paused && !$("lines").contains(document.activeElement)) {
     row.scrollIntoView({ block: "nearest" });
   }
+}
+
+// Lines automatic timing was unsure of, in order; a line whose time is changed by hand is settled.
+function checkLines() {
+  return Object.keys(notes).map(Number).sort((a, b) => a - b);
+}
+
+function showCheck() {
+  const list = checkLines();
+  $("check-bar").hidden = !list.length;
+  if (!list.length) { checkAt = -1; return; }
+  if (!list.includes(checkAt)) checkAt = list[0];
+  $("check-count").textContent = `확인할 줄 ${list.length}`;
+  $("check-why").textContent = `${checkAt + 1} · ${notes[checkAt]}`;
+  $("check-at").textContent = `${list.indexOf(checkAt) + 1}/${list.length}`;
+}
+
+function moveCheck(step) {
+  const list = checkLines();
+  if (!list.length) return;
+  const at = list.indexOf(checkAt);
+  checkAt = list[(at + step + list.length) % list.length];
+  for (const row of document.querySelectorAll(".line.checking")) row.classList.remove("checking");
+  const row = $("lines").children[checkAt];
+  row.classList.add("checking");
+  row.scrollIntoView({ block: "nearest" });
+  showCheck();
+  goLine(checkAt);
+}
+
+function settle(i, row) {
+  if (!notes[i]) return;
+  delete notes[i];
+  row.classList.remove("doubt", "checking");
+  showCheck();
 }
 
 function goLine(i) {
@@ -741,6 +775,7 @@ async function importText(name, text) {
   state.lines = data.lines;
   diff = data.diff;
   notes = {};
+  showCheck();
   tapIndex = -1;
   drawLines();
   scheduleSync();
@@ -837,11 +872,12 @@ async function pollAuto() {
       job.lines.forEach(([, text], i) => { if (text) lyricIndex.push(i); });
       for (const n of job.notes) {
         const at = lyricIndex[n.line];
-        notes[at] = n.kind === "unplaced"
-          ? "찾지 못한 줄: 앞뒤 줄 사이 시간으로 넣었습니다. 듣고 고칩니다."
-          : n.kind === "doubtful" ? "앞 줄과 1초 안으로 붙어 있습니다. 듣고 고칩니다."
+        notes[at] = n.kind === "unplaced" ? "못 찾음, 앞뒤 줄 사이에 둠"
+          : n.kind === "doubtful" ? "앞 줄과 1초 안"
           : `다르게 들림: ${n.heard}`;
       }
+      checkAt = -1;
+      showCheck();
       drawLines();
       scheduleSync();
       const sung = lyricIndex.length;
@@ -1084,6 +1120,8 @@ function bind() {
 
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => setTab(b.dataset.tab));
   bindRail();
+  $("check-prev").addEventListener("click", () => moveCheck(-1));
+  $("check-next").addEventListener("click", () => moveCheck(1));
 
   $("tap-start").addEventListener("click", () => {
     if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
