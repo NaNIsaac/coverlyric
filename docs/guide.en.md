@@ -41,7 +41,10 @@ line without a time).
 - Each line becomes one line on screen. A line wider than the band is drawn smaller, and if it is
   still too wide, on two rows. Such lines are underlined in the timing list, and the count shows
   above it.
-- Marks such as `[후렴]` or `[Chorus]` are dropped.
+- Blank lines, lines starting with `#` and square-bracket marks such as `[후렴]` or
+  `[Verse 1 — Conversational, rhythmic]` are dropped. A mark inside a line is removed and the rest of
+  the line stays. Round brackets such as `(echo)` stay. The same applies to pasted and loaded
+  subtitles.
 
 ## Timing
 
