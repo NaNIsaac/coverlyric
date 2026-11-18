@@ -12,6 +12,35 @@ uv run coverlyric app --home <folder>     # keep work and videos in <folder>
 uv run coverlyric app --port 8765 --no-browser
 ```
 
+## Everything at once
+
+```sh
+uv run --extra auto coverlyric make --audio song.mp3 --cover cover.png --lyrics lyrics.txt --title "Title" --out videos
+```
+
+One folder, `videos/Title/`, gets copies of the song and cover, `project.json`, `Title.mp4`, `.srt`,
+`.lrc` and `.png`. The lyrics are timed by listening to the song. With subtitles that already have
+times, use `--timing <subtitles>` in place of `--lyrics`; then nothing is listened to.
+
+| Option | Means |
+|---|---|
+| `--artist ..` | the artist |
+| `--lead 1` / `--tail 2` | seconds of silence before and after the song in the video |
+| `--height 720` / `--fps 30` | picture height (1080, 720) and frames per second (24, 30) |
+| `--style <JSON or file>` | look settings, e.g. `'{"fade": false}'` |
+| `--model small` | the listening model (`small`, `base`, `tiny`); a smaller one is used when memory is short |
+| `--keep-tags` | keep square-bracket marks and `#` lines |
+| `--strict` | exit code 4 when a line was not found or needs a check |
+
+At the end it prints a summary: the file paths, the number of lyric lines (`sung`), the lines found
+by listening (`placed`), the number and time of each line not found and put between its neighbours
+(`unplaced`) and of each line within 1 s of the one before (`doubtful`), the model used and the
+seconds each step took.
+
+Automatic timing needs the `auto` extra (faster-whisper). `uv run --extra auto` installs it the first
+time, and the listening model is downloaded the first time it is used (`small` about 460 MB). The
+song is listened to on this computer only.
+
 ## Making a video from a project folder
 
 A project is one folder: `project.json`, the song (`song.*`) and the cover (`cover.*`). The video
@@ -26,6 +55,8 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `project lines <project> --shift -0.3` | Moves every timed line. |
 | `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
 | `project lines <project> --import <subtitles>` / `--from-lyrics <file>` | Lines and times again from a subtitle file, or lines without times from a lyrics file. |
+| `auto <project> [--model ..] [--apply] [--strict]` | Listens to the song and times each line. Shows the result and the lines to check; `--apply` saves it into the project. |
+| `words <song or project> --from 1:10 --to 1:20 [--model ..]` | The words heard in that stretch with their start and end times, for timing a line that was not found. |
 | `render <project> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | Makes the video. A whole video also gets `.srt`, `.lrc` and `.png` beside it. The default name is `<title>.mp4` in the project folder. |
 | `still <project> [--at 1:05] [--out <png>]` | Saves one frame as an image. |
 
@@ -38,8 +69,9 @@ Output is UTF-8 whatever the console is set to.
 | 1 | failed (the reason on standard error, and as `error` with `--json`) |
 | 2 | the command was given wrong (unknown key, a value that is not a time, no such line) |
 | 3 | not enough memory |
+| 4 | made, but some lines need a check (only with `--strict`) |
 
-Example (demo song):
+Trying it on the demo song (`timing.srt` is your own subtitle file):
 
 ```sh
 uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "Demo song"
