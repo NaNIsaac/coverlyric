@@ -24,7 +24,7 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `project show <project>` | Title, the look settings that differ from the default, each line with number, time and text, and the lines to check. |
 | `project set <project> key=value ...` | `title`, `artist`, `clean_tags` and the look settings (`lead`, `tail`, `height`, `fps`, `fade`, `band`, ...). An unknown key is refused with the list of keys. |
 | `project lines <project> --shift -0.3` | Moves every timed line. |
-| `project lines <project> --set 5=1:12.4 --text 5=new words` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
+| `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
 | `project lines <project> --import <subtitles>` / `--from-lyrics <file>` | Lines and times again from a subtitle file, or lines without times from a lyrics file. |
 | `render <project> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | Makes the video. A whole video also gets `.srt`, `.lrc` and `.png` beside it. The default name is `<title>.mp4` in the project folder. |
 | `still <project> [--at 1:05] [--out <png>]` | Saves one frame as an image. |

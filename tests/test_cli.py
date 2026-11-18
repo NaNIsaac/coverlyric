@@ -168,3 +168,24 @@ def test_korean_goes_through_a_pipe_on_any_console(song):
         check=True,
     )
     assert "첫 번째 줄이에요" in done.stdout.decode("utf-8")
+
+
+def test_new_never_replaces_files_already_in_the_folder(capsys, tmp_path):
+    folder = tmp_path / "mine"
+    folder.mkdir()
+    (folder / "song.wav").write_bytes(b"my own recording")
+    (folder / "song.mp3").write_bytes(b"another one")
+    code, data = run(capsys, "project", "new", str(folder), "--audio", str(DEMO / "tone.wav"), "--cover", str(DEMO / "cover.png"))  # fmt: skip
+    assert code == 2 and "song.wav already exists" in data["error"]
+    assert (folder / "song.wav").read_bytes() == b"my own recording"
+    assert (folder / "song.mp3").read_bytes() == b"another one"
+    assert not (folder / "project.json").exists()
+
+
+def test_new_in_the_folder_that_holds_the_song(capsys, tmp_path):
+    folder = tmp_path / "here"
+    folder.mkdir()
+    (folder / "song.wav").write_bytes((DEMO / "tone.wav").read_bytes())
+    (folder / "song.mp3").write_bytes(b"kept")
+    code, _ = run(capsys, "project", "new", str(folder), "--audio", str(folder / "song.wav"), "--cover", str(DEMO / "cover.png"))  # fmt: skip
+    assert code == 0 and (folder / "song.mp3").read_bytes() == b"kept"

@@ -60,14 +60,16 @@ def load(path: Path) -> tuple[Project, Path]:
 
 
 def copy_in(source: Path, folder: Path, stem: str) -> str:
-    """Copy a song or cover into the project folder as stem + its suffix; a file already there stays."""
+    """Copy a song or cover into the project folder as stem + its suffix. Files already in the folder
+    are never replaced: another file under that name stops the command."""
     if not source.is_file():
         raise FileNotFoundError(f"no file at {source}")
     target = folder / f"{stem}{source.suffix.lower()}"
-    if source.resolve() != target.resolve():
-        for old in folder.glob(f"{stem}.*"):
-            old.unlink()
-        shutil.copyfile(source, target)
+    if target.exists():
+        if target.resolve() == source.resolve():
+            return target.name
+        raise Usage(f"{target} already exists; use an empty folder for a new project")
+    shutil.copyfile(source, target)
     return target.name
 
 

@@ -24,7 +24,7 @@ uv run coverlyric app --port 8765 --no-browser
 | `project show <프로젝트>` | 제목, 바꾼 모양 설정, 줄마다 번호와 시간과 글자, 확인할 줄. |
 | `project set <프로젝트> 키=값 ...` | `title`, `artist`, `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. |
 | `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
-| `project lines <프로젝트> --set 5=1:12.4 --text 5=고친 글자` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
+| `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
 | `project lines <프로젝트> --import <자막>` / `--from-lyrics <가사>` | 줄과 시간을 자막 파일에서, 또는 시간 없이 가사 파일에서 다시 넣습니다. |
 | `render <프로젝트> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | 영상을 만듭니다. 영상 전체를 만들면 옆에 `.srt`, `.lrc`, `.png` 도 저장합니다. 기본 파일 이름은 프로젝트 폴더의 `<제목>.mp4`. |
 | `still <프로젝트> [--at 1:05] [--out <png>]` | 한 장면을 그림으로 저장합니다. |
