@@ -141,7 +141,7 @@ def test_the_version_is_read_from_pyproject(folders):
 
 
 def test_the_whole_update_from_a_zip(folders, tmp_path):
-    root, new = folders
+    root, _ = folders
     (root / "tools" / "update.ps1").write_bytes(UPDATE.read_bytes())
     archive = tmp_path / "main.zip"
     with zipfile.ZipFile(archive, "w") as z:
