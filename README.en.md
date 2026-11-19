@@ -26,6 +26,10 @@ Without the installer, use the ZIP:
 
 If "Windows protected your PC" appears, click **More info** → **Run anyway**.
 
+To update, close the program and double-click `업데이트.bat` in the same folder. Only the program files
+are replaced; your videos, the song in progress, settings, the log and downloaded models stay. The old
+program files are kept in the `업데이트 백업` folder, and a failed update puts them back.
+
 ## Files
 
 ![Files group](docs/screenshots/1-files.png)
