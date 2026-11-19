@@ -92,3 +92,17 @@ uv run coverlyric render songs/demo --json
 
 The full render answers with `video`, `srt`, `lrc`, `png` and `seconds`. A render refuses lines
 without a time (exit 1, the first such line in `error`).
+
+## Make a Short
+
+```sh
+uv run coverlyric chorus songs/demo --length 30 --apply --json
+uv run coverlyric render songs/demo --json
+```
+
+`chorus` finds the block of lines repeated most and, with `--apply`, makes the project a Short
+(1080x1920, 30 fps; an upright project keeps its ratio) of `from` to `to`; without a repeated line it
+fails with exit 1. To pick the part and the look by hand:
+`project set songs/demo shape=square fps=30 lyric_edge=outline clip_from=42 clip_to=72 loop=true
+bars=true "bars_top=Title - Artist"`. `shape` is `tall` (9:16), `square` (1:1) or `portrait` (4:5);
+the video is `<title>_shorts.mp4`, `_1x1.mp4` or `_4x5.mp4`.

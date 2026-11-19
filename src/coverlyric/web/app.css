@@ -250,6 +250,7 @@ body.timing-open .editor { display: flex; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; margin-bottom: 8px; background: var(--field); border-radius: 3px; }
 .seg label { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; border-radius: 3px; cursor: pointer; color: var(--muted); }
 .seg.tones { grid-template-columns: repeat(5, 1fr); }
+.seg.lengths { grid-template-columns: repeat(4, 1fr); }
 .slider { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 4px; color: var(--muted); font-size: 13px; }
 .band-row { display: flex; align-items: center; gap: 8px; }
 .band-row .color { flex: 1; }
@@ -350,14 +351,27 @@ progress::-moz-progress-bar { background: var(--accent); }
   box-shadow: 0 0 0 1px var(--line);
 }
 #still { width: 100%; height: 100%; display: block; }
-/* A Short's preview stands upright, as tall as the well allows. */
-body.tall #stage {
+/* An upright preview (9:16, 1:1, 4:5) is as tall as the well allows, in the shape's ratio. */
+body.upright #stage {
   width: auto;
+  max-width: 100%;
   height: min(100%, calc(100vh - var(--top-h) - var(--transport-h) - var(--editor-h) - 48px));
-  aspect-ratio: 9 / 16;
+  aspect-ratio: var(--ratio, 9 / 16);
 }
-body.tall .stage-well { min-height: 0; }
-body.tall .wide-only { display: none; }
+body.upright .stage-well { min-height: 0; }
+body.upright .wide-only { display: none; }
+body:not(.upright) .upright-only { display: none; }
+.seg.shapes { grid-template-columns: repeat(4, 1fr); }
+.clip-field { margin-bottom: 12px; }
+.clip-head { display: flex; justify-content: space-between; }
+.clip-wave { display: block; width: 100%; height: 48px; margin: 6px 0; background: var(--field); border-radius: 3px; touch-action: none; }
+.clip-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.bars-field { margin-bottom: 12px; }
+.bars-options { padding-left: 22px; }
+.swatches { display: flex; align-items: center; gap: 6px; margin: 6px 0 8px; }
+.swatches button { width: 24px; height: 24px; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: 3px; }
+.swatches button[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.swatches input[type="color"] { width: 32px; height: 26px; }
 .shape-field { margin-bottom: 12px; }
 #stage-empty {
   position: absolute;

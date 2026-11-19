@@ -407,12 +407,182 @@ function clipLabel(text, busy) {
   $("deco-clip").disabled = busy;
 }
 
+// An upright video holds part of the song: clip_from to clip_to, a clip_to of 0 being the end.
+function clipEnd() {
+  const s = state.style;
+  return s.clip_to > 0 ? s.clip_to : state.duration || 0;
+}
+
+function fillClip() {
+  const s = state.style;
+  const end = clipEnd();
+  const plain = (t) => clock(t).replace(/\.\d+$/, "");
+  $("clip-range").textContent = `${plain(s.clip_from)} – ${plain(end)} (${Math.round(end - s.clip_from)}초)`;
+  $("loop").checked = s.loop;
+  // The preview runs over what the video holds: the part, or the whole song.
+  const time = $("time");
+  const upright = s.shape !== "wide";
+  time.min = upright ? s.clip_from : 0;
+  time.max = Math.max(Number(time.min) + 1, upright ? end : state.duration || 60);
+  const t = Number(time.value);
+  if (t < Number(time.min) || t > Number(time.max)) {
+    time.value = time.min;
+    $("time-label").textContent = plain(Number(time.min));
+  }
+  drawClip();
+}
+
+function lineStarts() {
+  return state.lines.filter(([start, text]) => start != null && text).map(([start]) => start);
+}
+
+function firstLine() {
+  const starts = lineStarts();
+  return starts.length ? Math.min(...starts) : 0;
+}
+
+// A dragged end lands on the nearest line start, or the song's end for the end handle, so the part
+// starts and stops where a line does.
+function nearestStart(t, orEnd) {
+  const marks = lineStarts();
+  if (orEnd) marks.push(state.duration || 0);
+  return marks.length ? marks.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a)) : t;
+}
+
+function setClip(from, to) {
+  const s = state.style;
+  const duration = state.duration || 0;
+  s.clip_from = Math.max(0, Math.min(from, duration));
+  const end = Math.min(duration, Math.max(to, s.clip_from + 1));
+  s.clip_to = end >= duration ? 0 : end;
+  fillClip();
+  showAt(s.clip_from, 0);
+}
+
+function songLength() {
+  return (state && state.duration) || (peaks && peaks.duration) || 0;
+}
+
+function drawClip() {
+  const c = $("clip-wave");
+  const duration = songLength();
+  if (!c.clientWidth || !duration) return;
+  const ratio = window.devicePixelRatio || 1;
+  const w = (c.width = Math.round(c.clientWidth * ratio));
+  const h = (c.height = Math.round(c.clientHeight * ratio));
+  const g = c.getContext("2d");
+  const css = getComputedStyle(document.documentElement);
+  const x = (t) => (t / duration) * w;
+  if (peaks) {
+    g.fillStyle = css.getPropertyValue("--line");
+    for (let px = 0; px < w; px++) {
+      const top = peaks[Math.floor((px / w) * peaks.length)] || 0;
+      g.fillRect(px, h / 2 - (top * h) / 2, 1, Math.max(1, top * h));
+    }
+  }
+  g.fillStyle = css.getPropertyValue("--muted");
+  for (const t of lineStarts()) g.fillRect(Math.round(x(t)), h - 6 * ratio, ratio, 6 * ratio);
+  const a = x(state.style.clip_from), b = x(clipEnd());
+  g.fillStyle = css.getPropertyValue("--accent");
+  g.globalAlpha = 0.22;
+  g.fillRect(a, 0, b - a, h);
+  g.globalAlpha = 1;
+  g.fillRect(Math.round(a), 0, 3 * ratio, h);
+  g.fillRect(Math.round(b) - 3 * ratio, 0, 3 * ratio, h);
+  g.fillStyle = css.getPropertyValue("--ink");
+  g.fillRect(Math.round(x(Number($("time").value))), 0, ratio, h);
+}
+
+// The handles at the part's two ends are dragged; a press inside the part moves the preview there.
+function bindClip() {
+  const c = $("clip-wave");
+  let held = null;
+  const timeAt = (e) => Math.min(songLength(), Math.max(0, (e.offsetX / c.clientWidth) * songLength()));
+  const handle = (e) => {
+    const px = (t) => (t / songLength()) * c.clientWidth;
+    const a = Math.abs(px(state.style.clip_from) - e.offsetX);
+    const b = Math.abs(px(clipEnd()) - e.offsetX);
+    if (Math.min(a, b) > 8) return null;
+    return a < b ? "from" : "to";
+  };
+  c.addEventListener("pointermove", (e) => {
+    if (!songLength()) return;
+    if (!held) {
+      c.style.cursor = handle(e) ? "ew-resize" : "";
+      return;
+    }
+    const s = state.style;
+    const t = nearestStart(timeAt(e), held === "to");
+    if (held === "from" && t < clipEnd() - 0.5) s.clip_from = t;
+    if (held === "to" && t > s.clip_from + 0.5) s.clip_to = t >= state.duration ? 0 : t;
+    fillClip();
+  });
+  c.addEventListener("pointerdown", (e) => {
+    if (!songLength()) return;
+    held = handle(e);
+    if (held) {
+      c.setPointerCapture(e.pointerId);
+      return;
+    }
+    const t = timeAt(e);
+    if (t >= state.style.clip_from && t <= clipEnd()) showAt(t, 0);
+  });
+  const release = () => {
+    if (!held) return;
+    held = null;
+    showAt(state.style.clip_from, 0);
+  };
+  c.addEventListener("pointerup", release);
+  c.addEventListener("pointercancel", release);
+  new ResizeObserver(drawClip).observe(c);
+}
+
+// Plays the part once from its start and stops at its end; a second press stops it.
+function playClip() {
+  const p = $("player");
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
+  if (!p.paused) { p.pause(); return; }
+  p.currentTime = state.style.clip_from;
+  p.play();
+  $("clip-play").textContent = "■ 멈추기";
+  const watch = () => {
+    if (!p.paused && p.currentTime < clipEnd()) { requestAnimationFrame(watch); return; }
+    p.pause();
+    $("clip-play").textContent = "▶ 구간 듣기";
+  };
+  requestAnimationFrame(watch);
+}
+
+function swatchColour(b) {
+  return b.dataset.colour === "band" ? state.style.band : b.dataset.colour;
+}
+
+function fillBars() {
+  const s = state.style;
+  $("bars").checked = s.bars;
+  $("bars-options").hidden = !s.bars;
+  $("bars_colour").value = s.bars_colour;
+  $("bars_height").value = s.bars_height;
+  $("bars_top").value = s.bars_top;
+  $("bars_bottom").value = s.bars_bottom;
+  $("bars_size").value = s.bars_size;
+  for (const b of document.querySelectorAll("#bars-swatches button")) {
+    b.style.background = swatchColour(b);
+    b.setAttribute("aria-pressed", String(swatchColour(b).toLowerCase() === s.bars_colour.toLowerCase()));
+  }
+}
+
+const RATIOS = { wide: "16 / 9", tall: "9 / 16", square: "1 / 1", portrait: "4 / 5" };
+
 function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
   for (const r of document.querySelectorAll('input[name="tone"]')) r.checked = r.value === s.tone;
   for (const r of document.querySelectorAll('input[name="shape"]')) r.checked = r.value === s.shape;
-  document.body.classList.toggle("tall", s.shape === "tall");
+  document.body.classList.toggle("upright", s.shape !== "wide");
+  document.body.style.setProperty("--ratio", RATIOS[s.shape] || RATIOS.wide);
+  fillClip();
+  fillBars();
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
@@ -690,6 +860,7 @@ function showAt(t, delay = 150) {
   $("time-label").textContent = clock(t).replace(/\.\d+$/, "");
   markNow(t);
   drawWave();
+  drawClip();
   scheduleSync(delay);
 }
 
@@ -715,6 +886,7 @@ async function loadWave() {
     peaks = null; // a format the browser cannot decode: the list works without the strip
   }
   drawWave();
+  drawClip();
 }
 
 // On the strip a line's mark can be dragged to a new start; anywhere else a press moves the preview.
@@ -1414,11 +1586,42 @@ function bind() {
   for (const r of document.querySelectorAll('input[name="tone"]')) {
     r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
   }
-  // 세로 sets what a Short needs (the server's tall.SHORTS); 가로 goes back to the wide frame at 24.
+  $("clip-play").addEventListener("click", playClip);
+  $("clip-chorus").addEventListener("click", async () => {
+    const length = Math.round(clipEnd() - state.style.clip_from) || 30;
+    try {
+      const res = await api(`/api/chorus?len=${length}`, { method: "POST", body: JSON.stringify(payload()) });
+      const found = await res.json();
+      if (found.from == null) toast("두 번 이상 나오는 줄이 없어 후렴을 찾지 못했습니다.");
+      else setClip(found.from, found.to);
+    } catch (e) {
+      toast(e.message);
+    }
+  });
+  bindClip();
+  $("bars").addEventListener("change", (e) => { state.style.bars = e.target.checked; fillBars(); scheduleSync(0); });
+  for (const b of document.querySelectorAll("#bars-swatches button")) {
+    b.addEventListener("click", () => { state.style.bars_colour = swatchColour(b); fillBars(); scheduleSync(0); });
+  }
+  $("bars_colour").addEventListener("input", (e) => { state.style.bars_colour = e.target.value; fillBars(); scheduleSync(); });
+  for (const key of ["bars_height", "bars_size"]) {
+    $(key).addEventListener("input", (e) => { state.style[key] = Number(e.target.value); scheduleSync(); });
+  }
+  for (const key of ["bars_top", "bars_bottom"]) {
+    $(key).addEventListener("input", (e) => { state.style[key] = e.target.value; scheduleSync(); });
+  }
+  $("loop").addEventListener("change", (e) => { state.style.loop = e.target.checked; scheduleSync(0); });
+  // Leaving 16:9 sets what a phone video needs (the server's tall.SHORTS); 16:9 goes back to 24 fps.
   for (const r of document.querySelectorAll('input[name="shape"]')) {
     r.addEventListener("change", () => {
-      Object.assign(state.style, r.value === "tall" ? state.shorts : { shape: "wide", fps: 24 });
+      const s = state.style;
+      const upright = r.value !== "wide";
+      if (upright && s.shape === "wide") Object.assign(s, state.shorts);
+      if (!upright) s.fps = 24;
+      s.shape = r.value;
       fillLook();
+      // It starts on the hook: with no part chosen yet, 30 s from the first sung line.
+      if (upright && !s.clip_from && !s.clip_to) setClip(firstLine(), firstLine() + 30);
       scheduleSync(0);
     });
   }

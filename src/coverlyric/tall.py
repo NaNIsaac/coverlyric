@@ -1,50 +1,98 @@
-"""Shorts: the song's frame turned upright for a phone, 1080x1920. The title and the artist small at
-the top, the cover in the top third, the line being sung large in the middle on a band and the next
-one small under it. The bottom fifth and the right edge stay empty, as YouTube Shorts covers them
-with its own buttons and caption."""
+"""Upright frames for phones: 9:16 for YouTube Shorts (1080x1920), 1:1 (1080x1080) and 4:5
+(1080x1350). The title and the artist small at the top, the cover under them, the line being sung
+large in the middle on a band and the next one small under it. In 9:16 the bottom fifth and the right
+edge stay empty, as Shorts covers them with its own buttons and caption. Solid bands across the top
+and the bottom, each with a short text, are optional; the rest fits between them."""
 
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+import re
+from dataclasses import dataclass, replace
 from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFilter
 
 from . import fonts, render
 
-TW, TH = 1080, 1920
-SAFE_BOTTOM = 0.2  # share of the height Shorts covers with the caption and the music line
-SAFE_RIGHT = 120  # px Shorts covers with the like, comment and share buttons
+SHAPES = render.UPRIGHT
+SUFFIX = {
+    "tall": "_shorts",
+    "square": "_1x1",
+    "portrait": "_4x5",
+}  # after the title in the file name
+SAFE_BOTTOM = 0.2  # share of a Short's height covered by the caption and the music line
+SAFE_RIGHT = 120  # px of a Short covered by the like, comment and share buttons
 MARGIN = 60
-RIGHT = TW - SAFE_RIGHT
-CX = (MARGIN + RIGHT) // 2
+REF = 1536  # the room the sizes below are for: a 9:16 frame less its bottom fifth
 TITLE_Y, ARTIST_Y = 112, 162
 COVER_SIDE, COVER_TOP = 440, 196
 NOW_Y = 1040  # centre of the line being sung
 NOW_PX, NEXT_PX, MIN_PX = 84, 48, 44
+NEXT_GAP = 44
+GONE_RISE = 160
 MAX_ROWS = 3
 PITCH = 1.18  # row distance in em
 BAND_PAD = (30, 16)
+BARS_MOST = 0.25  # a band takes at most this share of the height
 CHANGE = 0.3  # seconds a new line takes to move up into the middle
 LOOP = 0.5  # seconds of the end that blend into the moments before the start
+MAX_BLOCK = 8  # the longest block of lines 후렴 찾기 compares
 AUDIO_FADE = 0.3
 
-# What 세로 (Shorts) sets; the colours, font and background stay as the user made them.
+# What an upright shape sets; the colours, font and background stay as the user made them.
 SHORTS = {"shape": "tall", "fps": 30, "lyric_edge": "outline", "intro": 0.0}
 
 
-def shorts(style: render.Style) -> render.Style:
-    return replace(style, **SHORTS)
+def shorts(style: render.Style, shape: str = "tall") -> render.Style:
+    return replace(style, **{**SHORTS, "shape": shape})
 
 
 def wide(style: render.Style) -> render.Style:
     return replace(style, shape="wide", fps=render.FPS)
 
 
+@dataclass(frozen=True)
+class Frame:
+    """Where an upright frame's parts go: the room between the bands and a Short's covered edges
+    (top to bottom, margin to right), and how much the 9:16 sizes above shrink to fit it."""
+
+    w: int
+    h: int
+    top: int
+    bottom: int
+    margin: int
+    right: int
+    bar: int
+    scale: float  # places and the cover
+    text: float  # type, which shrinks half as much so it stays readable on a phone
+
+    @property
+    def cx(self) -> int:
+        return (self.margin + self.right) // 2
+
+    def y(self, v: float) -> float:
+        return self.top + v * self.scale
+
+
+@lru_cache(maxsize=16)
+def _frame(shape: str, bars: bool, bars_height: float) -> Frame:
+    w, h = SHAPES.get(shape, SHAPES["tall"])
+    bar = round(h * min(max(bars_height, 0.0), BARS_MOST)) if bars else 0
+    covered = round(h * SAFE_BOTTOM) if shape == "tall" else 0
+    top, bottom = bar, h - max(bar, covered)
+    right = w - (SAFE_RIGHT if shape == "tall" else MARGIN)
+    scale = min(1.0, (bottom - top) / REF)
+    return Frame(w, h, top, bottom, MARGIN, right, bar, scale, (1 + scale) / 2)
+
+
+def frame_of(style: render.Style) -> Frame:
+    return _frame(style.shape, style.bars, style.bars_height)
+
+
 def span(style: render.Style, song: render.Song) -> tuple[float, float]:
-    """The part of the song the Shorts video holds: clip_from to clip_to, a clip_to of 0 meaning the
-    end, both kept inside the song."""
+    """The part of the song the video holds: clip_from to clip_to, a clip_to of 0 meaning the end,
+    both kept inside the song."""
     end = song.duration
     first = min(max(0.0, style.clip_from), end)
     last = style.clip_to if style.clip_to > 0 else end
@@ -75,21 +123,24 @@ def loop_graph(length: float, overlap: float) -> str:
 
 
 @lru_cache(maxsize=2)
-def _backdrop(path: str, art_stamp: float, blur: int, dim: float, tone: str) -> Image.Image:
+def _backdrop(
+    path: str, art_stamp: float, blur: int, dim: float, tone: str, w: int, h: int
+) -> Image.Image:
     art = render.square(path, art_stamp)
-    scale = max(TW / art.width, TH / art.height)
+    scale = max(w / art.width, h / art.height)
     bg = art.resize((math.ceil(art.width * scale), math.ceil(art.height * scale)), Image.LANCZOS)
-    left, top = (bg.width - TW) // 2, (bg.height - TH) // 2
-    bg = bg.crop((left, top, left + TW, top + TH))
+    left, top = (bg.width - w) // 2, (bg.height - h) // 2
+    bg = bg.crop((left, top, left + w, top + h))
     if blur > 0:
         bg = bg.filter(ImageFilter.GaussianBlur(blur))
     bg = render.toned(bg.convert("RGB"), tone, path, art_stamp)
-    return Image.blend(bg, Image.new("RGB", (TW, TH), (0, 0, 0)), dim).convert("RGBA")
+    return Image.blend(bg, Image.new("RGB", (w, h), (0, 0, 0)), dim).convert("RGBA")
 
 
 def backdrop(song: render.Song, style: render.Style) -> Image.Image:
     """The cover filling the upright frame, blurred, toned and darkened, with nothing on it."""
-    return _backdrop(song.art, render.stamp(song.art), style.blur, style.dim, style.tone)
+    w, h = SHAPES.get(style.shape, SHAPES["tall"])
+    return _backdrop(song.art, render.stamp(song.art), style.blur, style.dim, style.tone, w, h)
 
 
 def rows_of(text: str, f, room: float) -> list[str]:
@@ -111,15 +162,16 @@ def rows_of(text: str, f, room: float) -> list[str]:
 
 @lru_cache(maxsize=256)
 def fitted(
-    text: str, face: str, size: float, weight: int, most: int
+    text: str, face: str, size: float, weight: int, most: int, fr: Frame
 ) -> tuple[float, tuple[str, ...]]:
     """The size a line is drawn at and its rows: `size`, smaller when it needs more than `most` rows."""
-    room = RIGHT - MARGIN - 2 * BAND_PAD[0]
+    room = fr.right - fr.margin - 2 * BAND_PAD[0] * fr.text
+    least = MIN_PX * fr.text
     while True:
         rows = rows_of(text, render.font(face, size, weight), room)
-        if len(rows) <= most or size <= MIN_PX:
+        if len(rows) <= most or size <= least:
             return size, tuple(rows[:most])
-        size = max(MIN_PX, round(size * 0.9))
+        size = max(least, round(size * 0.9))
 
 
 def block(
@@ -129,18 +181,19 @@ def block(
     weight: int,
     most: int,
     centre: float,
+    fr: Frame,
     rows: tuple[str, ...] | None = None,
 ) -> dict:
     """A line laid out at `size` around `centre`; given rows are kept as they are, at that size."""
     if rows is None:
-        size, rows = fitted(text, face, size, weight, most)
+        size, rows = fitted(text, face, size, weight, most, fr)
     f = render.font(face, size, weight)
     width = max(render.text_width(r, f) for r in rows)
     height = len(rows) * size * PITCH
     box = (
-        round(CX - width / 2),
+        round(fr.cx - width / 2),
         round(centre - height / 2),
-        round(CX + width / 2),
+        round(fr.cx + width / 2),
         round(centre + height / 2),
     )
     return {
@@ -165,6 +218,16 @@ def current(t: float, lines: tuple[tuple[float, str], ...]) -> int:
     return k
 
 
+def moved(t: float, k: int, lines: tuple[tuple[float, str], ...], first: float) -> float:
+    """How far line k has moved into the middle at t, 0 to 1. A line that starts on the clip's first
+    moment, or less than CHANGE before it, is already in place there: a Short opens on its line."""
+    if k < 0:
+        return 1.0
+    start = lines[k][0]
+    begin = min(start, first - CHANGE) if start <= first else start
+    return min(1.0, max(0.0, (t - begin) / CHANGE))
+
+
 def following(k: int, lines: tuple[tuple[float, str], ...]) -> int | None:
     return next((i for i in range(k + 1, len(lines)) if lines[i][1]), None)
 
@@ -176,63 +239,109 @@ def layout(
     size, box and how visible they are (alpha 0 to 1). The new line moves up from the next line's
     place over CHANGE seconds while the one before it leaves upwards."""
     face = fonts.resolve(style.font)
-    side = COVER_SIDE
-    cover = (CX - side // 2, COVER_TOP, CX - side // 2 + side, COVER_TOP + side)
-    title = (MARGIN, TITLE_Y - 40, RIGHT, (ARTIST_Y if song.artist else TITLE_Y) + 30)
+    fr = frame_of(style)
+    side = round(COVER_SIDE * fr.scale)
+    cover_top = round(fr.y(COVER_TOP))
+    cover = (fr.cx - side // 2, cover_top, fr.cx - side // 2 + side, cover_top + side)
+    title = (
+        fr.margin,
+        round(fr.y(TITLE_Y - 40)),
+        fr.right,
+        round(fr.y((ARTIST_Y if song.artist else TITLE_Y) + 30)),
+    )
+    now_y, gap = fr.y(NOW_Y), NEXT_GAP * fr.scale
+    now_px, next_px = NOW_PX * fr.text, NEXT_PX * fr.text
+    pad_x, pad_y = BAND_PAD[0] * fr.text, BAND_PAD[1] * fr.text
     k = current(t, lines)
-    p = ease(min(1.0, (t - lines[k][0]) / CHANGE)) if k >= 0 else 1.0
+    p = ease(moved(t, k, lines, span(style, song)[0]))
     now = None
     if k >= 0 and lines[k][1]:
-        rest = block(lines[k][1], face, NOW_PX, 700, MAX_ROWS, NOW_Y)
+        rest = block(lines[k][1], face, now_px, 700, MAX_ROWS, now_y, fr)
         below = rest["box"][3]
     else:
-        rest, below = None, NOW_Y
+        rest, below = None, now_y
     n = following(k, lines)
     nxt = None
     if n is not None:
-        size, rows = fitted(lines[n][1], face, NEXT_PX, 500, 2)
-        centre = below + 44 + len(rows) * size * PITCH / 2
-        nxt = block(lines[n][1], face, NEXT_PX, 500, 2, centre)
+        size, rows = fitted(lines[n][1], face, next_px, 500, 2, fr)
+        centre = below + gap + len(rows) * size * PITCH / 2
+        nxt = block(lines[n][1], face, next_px, 500, 2, centre, fr)
         # It waits until the new line has nearly left its place.
         nxt["alpha"] = 0.6 * (max(0.0, (p - 0.6) / 0.4) if rest else 1.0)
     if rest:
         if p < 1.0:
             # From the place it had as the next line to the middle, growing on the way.
-            size0, rows0 = fitted(lines[k][1], face, NEXT_PX, 500, 2)
+            size0, rows0 = fitted(lines[k][1], face, next_px, 500, 2, fr)
             start = (
-                NOW_Y + 44 + len(rows0) * size0 * PITCH / 2 + (rest["box"][3] - rest["box"][1]) / 2
+                now_y + gap + len(rows0) * size0 * PITCH / 2 + (rest["box"][3] - rest["box"][1]) / 2
             )
-            centre = start + (NOW_Y - start) * p
-            size = NEXT_PX + (rest["size"] - NEXT_PX) * p
+            centre = start + (now_y - start) * p
+            size = next_px + (rest["size"] - next_px) * p
             # The rows it ends in, so the line grows without breaking anew on the way.
-            now = block(lines[k][1], face, size, 700, MAX_ROWS, centre, rest["rows"])
+            now = block(lines[k][1], face, size, 700, MAX_ROWS, centre, fr, rest["rows"])
         else:
             now = rest
         now["alpha"] = 0.6 + 0.4 * p
         bx0, by0, bx1, by1 = now["box"]
         now["band"] = (
-            max(MARGIN, bx0 - BAND_PAD[0]),
-            by0 - BAND_PAD[1],
-            min(RIGHT, bx1 + BAND_PAD[0]),
-            by1 + BAND_PAD[1],
+            max(fr.margin, round(bx0 - pad_x)),
+            round(by0 - pad_y),
+            min(fr.right, round(bx1 + pad_x)),
+            round(by1 + pad_y),
         )
         now["band_alpha"] = p
     gone = None
     before = k - 1
     if rest and p < 1.0 and before >= 0 and lines[before][1]:
-        gone = block(lines[before][1], face, NOW_PX, 700, MAX_ROWS, NOW_Y - 160 * p)
+        gone = block(
+            lines[before][1], face, now_px, 700, MAX_ROWS, now_y - GONE_RISE * fr.scale * p, fr
+        )
         gone["alpha"] = 1.0 - p
     return {"title": title, "cover": cover, "now": now, "next": nxt, "gone": gone, "progress": p}
 
 
+def bar_ink(colour: str) -> tuple[int, int, int]:
+    """Dark text on a light band, white on a dark one."""
+    r, g, b = render.hex_rgb(colour)
+    return (24, 24, 24) if 0.299 * r + 0.587 * g + 0.114 * b > 150 else (255, 255, 255)
+
+
+def titled(style: render.Style) -> bool:
+    """The title and the artist are drawn in the frame unless a top band carries a text, which
+    would say the same thing twice."""
+    return style.show_title and not (style.bars and style.bars_top.strip())
+
+
+def draw_bars(img: Image.Image, style: render.Style, fr: Frame) -> None:
+    """The bands across the top and the bottom, and their texts on one line each, made smaller when
+    a text is wider than the frame or taller than its band."""
+    d = ImageDraw.Draw(img)
+    fill = (*render.hex_rgb(style.bars_colour), 255)
+    d.rectangle((0, 0, fr.w, fr.bar - 1), fill=fill)
+    d.rectangle((0, fr.h - fr.bar, fr.w, fr.h), fill=fill)
+    face = fonts.resolve(style.font)
+    ink = (*bar_ink(style.bars_colour), 255)
+    for text, y in ((style.bars_top, fr.bar / 2), (style.bars_bottom, fr.h - fr.bar / 2)):
+        text = " ".join(text.split())
+        if not text:
+            continue
+        size = min(style.bars_size, fr.bar * 0.6)
+        f = render.font(face, size, 650)
+        while render.text_width(text, f) > fr.right - fr.margin and f.size > 12:
+            f = render.font(face, f.size * 0.92, 650)
+        render.tracked(d, (fr.cx, y), text, f, ink)
+
+
 class Painter:
-    """The upright frames of one song and style. The background, title and cover are drawn once; a
-    frame adds the lines, and a frame whose lines stand where they stood is the last one again."""
+    """The upright frames of one song and style. The background, title, cover and bands are drawn
+    once; a frame adds the lines, and a frame whose lines stand where they stood is the last one
+    again."""
 
     def __init__(
         self, lines: tuple[tuple[float, str], ...], song: render.Song, style: render.Style
     ):
         self.lines, self.song, self.style = lines, song, style
+        self.frame = frame_of(style)
         self.base = self.still_layer()
         self.span = span(style, song)
         self.overlap = loop_length(style, song)
@@ -240,33 +349,37 @@ class Painter:
         self.fps = render.rate(style)
 
     def still_layer(self) -> Image.Image:
-        song, style = self.song, self.style
+        song, style, fr = self.song, self.style, self.frame
         img = backdrop(song, style).copy()
         spots = layout(-1.0, (), song, style)
         x0, y0, x1, y1 = spots["cover"]
-        shade = Image.new("RGBA", (TW, TH), (0, 0, 0, 0))
+        shade = Image.new("RGBA", (fr.w, fr.h), (0, 0, 0, 0))
         ImageDraw.Draw(shade).rectangle((x0 + 6, y0 + 14, x1 + 6, y1 + 14), fill=(0, 0, 0, 150))
         img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(18)))
         art = render.square(song.art, render.stamp(song.art)).resize(
             (x1 - x0, y1 - y0), Image.LANCZOS
         )
         img.paste(art.convert("RGB"), (x0, y0))
-        if style.show_title:
+        if titled(style):
             face = fonts.resolve(style.font)
             d = ImageDraw.Draw(img)
-            title = render.font(face, 40, 650)
-            while render.text_width(song.title, title, 0.04) > RIGHT - MARGIN and title.size > 24:
+            title = render.font(face, 40 * fr.text, 650)
+            while (
+                render.text_width(song.title, title, 0.04) > fr.right - fr.margin
+                and title.size > 24 * fr.text
+            ):
                 title = render.font(face, title.size * 0.92, 650)
-            render.lettered(d, (CX, TITLE_Y), song.title, title, 255, style, 0.04)
+            render.lettered(d, (fr.cx, fr.y(TITLE_Y)), song.title, title, 255, style, 0.04)
             if song.artist:
-                render.lettered(
-                    d, (CX, ARTIST_Y), song.artist, render.font(face, 28, 400), 190, style, 0.12
-                )
+                artist = render.font(face, 28 * fr.text, 400)
+                render.lettered(d, (fr.cx, fr.y(ARTIST_Y)), song.artist, artist, 190, style, 0.12)
+        if fr.bar:
+            draw_bars(img, style, fr)
         return img
 
     def lyric_state(self, t: float) -> tuple:
         k = current(t, self.lines)
-        p = min(1.0, (t - self.lines[k][0]) / CHANGE) if k >= 0 else 1.0
+        p = moved(t, k, self.lines, self.span[0])
         return (k, round(p * self.fps))
 
     def state(self, t: float) -> tuple:
@@ -279,15 +392,16 @@ class Painter:
         return state
 
     def plain(self, t: float) -> Image.Image:
+        fr = self.frame
         img = self.base.copy()
         spots = layout(t, self.lines, self.song, self.style)
-        layer = Image.new("RGBA", (TW, TH), (0, 0, 0, 0))
+        layer = Image.new("RGBA", (fr.w, fr.h), (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
         now = spots["now"]
         if now and now["band_alpha"] > 0:
             d.rounded_rectangle(
                 now["band"],
-                radius=14,
+                radius=round(14 * fr.text),
                 fill=(*render.band_rgb(self.style), round(render.BAND_ALPHA * now["band_alpha"])),
             )
         face = fonts.resolve(self.style.font)
@@ -298,7 +412,7 @@ class Painter:
             pitch = part["size"] * PITCH
             for i, row in enumerate(part["rows"]):
                 y = part["centre"] + (i - (len(part["rows"]) - 1) / 2) * pitch
-                render.lettered(d, (CX, y), row, f, round(255 * part["alpha"]), self.style)
+                render.lettered(d, (fr.cx, y), row, f, round(255 * part["alpha"]), self.style)
         img.alpha_composite(layer)
         return img
 
@@ -333,3 +447,38 @@ def painter(
             _painters.pop(next(iter(_painters)))
         found = _painters[key] = Painter(lines, song, style)
     return found
+
+
+def _key(text: str) -> str:
+    """A line as it is sung: no case, spaces or punctuation, so "Oh, my love!" is "oh my love"."""
+    return re.sub(r"[\W_]+", "", text.casefold())
+
+
+def chorus(
+    lines: tuple[tuple[float | None, str], ...], duration: float, length: float
+) -> tuple[float, float] | None:
+    """The part a Short should hold: from the first time the most repeated block of lines is sung,
+    `length` seconds or to the end of the song. A block weighs its repeats times its lines, so a
+    four-line chorus sung three times wins over one word sung five; then the longer block, then the
+    earlier. None when no line comes back."""
+    sung = [(t, _key(text)) for t, text in lines if t is not None and _key(text)]
+    keys = [k for _, k in sung]
+    best: tuple[tuple[int, int, int], int] | None = None
+    for size in range(1, min(MAX_BLOCK, len(sung) // 2) + 1):
+        found: dict[tuple[str, ...], list[int]] = {}
+        for i in range(len(sung) - size + 1):
+            found.setdefault(tuple(keys[i : i + size]), []).append(i)
+        for starts in found.values():
+            count, after = 0, -1
+            for s in starts:
+                if s >= after:
+                    count, after = count + 1, s + size
+            if count < 2:
+                continue
+            score = (count * size, size, -starts[0])
+            if best is None or score > best[0]:
+                best = (score, starts[0])
+    if best is None:
+        return None
+    start = sung[best[1]][0]
+    return start, min(duration, start + length)

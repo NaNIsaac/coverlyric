@@ -53,15 +53,23 @@ are saved in the **저장 위치** (save folder): `만든 영상` in the program
 (change) picks another folder and **열기** (open) opens it. If the song starts on its very
 first sound, put a number of seconds such as 1 in **앞 공백** (silence before).
 
-## Shorts
+## Shorts and upright videos
 
 ![Shorts](docs/screenshots/6-shorts.png)
 
-In **만들기** (make), set **화면** (frame) to **세로 (쇼츠)** (upright, Shorts) for an upright video for
-YouTube Shorts: 1080x1920 at 30 frames a second. The title and the cover are at the top, the line
-being sung large in the middle and the next line small under it. The bottom fifth and the right edge
-are left empty, as Shorts covers them with its buttons and caption. The file is `title_shorts.mp4`,
-saved apart from the wide video.
+In **만들기** (make), set **화면 비율** (ratio) to **9:16 쇼츠** (Shorts), **1:1** or **4:5** for a phone
+video at 30 frames a second. The title and the cover are at the top, the line being sung large in the
+middle and the next line small under it. In 9:16 the bottom fifth and the right edge stay empty, as
+Shorts covers them with its buttons and caption. The file is `title_shorts.mp4`, `title_1x1.mp4` or
+`title_4x5.mp4`, saved apart from the 16:9 video.
+
+In **구간** (part), drag the two ends on the waveform to choose the part; an end lands on the nearest
+line start. **▶ 구간 듣기** (play the part) plays it, and **후렴 찾기** (find the chorus) moves it to start
+on the lines repeated most. **끝을 처음과 이어지게** (join the end to the start) makes it loop without a
+jump.
+
+**위아래 띠** (bands) adds a coloured band at the top and the bottom, each with an optional short text
+such as the title and the artist. Colour, height and text size can be changed.
 
 ## Troubleshooting
 

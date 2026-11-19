@@ -199,10 +199,36 @@
 
     <section class="pane make" id="g-make" role="tabpanel" aria-labelledby="tab-make" hidden>
       <h2 class="pane-head">만들기</h2>
-      <div class="field shape-field">화면
-        <div class="seg shapes" role="radiogroup" aria-label="화면">
-          <label><input type="radio" name="shape" value="wide" checked> 가로</label>
-          <label><input type="radio" name="shape" value="tall"> 세로 (쇼츠)</label>
+      <div class="field shape-field">화면 비율
+        <div class="seg shapes" role="radiogroup" aria-label="화면 비율">
+          <label><input type="radio" name="shape" value="wide" checked> 16:9</label>
+          <label><input type="radio" name="shape" value="tall"> 9:16 쇼츠</label>
+          <label><input type="radio" name="shape" value="square"> 1:1</label>
+          <label><input type="radio" name="shape" value="portrait"> 4:5</label>
+        </div>
+      </div>
+      <div class="field upright-only clip-field">
+        <div class="clip-head">구간 <span id="clip-range" class="clock"></span></div>
+        <canvas id="clip-wave" class="clip-wave" aria-label="구간: 양 끝을 끌어 옮깁니다"></canvas>
+        <div class="clip-row">
+          <button id="clip-play" class="quiet small">▶ 구간 듣기</button>
+          <button id="clip-chorus" class="quiet small">후렴 찾기</button>
+        </div>
+        <label class="check"><input type="checkbox" id="loop"> 끝을 처음과 이어지게</label>
+      </div>
+      <div class="field upright-only bars-field">
+        <label class="check"><input type="checkbox" id="bars"> 위아래 띠</label>
+        <div id="bars-options" class="bars-options" hidden>
+          <div class="swatches" id="bars-swatches" role="group" aria-label="띠 색">
+            <button type="button" data-colour="#000000" aria-label="검정"></button>
+            <button type="button" data-colour="#ffffff" aria-label="흰색"></button>
+            <button type="button" data-colour="band" aria-label="가사 띠와 같은 색"></button>
+            <input type="color" id="bars_colour" aria-label="다른 색">
+          </div>
+          <label class="field">띠 높이<input type="range" id="bars_height" min="0.05" max="0.25" step="0.01"></label>
+          <label class="field">위 글자<input type="text" id="bars_top" maxlength="40" placeholder="예: 제목 - 가수"></label>
+          <label class="field">아래 글자<input type="text" id="bars_bottom" maxlength="40"></label>
+          <label class="field">글자 크기<input type="range" id="bars_size" min="24" max="96" step="2"></label>
         </div>
       </div>
       <div class="output-options" id="output-options">

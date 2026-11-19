@@ -66,7 +66,7 @@ def beside(
     out: Path, project: Project, lines: tuple[tuple[float, str], ...], song: render.Song
 ) -> None:
     """The thumbnail and the timing files next to a finished video."""
-    if project.style.shape == "tall":
+    if render.is_upright(project.style):
         shorts_beside(out, project, lines, song)
         return
     first = next((t for t, text in lines if text), 0.0)
@@ -83,12 +83,15 @@ def beside(
 def shorts_beside(
     out: Path, project: Project, lines: tuple[tuple[float, str], ...], song: render.Song
 ) -> None:
-    """A Short's upright thumbnail, and timing files on the clip's own clock with only its lines."""
+    """An upright video's thumbnail at two thirds of its size, and timing files on the clip's own
+    clock with only its lines."""
     first, last = tall.span(project.style, song)
     inside = [t for t, text in lines if text and first <= t < last]
     at = min(last, inside[0] + 0.6) if inside else first
     still = render.frame(at, lines, song, project.style)
-    still.resize((720, 1280), Image.LANCZOS).save(out.with_suffix(".png"))
+    still.resize((still.width * 2 // 3, still.height * 2 // 3), Image.LANCZOS).save(
+        out.with_suffix(".png")
+    )
     timed = [(t - first, text) for t, text in project.lines if first <= t < last]
     out.with_suffix(".lrc").write_text(
         timing.to_lrc(timed, project.title, project.artist), encoding="utf-8"
