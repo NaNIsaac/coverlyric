@@ -411,6 +411,8 @@ function fillLook() {
   const s = state.style;
   for (const r of document.querySelectorAll('input[name="layout"]')) r.checked = r.value === s.layout;
   for (const r of document.querySelectorAll('input[name="tone"]')) r.checked = r.value === s.tone;
+  for (const r of document.querySelectorAll('input[name="shape"]')) r.checked = r.value === s.shape;
+  document.body.classList.toggle("tall", s.shape === "tall");
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
@@ -1411,6 +1413,14 @@ function bind() {
   }
   for (const r of document.querySelectorAll('input[name="tone"]')) {
     r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
+  }
+  // 세로 sets what a Short needs (the server's tall.SHORTS); 가로 goes back to the wide frame at 24.
+  for (const r of document.querySelectorAll('input[name="shape"]')) {
+    r.addEventListener("change", () => {
+      Object.assign(state.style, r.value === "tall" ? state.shorts : { shape: "wide", fps: 24 });
+      fillLook();
+      scheduleSync(0);
+    });
   }
   $("spin").addEventListener("change", (e) => { state.style.spin = e.target.checked ? 7 : 0; scheduleSync(0); });
   $("tilt").addEventListener("input", (e) => {

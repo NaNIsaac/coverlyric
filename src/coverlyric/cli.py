@@ -237,9 +237,9 @@ def edit_lines(project: Project, args: argparse.Namespace) -> list[str]:
 
 
 def video_name(project: Project) -> str:
-    from .server import safe_name
+    from .server import video_file
 
-    return f"{safe_name(project.title)}.mp4"
+    return video_file(project.title, project.style)
 
 
 def say(text: str) -> None:

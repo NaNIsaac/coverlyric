@@ -29,7 +29,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import anim, auto, fonts, looks, media, render, timing
+from . import anim, auto, fonts, looks, media, render, tall, timing
 from .project import Project
 from .render import Style
 
@@ -130,6 +130,11 @@ def safe_name(name: str) -> str:
     return name or "가사영상"
 
 
+def video_file(title: str, style: render.Style) -> str:
+    """The video's file name: the title, with _shorts for a Short so it does not replace the video."""
+    return f"{safe_name(title)}{'_shorts' if style.shape == 'tall' else ''}.mp4"
+
+
 class App:
     def __init__(self, home: Path):
         self.home = home
@@ -202,6 +207,7 @@ class App:
         data["has_art"] = bool(self.project.art)
         data["output"] = str(self.output)
         data["output_default"] = self.output == self.default_output
+        data["shorts"] = tall.SHORTS
         return data
 
     def update(self, data: dict) -> None:
@@ -349,7 +355,7 @@ class App:
         with self.lock:
             img = render.frame(t, lines, song, p.style)
         width = min(1280, max(320, width))
-        small = img.resize((width, round(width * 9 / 16)), Image.LANCZOS)
+        small = img.resize((width, round(width * img.height / img.width)), Image.LANCZOS)
         buf = io.BytesIO()
         small.save(buf, "JPEG", quality=88)
         fits = render.line_fits(tuple(p.lines), p.style)
@@ -419,8 +425,7 @@ class App:
         if not p.lines:
             raise ValueError("가사가 없습니다. 가사 묶음에서 가사를 넣습니다.")
         timing.ready(p.lines)
-        name = safe_name(p.title)
-        out = self.output / f"{name}.mp4"
+        out = self.output / video_file(p.title, p.style)
         job = self.work / "job.json"
         data = p.to_dict()
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
@@ -439,6 +444,9 @@ class App:
             **new_group(),
         )
         total = p.duration + p.style.lead + p.style.tail
+        if p.style.shape == "tall":
+            first, last = tall.span(p.style, p.song())
+            total = last - first
         self.job = {"state": "running", "done": 0.0, "total": total, "started": time.time()}
         LOG.info("render started: %s (%.1f s)", out.name, p.duration)
         threading.Thread(target=self.watch, args=(self.proc, out), daemon=True).start()

@@ -53,6 +53,16 @@ are saved in the **저장 위치** (save folder): `만든 영상` in the program
 (change) picks another folder and **열기** (open) opens it. If the song starts on its very
 first sound, put a number of seconds such as 1 in **앞 공백** (silence before).
 
+## Shorts
+
+![Shorts](docs/screenshots/6-shorts.png)
+
+In **만들기** (make), set **화면** (frame) to **세로 (쇼츠)** (upright, Shorts) for an upright video for
+YouTube Shorts: 1080x1920 at 30 frames a second. The title and the cover are at the top, the line
+being sung large in the middle and the next line small under it. The bottom fifth and the right edge
+are left empty, as Shorts covers them with its buttons and caption. The file is `title_shorts.mp4`,
+saved apart from the wide video.
+
 ## Troubleshooting
 
 - "디스크 공간 부족" (not enough disk space): free space on the drive it names and start again.
