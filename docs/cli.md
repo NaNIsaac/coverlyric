@@ -2,7 +2,29 @@
 
 [English](cli.en.md) · [처음으로](../README.md)
 
-[uv](https://docs.astral.sh/uv/)가 있으면 저장소 폴더에서 바로 실행할 수 있습니다.
+프로그램을 쓰기만 하려면 [README](../README.md#설치)의 설치 프로그램으로 설치합니다. 이 문서는 소스에서
+실행하는 법과 페이지 없이 영상을 만드는 명령입니다.
+
+## 소스에서 실행
+
+[uv](https://docs.astral.sh/uv/)와 git이 있으면 저장소를 받아 그 폴더에서 실행합니다. Python과 패키지는
+`uv` 가 처음 한 번 설치합니다.
+
+```sh
+git clone https://github.com/NaNIsaac/coverlyric
+cd coverlyric
+uv run coverlyric
+```
+
+데모 노래로 프로젝트 폴더를 만들고 한 장면을 그려 봅니다:
+
+<!-- test -->
+```sh
+uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
+uv run coverlyric still demo-song --at 7
+```
+
+테스트는 `uv run pytest` 입니다.
 
 ## 페이지
 
@@ -79,17 +101,12 @@ uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
 
-`가사영상 만들기.bat` 은 `tools/start.ps1` 을 실행합니다. 설치 프로그램이 넣은 `uv\uv.exe` 를 쓰고, 없으면
-PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤 `uv run --frozen --no-dev coverlyric`
-으로 페이지를 엽니다. 데이터 폴더는 `COVERLYRIC_HOME`, 없으면 `%LOCALAPPDATA%\coverlyric\data-folder.txt` 의
-첫 줄(설치 프로그램이 씀), 없으면 문서\coverlyric 입니다. 프로그램 폴더에 `작업 중`, `만든 영상`,
-`settings.json`, `coverlyric.log` 가 있으면 처음 한 번 데이터 폴더로 옮기고, 데이터 폴더에 이미 있는 이름은
-그대로 둡니다.
+## 설치된 프로그램
 
-`업데이트.bat` 은 `tools/update.ps1` 을 실행합니다. GitHub의 main ZIP을 받아 프로그램 파일(ZIP 맨 위의
-이름들: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, README, 두 .bat 등)을 바꾸고, 이전 파일은
-`업데이트 백업/<날짜-시각>/` 에 옮겨 둡니다. `만든 영상`, `작업 중`, `settings.json`, `coverlyric.log`, `.venv`,
-`업데이트 백업` 은 건드리지 않습니다. `COVERLYRIC_UPDATE_ZIP` 에 ZIP 경로를 주면 내려받는 대신 그 파일을 씁니다.
+시작 메뉴의 바로 가기가 `가사영상 만들기.bat` 을, 그것이 `tools/start.ps1` 을
+실행합니다. 설치 프로그램이 넣은 `uv\uv.exe` 로 `uv run --frozen --no-dev coverlyric` 을 실행하고,
+데이터 폴더는 `COVERLYRIC_HOME`, 없으면 `%LOCALAPPDATA%\coverlyric\data-folder.txt` 의 첫 줄(설치
+프로그램이 씀), 없으면 문서\coverlyric 입니다.
 
 ## 프로젝트 파일
 
@@ -111,9 +128,3 @@ PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤
 포함된 글꼴은 SIL Open Font License 1.1이며, 라이선스 파일은 `src/coverlyric/fonts/` 에 글꼴과 함께
 있습니다: Noto Sans KR, NanumGothic Bold, Do Hyeon, Black Han Sans, Nanum Brush Script, East Sea
 Dokdo.
-
-## 테스트
-
-```sh
-uv run pytest
-```

@@ -1,9 +1,8 @@
 # coverlyric for agents
 
-Exact commands for the common jobs. Run them from the repository folder with `uv run`, or with
-`coverlyric` once installed. Add `--json` to get one JSON object on stdout; progress goes to stderr.
-Exit codes: 0 done, 1 failed (`error` in the JSON), 2 wrong arguments, 3 not enough memory, 4 made
-but lines need a check (only with `--strict`).
+Exact commands for the common jobs. Run them with `uv run` from a source folder
+([run from source](cli.en.md#run-from-source)). Add `--json` to get one JSON object on stdout;
+progress goes to stderr. Every option and the exit codes are in the [command line](cli.en.md) page.
 
 A project is a folder: `project.json`, `song.*`, `cover.*`, and after a render `<title>.mp4`, `.srt`,
 `.lrc`, `.png`.

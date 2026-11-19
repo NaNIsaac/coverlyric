@@ -2,7 +2,29 @@
 
 [한국어](cli.md) · [Back](../README.en.md)
 
-With [uv](https://docs.astral.sh/uv/) installed, run it from the repository folder.
+To just use the program, install it with the setup in the [README](../README.en.md#install). This
+page is for running it from source and for the commands that make a video without the page.
+
+## Run from source
+
+With [uv](https://docs.astral.sh/uv/) and git, get the repository and run it from its folder. `uv`
+installs Python and the packages the first time.
+
+```sh
+git clone https://github.com/NaNIsaac/coverlyric
+cd coverlyric
+uv run coverlyric
+```
+
+Make a project folder from the demo song and draw one frame:
+
+<!-- test -->
+```sh
+uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
+uv run coverlyric still demo-song --at 7
+```
+
+The tests run with `uv run pytest`.
 
 ## The page
 
@@ -81,18 +103,12 @@ uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
 
-`가사영상 만들기.bat` runs `tools/start.ps1`. It uses the `uv\uv.exe` the installer ships, else uv on PATH,
-else installs uv into `%LOCALAPPDATA%\coverlyric\uv`, then opens the page with
-`uv run --frozen --no-dev coverlyric`. The data folder is `COVERLYRIC_HOME`, else the first line of
-`%LOCALAPPDATA%\coverlyric\data-folder.txt` (written by the installer), else `Documents\coverlyric`.
-`작업 중`, `만든 영상`, `settings.json` and `coverlyric.log` found in the program folder are moved there once;
-a name the data folder already has is left where it is.
+## The installed program
 
-`업데이트.bat` runs `tools/update.ps1`. It downloads the main ZIP from GitHub, replaces the program files
-(the names at the top of the ZIP: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, the READMEs, both
-.bat files and so on) and moves the old ones to `업데이트 백업/<date-time>/`. It never touches `만든 영상`,
-`작업 중`, `settings.json`, `coverlyric.log`, `.venv` or `업데이트 백업`. `COVERLYRIC_UPDATE_ZIP` names a
-local ZIP to use instead of the download.
+The Start menu shortcut runs `가사영상 만들기.bat`, which runs `tools/start.ps1`. It runs
+`uv run --frozen --no-dev coverlyric` with the `uv\uv.exe` the installer ships. The data folder is
+`COVERLYRIC_HOME`, else the first line of `%LOCALAPPDATA%\coverlyric\data-folder.txt` (written by the
+installer), else `Documents\coverlyric`.
 
 ## Project file
 
@@ -112,21 +128,5 @@ the save folder (`만든 영상/` at first). The command-line commands work on t
 ## Fonts
 
 The bundled fonts are under the SIL Open Font License 1.1; each licence file is next to its font in
-`src/coverlyric/fonts/`:
-
-| Font | Licence file |
-|---|---|
-| Noto Sans KR | `OFL-NotoSansKR.txt` |
-| NanumGothic Bold | `OFL-NanumGothic.txt` |
-| Do Hyeon | `OFL-DoHyeon.txt` |
-| Black Han Sans | `OFL-BlackHanSans.txt` |
-| Nanum Brush Script | `OFL-NanumBrushScript.txt` |
-| East Sea Dokdo | `OFL-EastSeaDokdo.txt` |
-
-The page also lists the fonts installed on the PC that can write Korean, and takes any font file.
-
-## Tests
-
-```sh
-uv run pytest
-```
+`src/coverlyric/fonts/`: Noto Sans KR, NanumGothic Bold, Do Hyeon, Black Han Sans, Nanum Brush Script,
+East Sea Dokdo.
