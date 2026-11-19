@@ -116,3 +116,18 @@ def test_lines_not_heard_at_the_end_stay_inside_the_song():
     assert all(t < 20.0 for t, text in lines if text)
     assert all(t <= 20.0 for t, _ in lines)
     assert {n["line"] for n in notes if n["kind"] == "unplaced"} == {4, 5}
+
+
+def test_closing_lines_that_share_the_chorus_words_are_placed_where_sung():
+    # The first closing line starts like the chorus and its end was misheard (#41).
+    bridge = ["멀리 떠나도 괜찮아요"]
+    closing = ["너를 부르는 밤에", "다시 만나요", "우리 노래로"]
+    lyrics = VERSE_1 + CHORUS + VERSE_2 + CHORUS + bridge + CHORUS + closing
+    heard = sung(
+        *VERSE_1, *CHORUS, *VERSE_2, *CHORUS, *bridge, *CHORUS, "너를 부르는 바메", *closing[1:]
+    )
+    lines, notes = auto.align(lyrics, heard, duration=80.0)
+    starts = [t for t, text in lines if text]
+    sung_at = [w["start"] for w in heard if w["word"] in (" 너를", " 다시", " 우리")]
+    assert [starts[i] for i in (2, 3, 6, 7, 9, 10, 11, 12, 13)] == sung_at
+    assert not [n for n in notes if n["kind"] == "unplaced"]
