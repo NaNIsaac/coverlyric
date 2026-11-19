@@ -24,7 +24,7 @@ line without a time).
   on disk). It needs no administrator rights.
 - If the extracted folder holds another folder of the same name, run the `.bat` inside it.
 - If antivirus blocks it, add the folder to its exceptions or click **Allow** on its notice.
-- **데모 불러오기** (load demo) fills in a practice song, a cover and four lines.
+- **데모로 둘러보기** (try the demo), in the empty preview, fills in a practice song, a cover and four lines.
 
 ## Song and cover
 
