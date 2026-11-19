@@ -17,16 +17,21 @@ from coverlyric import render
 from coverlyric.project import Project
 
 DEMO = Path(render.__file__).parent / "demo" / "demo.json"
+
+
+def plain_style(**keys) -> render.Style:
+    """A style without the drifting light, which these comparisons predate."""
+    return render.Style(drift=False, **keys)
+
+
 TIMES = (0.0, 1.0, 2.5, 3.1, 7.0, 10.05, 14.0, 17.9)
 STYLES = {
-    "default": render.Style(),
-    "bar": render.Style(bar=True),
-    "case only": render.Style(show_cd=False),
-    "still cd": render.Style(spin=0),
-    "round": render.Style(layout="disc", show_title=False),
-    "moved": render.Style(
-        album_x=-200, album_y=120, album_scale=1.3, panel_x=-300, panel_scale=0.8
-    ),
+    "default": plain_style(),
+    "bar": plain_style(bar=True),
+    "case only": plain_style(show_cd=False),
+    "still cd": plain_style(spin=0),
+    "round": plain_style(layout="disc", show_title=False),
+    "moved": plain_style(album_x=-200, album_y=120, album_scale=1.3, panel_x=-300, panel_scale=0.8),
 }
 
 
@@ -113,7 +118,7 @@ def test_frames_look_as_before(demo, name):
 def test_shared_turn_pictures_look_as_before(demo):
     """The render path: the CD out of the case comes from the pictures of one turn the workers share,
     so a frame one turn later is copied, not drawn, and still matches."""
-    style, song, lines = render.Style(), demo.song(), demo.preview_lines()
+    style, song, lines = plain_style(), demo.song(), demo.preview_lines()
     box, period = render.turn_set(style)
     memory = shared_memory.SharedMemory(create=True, size=render.turns_bytes(box, period))
     p = render.Painter(lines, song, style, memory.name)
@@ -130,7 +135,7 @@ def test_shared_turn_pictures_look_as_before(demo):
 
 
 def test_a_still_frame_is_not_drawn_again(demo):
-    style, song, lines = render.Style(spin=0), demo.song(), demo.preview_lines()
+    style, song, lines = plain_style(spin=0), demo.song(), demo.preview_lines()
     p = render.Painter(lines, song, style)
     # Between 7.0 s and 9.0 s no line starts and the CD stands still: one picture.
     first = p.raw(7.0)
@@ -191,16 +196,16 @@ def test_floor_shadow_and_reflection_change_only_the_floor(demo):
     from dataclasses import replace
 
     song = demo.song()
-    plain = render.scene(song, render.Style())[0]
-    g = render.geometry(render.Style())
+    plain = render.scene(song, plain_style())[0]
+    g = render.geometry(plain_style())
     _, y0, _, y1 = g.case
-    for style in (replace(render.Style(), floor=1.0), replace(render.Style(), reflection=True)):
+    for style in (replace(plain_style(), floor=1.0), replace(plain_style(), reflection=True)):
         bg = render.scene(song, style)[0]
         diff = ImageChops.difference(bg, plain).getbbox(alpha_only=False)
         assert diff is not None and diff[3] > y1 and diff[1] > y0 + (y1 - y0) // 2
-    off = render.scene(song, replace(render.Style(), floor=0.0, reflection=False))[0]
+    off = render.scene(song, replace(plain_style(), floor=0.0, reflection=False))[0]
     assert ImageChops.difference(off, plain).getbbox(alpha_only=False) is None
-    disc = replace(render.Style(), layout="disc")
+    disc = replace(plain_style(), layout="disc")
     assert (
         ImageChops.difference(
             render.scene(song, replace(disc, reflection=True))[0], render.scene(song, disc)[0]
@@ -213,8 +218,8 @@ def test_opening_card_covers_the_start_and_fades_into_the_song(demo):
     from dataclasses import replace
 
     song, lines = demo.song(), ((4.0, "first"), (8.0, "second"))
-    plain = render.Painter(lines, song, render.Style())
-    p = render.Painter(lines, song, replace(render.Style(), intro=3.0))
+    plain = render.Painter(lines, song, plain_style())
+    p = render.Painter(lines, song, replace(plain_style(), intro=3.0))
     card = render.intro_card(song, p.style)
     assert ImageChops.difference(p.image(0.5), card).getbbox(alpha_only=False) is None
     assert p.raw(0.5) == p.raw(1.0)  # the held card is one frame
@@ -229,7 +234,7 @@ def test_opening_card_covers_the_start_and_fades_into_the_song(demo):
 
 
 def test_opening_card_ends_at_the_first_line():
-    style = render.Style(intro=5.0)
+    style = plain_style(intro=5.0)
     assert render.intro_end(((2.5, "a"),), style) == 2.5
     assert render.intro_end((), style) == 5.0
-    assert render.intro_end(((2.5, "a"),), render.Style()) == 0.0
+    assert render.intro_end(((2.5, "a"),), plain_style()) == 0.0

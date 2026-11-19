@@ -76,8 +76,8 @@ def test_a_long_gif_keeps_at_most_max_frames_over_the_same_loop(tmp_path):
 def test_a_transparent_gif_shows_the_frame_through(tmp_path, demo):
     path = gif(tmp_path / "t.gif", [RED], [100], transparent_corner=True)
     song, lines = demo.song(), demo.preview_lines()
-    plain = render.frame(5.0, lines, song, demo.style)
-    style = render.Style(anim_x=-400, anim_y=-200)
+    plain = render.frame(5.0, lines, song, replace(demo.style, drift=False))
+    style = render.Style(anim_x=-400, anim_y=-200, drift=False)  # the light would tint the picture
     with_anim = render.frame(5.0, lines, replace(song, anim=(path,)), style)
     x0, y0, x1, y1 = render.boxes(style, 5.0, replace(song, anim=(path,)))["anim"]
     clear, solid = (x0 + 10, y0 + 10), (x1 - 10, y1 - 10)
@@ -95,7 +95,7 @@ def test_under_the_album_the_album_covers_it(tmp_path, demo):
     # Centre the picture on the case: above, it shows; under, the case's opaque cover hides it.
     cx, cy = (case[0] + case[2]) // 2, (case[1] + case[3]) // 2
     move = {"anim_x": cx - anim.CENTRE[0], "anim_y": cy - anim.CENTRE[1]}
-    above = render.frame(5.0, lines, song, render.Style(**move))
+    above = render.frame(5.0, lines, song, render.Style(**move, drift=False))
     under = render.frame(5.0, lines, song, render.Style(**move, anim_above=False))
     assert above.getpixel((cx, cy)) == GREEN[:3]
     assert under.getpixel((cx, cy)) != GREEN[:3]
