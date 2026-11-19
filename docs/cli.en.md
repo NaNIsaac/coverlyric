@@ -84,6 +84,12 @@ uv run coverlyric render demo-song
 `가사영상 만들기.bat` runs `tools/start.ps1`. It installs uv into `%LOCALAPPDATA%\coverlyric\uv` if
 it is missing, then opens the page with `uv run --frozen --no-dev coverlyric`.
 
+`업데이트.bat` runs `tools/update.ps1`. It downloads the main ZIP from GitHub, replaces the program files
+(the names at the top of the ZIP: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, the READMEs, both
+.bat files and so on) and moves the old ones to `업데이트 백업/<date-time>/`. It never touches `만든 영상`,
+`작업 중`, `settings.json`, `coverlyric.log`, `.venv` or `업데이트 백업`. `COVERLYRIC_UPDATE_ZIP` names a
+local ZIP to use instead of the download.
+
 ## Project file
 
 The page saves the work in `작업 중/project.json`: the song and cover paths, each line's start time
