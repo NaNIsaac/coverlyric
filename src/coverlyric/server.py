@@ -131,8 +131,9 @@ def safe_name(name: str) -> str:
 
 
 def video_file(title: str, style: render.Style) -> str:
-    """The video's file name: the title, with _shorts for a Short so it does not replace the video."""
-    return f"{safe_name(title)}{'_shorts' if style.shape == 'tall' else ''}.mp4"
+    """The video's file name: the title, with _shorts, _1x1 or _4x5 for an upright shape so it
+    does not replace the wide video."""
+    return f"{safe_name(title)}{tall.SUFFIX.get(style.shape, '')}.mp4"
 
 
 class App:
@@ -350,8 +351,12 @@ class App:
         p = self.project
         if not p.art:
             raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
-        lines, song = render.padded(p.preview_lines(), p.song(), p.style)
-        t = render.video_time(t, p.style)
+        if render.is_upright(p.style):
+            # An upright video is on the song's own clock, as render() makes it: no silence before or after.
+            lines, song = p.preview_lines(), p.song()
+        else:
+            lines, song = render.padded(p.preview_lines(), p.song(), p.style)
+            t = render.video_time(t, p.style)
         with self.lock:
             img = render.frame(t, lines, song, p.style)
         width = min(1280, max(320, width))
@@ -360,6 +365,13 @@ class App:
         small.save(buf, "JPEG", quality=88)
         fits = render.line_fits(tuple(p.lines), p.style)
         return buf.getvalue(), render.boxes(p.style, t, song), fits
+
+    def find_chorus(self, length: float) -> dict:
+        """후렴 찾기: the Short's part from the most repeated block of lines, or none."""
+        p = self.project
+        found = tall.chorus(tuple(p.lines), p.duration, length)
+        first, last = found or (None, None)
+        return {"from": first, "to": last}
 
     def look_stills(self, t: float, width: int = 320) -> dict:
         """Each look's keys and a small JPEG of the frame at time t in it, for the 꾸미기 cards."""
@@ -444,7 +456,7 @@ class App:
             **new_group(),
         )
         total = p.duration + p.style.lead + p.style.tail
-        if p.style.shape == "tall":
+        if render.is_upright(p.style):
             first, last = tall.span(p.style, p.song())
             total = last - first
         self.job = {"state": "running", "done": 0.0, "total": total, "started": time.time()}
@@ -954,6 +966,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     if data:
                         app.update(data)
                     self.json(app.look_stills(float(query.get("t", ["0"])[0])))
+                elif url.path == "/api/chorus":
+                    data = json.loads(self.body() or b"{}")
+                    if data:
+                        app.update(data)
+                    self.json(app.find_chorus(float(query.get("len", ["30"])[0])))
                 elif url.path == "/api/render":
                     self.json(app.start_render())
                 elif url.path == "/api/auto":

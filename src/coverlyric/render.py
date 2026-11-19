@@ -31,6 +31,8 @@ from . import anim, fonts, media
 # 24 fps: the slow turn of the disc and the eased lyric list look the same as at 30, with a fifth
 # fewer frames to draw and encode.
 W, H, FPS = 1920, 1080, 24
+# The upright frames tall.py draws, by shape: 9:16 for Shorts, 1:1 and 4:5 for feeds.
+UPRIGHT = {"tall": (1080, 1920), "square": (1080, 1080), "portrait": (1080, 1350)}
 RATES = (24, 30)  # frame rates the page offers; FPS is the default
 # Smaller videos are drawn at 1080 like the rest and scaled once by ffmpeg: the render is bound by the
 # encoder, which then has a little under half the pixels.
@@ -115,10 +117,16 @@ class Style:
     intro: float = 0.0  # seconds of a full-frame title card at the start, ended by the first line
     lead: float = 0.0  # seconds of silence before the song starts
     tail: float = 0.0  # seconds of silence after the song ends
-    shape: str = "wide"  # wide (1920x1080) | tall (1080x1920 for Shorts, drawn by tall.py)
-    loop: bool = False  # tall: the end blends into the start, so a Short repeats without a seam
-    clip_from: float = 0.0  # tall: the part of the song the video holds, in song seconds
+    shape: str = "wide"  # wide (16:9) or one of UPRIGHT: tall (9:16), square (1:1), portrait (4:5)
+    loop: bool = False  # upright: the end blends into the start, so it repeats without a seam
+    clip_from: float = 0.0  # upright: the part of the song the video holds, in song seconds
     clip_to: float = 0.0  # 0 is the end of the song
+    bars: bool = False  # upright: solid bands across the top and the bottom
+    bars_colour: str = "#000000"
+    bars_height: float = 0.12  # each band's share of the frame height
+    bars_top: str = ""  # a short text on the top band
+    bars_bottom: str = ""
+    bars_size: int = 48  # px of the band texts
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -328,7 +336,7 @@ def boxes(
 ) -> dict[str, tuple[int, ...]]:
     """The frame area of each movable element at time t, for the drag handles on the preview; the
     moving picture's needs the song, which names its files. A Short has none to drag."""
-    if style.shape == "tall":
+    if is_upright(style):
         return {}
     g = geometry(style)
     if style.layout == "case":
@@ -1036,15 +1044,21 @@ def rate(style: Style) -> int:
     return style.fps if style.fps in RATES else FPS
 
 
+def is_upright(style: Style) -> bool:
+    """Drawn by tall.py: a Short or a square or 4:5 frame, rather than the wide 16:9 one."""
+    return style.shape in UPRIGHT
+
+
 def frame_size(style: Style) -> tuple[int, int]:
-    """The size frames are drawn at: 1920x1080, or 1080x1920 for Shorts (the same bytes per frame)."""
-    return (H, W) if style.shape == "tall" else (W, H)
+    """The size frames are drawn at: 1920x1080, or the upright shape's. None has more bytes than
+    the wide frame, so every frame fits a FRAME slot."""
+    return UPRIGHT.get(style.shape, (W, H))
 
 
 def turn_set(style: Style) -> tuple[tuple[int, int, int, int], int] | None:
     """The frame box of the CD once it is out of the case, and the frames one turn takes, when one
     turn is a whole number of frames and its pictures fit in TURNS_MB."""
-    if style.shape == "tall" or style.layout != "case" or not style.show_cd or style.spin <= 0:
+    if is_upright(style) or style.layout != "case" or not style.show_cd or style.spin <= 0:
         return None
     period = style.spin * rate(style)
     if abs(period - round(period)) > 1e-6:
@@ -1252,7 +1266,7 @@ def painter(
 ) -> Painter:
     """The painter for these inputs, kept while scene() still returns the same layers (the page
     clears scene's cache when a file is replaced) and the moving picture's files are unchanged."""
-    if style.shape == "tall":
+    if is_upright(style):
         from . import tall
 
         return tall.painter(lines, song, style)
@@ -1292,7 +1306,7 @@ def render_chunk(args) -> list[int]:
         raw = p.raw(n / fps)
         if raw is not last:
             slot += 1
-            with buf[slot * FRAME : (slot + 1) * FRAME] as view:
+            with buf[slot * FRAME : slot * FRAME + len(raw)] as view:
                 view[:] = raw
             last = raw
         slots.append(slot)
@@ -1317,7 +1331,7 @@ def render(
     Returns what the user should know about the video: ANIM_DROPPED and SMALLER, or "" when it is
     as asked."""
     codec = "libx264" if quick else media.encoder()
-    upright = style.shape == "tall"
+    upright = is_upright(style)
     if upright:
         from . import tall
 
@@ -1447,7 +1461,7 @@ def fades(style: Style, duration: float, first: float, last: float) -> tuple[lis
     holds the end. Times are within the part."""
     vf: list[str] = []
     af: list[str] = []
-    if style.shape == "tall":
+    if is_upright(style):
         # A Short starts on the line it is about: no fade from black, a short one in the sound so the
         # cut does not click. A loop's end blends into its start instead of fading out.
         from . import tall
@@ -1494,11 +1508,12 @@ def encode(
     if song.lead or song.tail:
         af[:0] = [*([f"adelay={round(-heard * 1000)}:all=1"] if heard < 0 else []), "apad"]
     size = frame_size(style)
-    upright = style.shape == "tall"
+    upright = is_upright(style)
     if not quick and not upright and HEIGHTS.get(style.height):
         vf.insert(0, "scale={}:{}".format(*HEIGHTS[style.height]))
     if quick:
-        vf.append("scale={}:{}".format(*(QUICK_SIZE[::-1] if upright else QUICK_SIZE)))
+        quick_w = size[0] * QUICK_SIZE[0] // W if upright else QUICK_SIZE[0]
+        vf.append(f"scale={quick_w}:-2")
         codec_args = ["-c:v", "libx264", *QUICK_X264]
     else:
         codec_args = ["-c:v", codec, *media.ENCODERS[codec]]
@@ -1594,6 +1609,7 @@ def encode(
                 memory.unlink()
         raise
     span_n = CHUNK * step
+    frame_bytes = math.prod(frame_size(style)) * 4
     chunks = [
         (
             s,
@@ -1627,7 +1643,7 @@ def encode(
                 slots = waiting.popleft().result()
                 try:
                     for slot in slots:
-                        with frames.buf[slot * FRAME : (slot + 1) * FRAME] as view:
+                        with frames.buf[slot * FRAME : slot * FRAME + frame_bytes] as view:
                             ff.stdin.write(view)
                         written += 1
                 except OSError:

@@ -166,23 +166,56 @@ Files in the save folder:
 | `title.png` | thumbnail (1280x720) |
 | `title.lrc`, `title.srt` | timing |
 
-## Shorts
+## Shorts and upright videos
 
 ![Shorts](screenshots/6-shorts.png)
 
-In **만들기** (make), set **화면** (frame) to **세로 (쇼츠)** (upright, Shorts) for a YouTube Shorts video.
+**화면 비율** (ratio) in **만들기** (make) is 16:9 (the default), **9:16 쇼츠** (Shorts, 1080x1920),
+**1:1** (1080x1080) or **4:5** (1080x1350). The ratios other than 16:9 are drawn for a phone.
 
-- 1080x1920, 30 frames a second, H.264. The quality and silence fields do not apply and are hidden.
+- 30 frames a second, H.264. The quality and silence fields do not apply and are hidden.
 - The title and the artist at the top, the cover under them, the line being sung large on a band in
-  the middle and the next line small under it. The lyrics get an outline (changeable in **색과 배경**).
-- The bottom fifth and the right 120 pixels stay empty: Shorts covers them with its buttons and
-  caption.
+  the middle and the next line small under it. The lower the frame, the smaller everything gets, the
+  text less so. The lyrics get an outline (changeable in **색과 배경**).
+- In 9:16 the bottom fifth and the right 120 pixels stay empty: Shorts covers them with its buttons
+  and caption.
 - The picture starts at once, without rising from black; only the sound fades in and out over 0.3 s.
-- Album style, start and end, moving picture and place and size apply to the wide video only and are
-  hidden in **꾸미기** (decorate).
-- The file is `title_shorts.mp4`, with an upright thumbnail and the subtitle files beside it.
+- Album style, start and end, moving picture and place and size apply to 16:9 only and are hidden in
+  **꾸미기** (decorate).
+- The file is `title_shorts.mp4`, `title_1x1.mp4` or `title_4x5.mp4`, with a thumbnail in the same
+  ratio and the subtitle files beside it.
 
-Choosing **가로** (wide) again goes back to the wide video at 24 frames a second.
+The first change away from 16:9 sets 30 frames a second and the lyric outline; changes between the
+other ratios keep them. Choosing **16:9** again goes back to 24 frames a second.
+
+### Part (구간)
+
+Which part of the song the video holds; at first, 30 seconds from the first lyric line.
+
+- The light stretch on the waveform is the part. Drag the bar at either end; it lands on the nearest
+  line start (the end bar also on the song's end). Its start, end and length are shown above.
+- A press inside the part moves the preview there. The preview time bar moves inside the part only,
+  and the part's first line is in the middle, large, from the first frame.
+- **▶ 구간 듣기** (play the part) plays the part once; a second press stops it.
+- **후렴 찾기** (find the chorus) looks in the timed lyrics for the block of lines repeated most (the
+  more lines repeat together, the higher it ranks) and moves the part, at its length, to start on that
+  block's first line. Spaces, punctuation and case do not count. When no line comes back it only says
+  so.
+- **끝을 처음과 이어지게** (join the end to the start) blends the last 0.5 s, picture and sound, with
+  the moments before the part's start, so the last frame equals the first and a video on repeat does
+  not jump. The sound then does not fade out at the end.
+
+### Bands (위아래 띠)
+
+Off at first; switching them on shows their fields.
+
+- Colour: black (the default), white, the lyric band's colour, or any colour from the last field.
+- Height: 5 to 25 percent of the frame each. The cover and the lyrics shrink to fit between the bands.
+- Top and bottom text: one line each, dark on a light band and white on a dark one, made smaller when
+  wider than the frame or taller than the band.
+- With a top text, the title and the artist are not drawn inside the frame, so they do not show twice.
+- In 9:16 the bottom band's text can be covered by the Shorts caption; put what must be seen on the
+  top band.
 
 ## Quitting and coming back
 

@@ -10,10 +10,10 @@ import os
 import shutil
 import sys
 import time
-from dataclasses import fields
+from dataclasses import fields, replace
 from pathlib import Path
 
-from . import auto, jobs, media, render, timing
+from . import auto, jobs, media, render, tall, timing
 from .project import Project
 
 NOTE_TEXT = {
@@ -454,6 +454,13 @@ def add_commands(sub) -> None:
     s.add_argument("--at", default="0", help="time, e.g. 72.4 or 1:12.4")
     s.add_argument("--out", type=Path, help="the PNG (default: still.png in the project folder)")
 
+    c = sub.add_parser(
+        "chorus", parents=[common], help="the most repeated block of lines, as a Short's part"
+    )
+    c.add_argument("project", type=Path)
+    c.add_argument("--length", type=float, default=30, help="seconds (15, 30, 60, ...)")
+    c.add_argument("--apply", action="store_true", help="make the project a Short of that part")
+
     p = sub.add_parser("project", help="make, look at and change a project")
     ps = p.add_subparsers(dest="action", required=True)
     new = ps.add_parser(
@@ -538,6 +545,18 @@ def run(args: argparse.Namespace) -> dict:
                 raise Usage(f"--clip takes START,END: {args.clip!r}")
             clip = (seconds(a), seconds(b))
         return make_video(project, args.out, clip, args.quick)
+    if args.command == "chorus":
+        project, file = load(args.project)
+        found = tall.chorus(tuple(project.lines), project.duration, args.length)
+        if found is None:
+            raise ValueError("no line comes back, so there is no chorus to find")
+        if args.apply:
+            shape = project.style.shape if render.is_upright(project.style) else "tall"
+            project.style = replace(
+                tall.shorts(project.style, shape), clip_from=found[0], clip_to=found[1]
+            )
+            project.save(file)
+        return {"from": found[0], "to": found[1], "applied": args.apply}
     if args.command == "still":
         project, _ = load(args.project)
         out = args.out or project.folder / "still.png"

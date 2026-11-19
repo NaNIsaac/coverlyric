@@ -189,3 +189,20 @@ def test_new_in_the_folder_that_holds_the_song(capsys, tmp_path):
     (folder / "song.mp3").write_bytes(b"kept")
     code, _ = run(capsys, "project", "new", str(folder), "--audio", str(folder / "song.wav"), "--cover", str(DEMO / "cover.png"))  # fmt: skip
     assert code == 0 and (folder / "song.mp3").read_bytes() == b"kept"
+
+
+def test_chorus_finds_and_applies_a_shorts_part(capsys, song, tmp_path):
+    srt = tmp_path / "timed.srt"
+    srt.write_text(SRT.replace("세 번째 줄", "첫 번째 줄이에요"), encoding="utf-8")
+    code, out = run(capsys, "project", "lines", str(song), "--import", str(srt))
+    assert code == 0
+    code, out = run(capsys, "chorus", str(song), "--length", "15")
+    assert code == 0 and out["applied"] is False and out["from"] == 3.0
+    code, out = run(capsys, "chorus", str(song), "--length", "15", "--apply")
+    style = cli.load(song)[0].style
+    assert (style.shape, style.fps, style.clip_from, style.clip_to) == ("tall", 30, 3.0, out["to"])
+
+
+def test_chorus_without_a_repeated_line_fails(capsys, song):
+    code, out = run(capsys, "chorus", str(song))
+    assert code != 0 and "chorus" in out["error"]

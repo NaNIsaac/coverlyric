@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> None:
             "COVERLYRIC_NO_BROWSER"
         )
         serve(home.resolve(), getattr(args, "port", 0), browser)
-    elif args.command in ("render", "still", "project", "auto", "words", "make"):
+    elif args.command in ("render", "still", "project", "auto", "words", "make", "chorus"):
         sys.exit(cli.main(args))
     elif args.command == "auto-job":
         try:
