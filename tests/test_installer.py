@@ -136,3 +136,23 @@ def test_a_program_folder_used_as_the_data_folder_stays(tmp_path):
     (tmp_path / "작업 중").mkdir()
     assert powershell(f"Move-OldData '{tmp_path}' '{tmp_path}'").stdout.strip() == ""
     assert (tmp_path / "작업 중").exists()
+
+
+@windows
+def test_moving_the_data_keeps_every_other_setting(tmp_path):
+    root, data = tmp_path / "program", tmp_path / "data"
+    (root / "만든 영상").mkdir(parents=True)
+    kept = {
+        "style": {"band": {"top": {"text": "제목 - 가수", "color": [17, 34, 51], "on": True}}},
+        "recent": [{"song": {"title": "노래", "times": [0.5]}}],
+        "one": [5],
+        "none": [],
+        "lead": 1.25,
+        "model": None,
+    }
+    (root / "settings.json").write_text(
+        json.dumps({**kept, "output": str(root / "만든 영상")}), encoding="utf-8"
+    )
+    powershell(f"Move-OldData '{root}' '{data}'")
+    saved = json.loads((data / "settings.json").read_text(encoding="utf-8-sig"))
+    assert saved == {**kept, "output": str(data / "만든 영상")}

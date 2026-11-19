@@ -152,7 +152,7 @@ function Move-OldData([string]$root, [string]$data) {
             $moved = Join-Path $data $folder.Substring($root.TrimEnd('\').Length + 1)
             if (Test-Path -LiteralPath $moved) {
                 $saved.output = $moved
-                [IO.File]::WriteAllText($settings, ($saved | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
+                [IO.File]::WriteAllText($settings, ($saved | ConvertTo-Json -Depth 32), (New-Object Text.UTF8Encoding $false))
             }
         }
     }
