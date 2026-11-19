@@ -356,6 +356,9 @@ class App:
             if old.is_file():
                 old.unlink()
         self.project = Project(self.work)
+        self.job = {"state": "idle"}
+        if self.auto.get("state") != "running":
+            self.auto = {"state": "idle"}
         render.forget_art()
         self.save()
         return self.state()
@@ -365,7 +368,7 @@ class App:
         the page can drag, and how each lyric line fits the panel."""
         p = self.project
         if not p.art:
-            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
+            raise ValueError("앨범 표지가 없습니다. 노래·표지 단계에서 표지를 넣습니다.")
         if render.is_upright(p.style):
             # An upright video is on the song's own clock, as render() makes it: no silence before or after.
             lines, song = p.preview_lines(), p.song()
@@ -392,7 +395,7 @@ class App:
         """Each look's keys and a small JPEG of the frame at time t in it, for the 꾸미기 cards."""
         p = self.project
         if not p.art:
-            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
+            raise ValueError("앨범 표지가 없습니다. 노래·표지 단계에서 표지를 넣습니다.")
         lines, song = render.padded(p.preview_lines(), p.song(), p.style)
         t = render.video_time(t, p.style)
         stills = {}
@@ -409,7 +412,7 @@ class App:
         (dark lyrics) until the lyric colour on it reads at least as well as white on the default band."""
         p = self.project
         if not p.art:
-            raise ValueError("앨범 표지가 없습니다. 파일 묶음에서 표지를 넣습니다.")
+            raise ValueError("앨범 표지가 없습니다. 노래·표지 단계에서 표지를 넣습니다.")
         song = p.song()
         with self.lock:
             cover = render.cover_colour(song.art, render.stamp(song.art))
@@ -448,9 +451,9 @@ class App:
             )
         p = self.project
         if not p.audio or not p.art:
-            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")
+            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 노래·표지 단계에서 넣습니다.")
         if not p.lines:
-            raise ValueError("가사가 없습니다. 가사 묶음에서 가사를 넣습니다.")
+            raise ValueError("가사가 없습니다. 가사 단계에서 가사를 넣습니다.")
         timing.ready(p.lines)
         out = self.output / video_file(p.title, p.style)
         job = self.work / "job.json"
@@ -550,7 +553,7 @@ class App:
             )
         p = self.project
         if not p.audio or not p.art:
-            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 파일 묶음에서 넣습니다.")
+            raise ValueError("노래 파일과 앨범 표지가 필요합니다. 노래·표지 단계에서 넣습니다.")
         _, song = render.padded((), p.song(), p.style)
         start = min(render.video_time(max(0.0, at), p.style), max(0.0, song.duration - 1.0))
         end = min(song.duration, start + CLIP_S)
@@ -662,10 +665,10 @@ class App:
             raise ValueError("영상을 만드는 중입니다. 끝난 뒤 다시 합니다.")
         p = self.project
         if not p.audio:
-            raise ValueError("노래 파일이 없습니다. 파일 묶음에서 넣습니다.")
+            raise ValueError("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다.")
         lyrics = [text for _, text in p.lines if text]
         if not lyrics:
-            raise ValueError("가사가 없습니다. 가사 묶음에서 가사를 넣습니다.")
+            raise ValueError("가사가 없습니다. 가사 단계에서 가사를 넣습니다.")
         if model not in auto.MODELS:
             raise ValueError(f"unknown model {model}")
         # A model that cannot get memory fails only after a minute of loading; the free commit
