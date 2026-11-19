@@ -103,6 +103,61 @@ function Start-Program([string]$uv, [string]$venv, [version]$least = '3.12') {
     $global:LASTEXITCODE = $code
 }
 
+# Where the user's data lives (videos, the project in progress, settings, the log): COVERLYRIC_HOME
+# when set, else the folder chosen in the installer or the page (one line in data-folder.txt), else
+# coverlyric in the user's Documents. Documents comes from the shell, which follows a OneDrive move.
+function Get-DataFolder([string]$saved) {
+    if ($env:COVERLYRIC_HOME) { return $env:COVERLYRIC_HOME }
+    if ($saved -and (Test-Path -LiteralPath $saved)) {
+        $line = @(Get-Content -LiteralPath $saved -Encoding UTF8 | Where-Object { $_.Trim() })[0]
+        if ($line) { return $line.Trim() }
+    }
+    Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'coverlyric'
+}
+
+# The user's data from the program folder, where versions before the data folder kept it.
+$OldData = @('작업 중', '만든 영상', 'settings.json', 'coverlyric.log', 'coverlyric.log.1')
+
+# Moves the user's data out of the program folder once. A name already in the data folder is left
+# where it is and reported, never merged or overwritten. A video folder chosen inside the program
+# folder follows the move in settings.json. Writes one line per item for the console.
+function Move-OldData([string]$root, [string]$data) {
+    if ([IO.Path]::GetFullPath($root).TrimEnd('\') -eq [IO.Path]::GetFullPath($data).TrimEnd('\')) {
+        return
+    }
+    New-Item -ItemType Directory -Force -Path $data | Out-Null
+    foreach ($name in $OldData) {
+        $from = Join-Path $root $name
+        if (-not (Test-Path -LiteralPath $from)) { continue }
+        $to = Join-Path $data $name
+        if (Test-Path -LiteralPath $to) {
+            "$name 은 두 곳에 있어 옮기지 않았습니다: $from"
+            continue
+        }
+        if ([IO.Path]::GetPathRoot($from) -eq [IO.Path]::GetPathRoot($to)) {
+            Move-Item -LiteralPath $from -Destination $to
+        } else {
+            # Move-Item cannot take a folder to another drive: copy, and delete only once copied.
+            Copy-Item -LiteralPath $from -Destination $to -Recurse
+            Remove-Item -LiteralPath $from -Recurse -Force
+        }
+        "$name 을 $data 로 옮겼습니다."
+    }
+    $settings = Join-Path $data 'settings.json'
+    if (Test-Path -LiteralPath $settings) {
+        $text = [IO.File]::ReadAllText($settings)
+        $saved = $text | ConvertFrom-Json
+        $folder = [string]$saved.output
+        if ($folder -and $folder.StartsWith($root.TrimEnd('\') + '\', 'OrdinalIgnoreCase')) {
+            $moved = Join-Path $data $folder.Substring($root.TrimEnd('\').Length + 1)
+            if (Test-Path -LiteralPath $moved) {
+                $saved.output = $moved
+                [IO.File]::WriteAllText($settings, ($saved | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
+            }
+        }
+    }
+}
+
 # Dot-sourced by the tests for the functions above.
 if ($MyInvocation.InvocationName -eq '.') { return }
 
@@ -111,7 +166,9 @@ $ErrorActionPreference = 'Stop'
 $Host.UI.RawUI.WindowTitle = 'coverlyric 가사 영상 만들기'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
-$env:COVERLYRIC_HOME = $root
+$data = Get-DataFolder (Join-Path $env:LOCALAPPDATA 'coverlyric\data-folder.txt')
+Move-OldData $root $data | ForEach-Object { Write-Host $_ }
+$env:COVERLYRIC_HOME = $data
 # numpy fails to start on PCs with many cores and little free memory otherwise (issue #1).
 $env:OPENBLAS_NUM_THREADS = '1'
 $env:OMP_NUM_THREADS = '1'
@@ -129,7 +186,7 @@ function Short-Disks([long]$need, [string[]]$paths) {
 
 $first = -not (Test-Path (Join-Path $root '.venv'))
 $need = if ($first) { 500MB } else { 200MB }
-$short = @(Short-Disks $need @($root, $env:LOCALAPPDATA) | Select-Object -Unique)
+$short = @(Short-Disks $need @($root, $data, $env:LOCALAPPDATA) | Select-Object -Unique)
 if ($short) {
     Write-Host ''
     Write-Host ('디스크 공간 부족: 아래 드라이브에 {0} MB 이상의 여유 공간이 필요합니다.' -f ($need / 1MB))
@@ -145,7 +202,9 @@ if ($first) {
     Write-Host ''
 }
 
-$uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
+# The installer ships uv, so an installed copy never fetches the install script from the web.
+$uv = Join-Path $root 'uv\uv.exe'
+if (-not (Test-Path -LiteralPath $uv)) { $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source }
 if (-not $uv) {
     $dir = Join-Path $env:LOCALAPPDATA 'coverlyric\uv'
     $uv = Join-Path $dir 'uv.exe'

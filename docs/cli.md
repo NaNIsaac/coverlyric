@@ -79,8 +79,12 @@ uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
 
-`가사영상 만들기.bat` 은 `tools/start.ps1` 을 실행합니다. uv가 없으면 `%LOCALAPPDATA%\coverlyric\uv`
-에 설치한 뒤 `uv run --frozen --no-dev coverlyric` 으로 페이지를 엽니다.
+`가사영상 만들기.bat` 은 `tools/start.ps1` 을 실행합니다. 설치 프로그램이 넣은 `uv\uv.exe` 를 쓰고, 없으면
+PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤 `uv run --frozen --no-dev coverlyric`
+으로 페이지를 엽니다. 데이터 폴더는 `COVERLYRIC_HOME`, 없으면 `%LOCALAPPDATA%\coverlyric\data-folder.txt` 의
+첫 줄(설치 프로그램이 씀), 없으면 문서\coverlyric 입니다. 프로그램 폴더에 `작업 중`, `만든 영상`,
+`settings.json`, `coverlyric.log` 가 있으면 처음 한 번 데이터 폴더로 옮기고, 데이터 폴더에 이미 있는 이름은
+그대로 둡니다.
 
 ## 프로젝트 파일
 
