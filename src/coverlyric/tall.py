@@ -314,7 +314,8 @@ def titled(style: render.Style) -> bool:
 
 def draw_bars(img: Image.Image, style: render.Style, fr: Frame) -> None:
     """The bands across the top and the bottom, and their texts on one line each, made smaller when
-    a text is wider than the frame or taller than its band."""
+    a text is wider than the frame or taller than its band. The texts are centred on the whole
+    width, as the bands are, not on the room the lyrics keep clear of a Short's buttons."""
     d = ImageDraw.Draw(img)
     fill = (*render.hex_rgb(style.bars_colour), 255)
     d.rectangle((0, 0, fr.w, fr.bar - 1), fill=fill)
@@ -327,9 +328,9 @@ def draw_bars(img: Image.Image, style: render.Style, fr: Frame) -> None:
             continue
         size = min(style.bars_size, fr.bar * 0.6)
         f = render.font(face, size, 650)
-        while render.text_width(text, f) > fr.right - fr.margin and f.size > 12:
+        while render.text_width(text, f) > fr.w - 2 * fr.margin and f.size > 12:
             f = render.font(face, f.size * 0.92, 650)
-        render.tracked(d, (fr.cx, y), text, f, ink)
+        render.tracked(d, (fr.w / 2, y), text, f, ink)
 
 
 class Painter:

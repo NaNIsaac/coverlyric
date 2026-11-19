@@ -103,7 +103,15 @@ def test_a_wide_text_on_a_band_is_made_smaller_to_fit():
     got = pixels(render.frame(8.0, lines, song, style))
     bar = round(1920 * style.bars_height)
     ink = np.where((got[-bar:] > 128).all(axis=2))[1]
-    assert ink.size and ink.min() >= tall.MARGIN - 2 and ink.max() <= 1080 - tall.SAFE_RIGHT + 2
+    assert ink.size and ink.min() >= tall.MARGIN - 2 and ink.max() <= 1080 - tall.MARGIN + 2
+
+
+@pytest.mark.parametrize("shape", SIZES)
+def test_a_band_text_is_centred_on_the_whole_width(shape):
+    lines, song, style = demo(shape, bars=True, bars_top="아리랑 - 민요")
+    got = pixels(render.frame(8.0, lines, song, style))
+    ink = np.where((got[: tall.frame_of(style).bar] > 128).all(axis=2))[1]
+    assert abs((ink.min() + ink.max()) / 2 - 540) <= 3
 
 
 @pytest.mark.parametrize(
