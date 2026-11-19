@@ -722,12 +722,16 @@ def opening_panel(song: Song, style: Style) -> Image.Image:
     title = font(face, 72 * k * SS, 700)
     while text_width(song.title, title, 0.04) > room and title.size > 30 * k * SS:
         title = font(face, title.size * 0.92, 700)
-    rows = [(song.title, title, 255, 0.04, 0.0)]
+    # A light grey of the lyric colour rather than the colour itself, which reads as too bright
+    # this large in a still panel: #D2D2D2 and #B4B4B4 for white.
+    rows = [(song.title, title, 210, 0.04, 0.0)]
     if song.artist:
-        rows.append((song.artist, font(face, 32 * k * SS, 400), 205, 0.14, 86 * k * SS))
+        rows.append((song.artist, font(face, 32 * k * SS, 400), 180, 0.14, 86 * k * SS))
     top = ph / 2 - rows[-1][4] / 2
-    for text, f, alpha, tracking, dy in rows:
-        lettered(d, (pw / 2, top + dy), text, f, alpha, style, tracking)
+    ink = hex_rgb(style.lyric_colour)
+    for text, f, level, tracking, dy in rows:
+        grey = "#{:02x}{:02x}{:02x}".format(*(round(c * level / 255) for c in ink))
+        lettered(d, (pw / 2, top + dy), text, f, 255, replace(style, lyric_colour=grey), tracking)
     return layer.reduce(SS)
 
 

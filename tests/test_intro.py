@@ -67,3 +67,11 @@ def test_the_light_drifts_slowly_and_softly(song):
 def test_the_new_keys_load_from_a_project():
     style = render.Style.from_dict({"opening": 0, "drift": True})
     assert (style.opening, style.drift) == (False, True)
+
+
+def test_the_title_is_light_grey_and_the_artist_a_little_dimmer(song):
+    layer = render.opening_panel(song, render.Style())
+    pixels = np.asarray(layer)
+    solid = pixels[pixels[..., 3] == 255][:, :3]
+    assert solid.max() == 0xD2
+    assert {0xD2, 0xB4} <= set(np.unique(solid))
