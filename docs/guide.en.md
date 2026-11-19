@@ -67,6 +67,9 @@ the preview, where they can be edited.
 - The song is processed on this PC only.
 - Lines to check get a dashed border and a note: lines not found (given a time between their
   neighbours), lines within 1 second of the line before, and lines heard differently from the lyrics.
+  Lines not found at the end share the time left before the song ends.
+- When a chorus repeats, the lines written once are placed first and each chorus is matched only to
+  what was heard between them, so a first chorus that was not heard does not take a later one.
 - **취소** (cancel) brings back the list as it was.
 
 ### Tap along (재생하며 직접 맞추기)

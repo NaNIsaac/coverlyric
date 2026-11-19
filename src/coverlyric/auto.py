@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import difflib
 import gc
+import itertools
 import os
 import re
 import threading
@@ -60,11 +61,69 @@ def letters(text: str) -> str:
     return re.sub(r"[^0-9A-Za-z가-힣]", "", text)
 
 
-def align(lyrics: list[str], words: list[dict]) -> tuple[list[Line], list[dict]]:
+def matched(
+    own: list[str],
+    line_of: list[int],
+    heard: list[str],
+    lines: set[int],
+    lo: int,
+    hi: int,
+    least: int = 1,
+) -> dict[int, int]:
+    """The letters of `lines` matched in order to the heard letters lo to hi: {own: heard}, from
+    runs of at least `least` letters."""
+    picked = [n for n, i in enumerate(line_of) if i in lines]
+    matcher = difflib.SequenceMatcher(None, [own[n] for n in picked], heard[lo:hi], autojunk=False)
+    return {
+        picked[a + j]: lo + b + j
+        for a, b, size in matcher.get_matching_blocks()
+        if size >= least
+        for j in range(size)
+    }
+
+
+def placed_lines(hit: dict[int, int], line_of: list[int], lines: set[int]) -> list[int]:
+    """The lines of `lines` with enough of their letters heard."""
+    return [
+        i
+        for i in sorted(lines)
+        if (own := [n for n, li in enumerate(line_of) if li == i])
+        and sum(n in hit for n in own) / len(own) >= PLACED
+    ]
+
+
+def hits(lyrics: list[str], own: list[str], line_of: list[int], heard: list[str]) -> dict[int, int]:
+    """Which heard letter each lyric letter is. A repeated chorus is the same letters each time,
+    and one match over the whole song can give the first written chorus the second sung one when
+    the first was not heard (#37). So the lines written once are placed first, and each run of
+    other lines is matched only to what was heard between its placed neighbours."""
+    texts = [letters(line) for line in lyrics]
+    once = {i for i, t in enumerate(texts) if t and texts.count(t) == 1}
+    if len(once) == sum(1 for t in texts if t):
+        return matched(own, line_of, heard, once, 0, len(heard))
+    # A single letter heard far off (a 요 in the next chorus) would stretch a line over the gap.
+    hit = matched(own, line_of, heard, once, 0, len(heard), least=2)
+    anchors = placed_lines(hit, line_of, once)
+    hit = {n: b for n, b in hit.items() if line_of[n] in anchors}
+    first = {i: min(b for n, b in hit.items() if line_of[n] == i) for i in anchors}
+    last = {i: max(b for n, b in hit.items() if line_of[n] == i) for i in anchors}
+    bounds = [-1, *anchors, len(lyrics)]
+    for before, after in itertools.pairwise(bounds):
+        gap = set(range(before + 1, after))
+        if gap:
+            lo = last[before] + 1 if before >= 0 else 0
+            hi = first[after] if after < len(lyrics) else len(heard)
+            hit |= matched(own, line_of, heard, gap, lo, hi)
+    return hit
+
+
+def align(
+    lyrics: list[str], words: list[dict], duration: float | None = None
+) -> tuple[list[Line], list[dict]]:
     """Times for `lyrics` from heard `words` ({start, end, word}). Returns the lines (with an empty line
     after each line followed by a long pause) and one note per lyric line: {"line": i, "kind":
     "unplaced" | "doubtful" | "differs", "heard": text}. Unplaced lines get a time between their
-    neighbours."""
+    neighbours; after the last placed line they share what is left of the song's `duration`."""
     heard, at = [], []
     for k, w in enumerate(words):
         for ch in letters(w["word"]):
@@ -75,11 +134,7 @@ def align(lyrics: list[str], words: list[dict]) -> tuple[list[Line], list[dict]]
         for ch in letters(line):
             own.append(ch)
             line_of.append(i)
-    hit = {}
-    matcher = difflib.SequenceMatcher(None, own, heard, autojunk=False)
-    for a, b, size in matcher.get_matching_blocks():
-        for j in range(size):
-            hit[a + j] = b + j
+    hit = hits(lyrics, own, line_of, heard)
     rows = []
     for i in range(len(lyrics)):
         idx = [n for n, li in enumerate(line_of) if li == i]
@@ -111,7 +166,12 @@ def align(lyrics: list[str], words: list[dict]) -> tuple[list[Line], list[dict]]
         while j < len(rows) and not placed[j]:
             j += 1
         before = rows[i - 1]["end"] if i else 0.0
-        after = rows[j]["start"] if j < len(rows) else before + 3.0 * (j - i + 1)
+        if j < len(rows):
+            after = rows[j]["start"]
+        elif duration and duration > before:
+            after = min(before + 3.0 * (j - i + 1), duration)
+        else:
+            after = before + 3.0 * (j - i + 1)
         step = (after - before) / (j - i + 1)
         for n in range(i, j):
             start = round(before + step * (n - i + 1), 2)
@@ -136,7 +196,8 @@ def align(lyrics: list[str], words: list[dict]) -> tuple[list[Line], list[dict]]
             notes.append({"line": i, "kind": "differs", "heard": row["heard"]})
         nxt = rows[i + 1]["start"] if i + 1 < len(rows) else None
         if nxt is None or nxt - row["end"] >= GAP:
-            lines.append((round(row["end"] + 1.0, 2), ""))
+            gone = row["end"] + 1.0
+            lines.append((round(min(gone, duration) if duration else gone, 2), ""))
     return lines, notes
 
 

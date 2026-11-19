@@ -69,3 +69,50 @@ def test_downloaded_mb_counts_partial_files(tmp_path, monkeypatch):
     (blobs / "abc.incomplete").write_bytes(b"\0" * 2**20)
     assert auto.downloaded_mb("small") == 1.0
     assert not auto.has_model("small")
+
+
+def sung(*lines, start=0.0):
+    """Words for lines sung one after another: 0.5 s a word and 2 s between lines."""
+    out, t = [], start
+    for line in lines:
+        for w in line.split():
+            out.append({"start": t, "end": t + 0.4, "word": " " + w})
+            t += 0.5
+        t += 2.0
+    return out
+
+
+VERSE_1 = ["밤하늘 아래 혼자 걸어요", "차가운 바람이 불어와요"]
+CHORUS = ["너를 부르는 노래", "다시 돌아와 줘요"]
+VERSE_2 = ["창문 너머 불빛이 꺼지고", "골목길 끝에 서 있어요"]
+HUM = ["음음음 음음"] * 2
+
+
+def test_a_chorus_not_heard_the_first_time_does_not_take_the_second_one():
+    lyrics = VERSE_1 + CHORUS + VERSE_2 + CHORUS
+    heard = sung(*VERSE_1, *HUM, "창문 너머 불빛 꺼져", "골목 끝에 서 있죠", *CHORUS)
+    lines, notes = auto.align(lyrics, heard, duration=30.0)
+    starts = [t for t, text in lines if text]
+    assert starts[4] == 13.5, "the second verse where it was sung"
+    assert starts[6] == 21.5, "the second written chorus on the chorus heard"
+    assert starts[1] < starts[2] < starts[3] < starts[4]
+    assert {n["line"] for n in notes if n["kind"] == "unplaced"} == {2, 3}
+
+
+def test_each_written_chorus_gets_its_own_repeat():
+    lyrics = VERSE_1 + CHORUS + VERSE_2 + CHORUS
+    heard = sung(*VERSE_1, *CHORUS, *VERSE_2, *CHORUS)
+    choruses = [w["start"] for w in heard if w["word"] == " 너를"]
+    lines, notes = auto.align(lyrics, heard, duration=30.0)
+    starts = [t for t, text in lines if text]
+    assert [starts[2], starts[6]] == choruses
+    assert notes == []
+
+
+def test_lines_not_heard_at_the_end_stay_inside_the_song():
+    lyrics = VERSE_1 + CHORUS + VERSE_2
+    heard = sung(*VERSE_1, *CHORUS)
+    lines, notes = auto.align(lyrics, heard, duration=20.0)
+    assert all(t < 20.0 for t, text in lines if text)
+    assert all(t <= 20.0 for t, _ in lines)
+    assert {n["line"] for n in notes if n["kind"] == "unplaced"} == {4, 5}
