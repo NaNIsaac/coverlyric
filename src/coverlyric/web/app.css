@@ -531,3 +531,8 @@ body.timing-open .stage-well { padding: 16px 24px; }
   * { transition: none !important; }
 }
 #make-error { white-space: pre-line; }
+#stage-empty p { margin: 0 0 14px; }
+#stage-empty .row { display: flex; justify-content: center; gap: 8px; }
+.lines-empty { margin: 12px 4px; }
+.needs { margin: 6px 0 0; font-size: 12px; }
+.needs .link { min-height: 0; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }

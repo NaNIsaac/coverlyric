@@ -185,3 +185,23 @@ def test_import_follows_the_tag_switch(base):
     ]
     state = json.loads(call(f"{base}/api/state", {})[0])
     assert state["clean_tags"] is False
+
+
+def test_messages_name_the_steps_on_the_rail(tmp_path):
+    app = server.App(tmp_path)
+    with pytest.raises(ValueError, match="노래·표지 단계에서"):
+        app.begin_render()
+    with pytest.raises(ValueError, match="노래·표지 단계에서"):
+        app.begin_auto("small")
+    app.demo()
+    app.project.lines = []
+    with pytest.raises(ValueError, match="가사 단계에서"):
+        app.begin_render()
+
+
+def test_starting_over_forgets_the_last_video_and_timing(tmp_path):
+    app = server.App(tmp_path)
+    app.job = {"state": "done", "out": str(tmp_path / "노래.mp4")}
+    app.auto = {"state": "done", "lines": [[1.0, "줄"]]}
+    app.reset()
+    assert app.job == {"state": "idle"} and app.auto == {"state": "idle"}

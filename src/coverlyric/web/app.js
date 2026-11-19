@@ -540,7 +540,7 @@ function bindClip() {
 // Plays the part once from its start and stops at its end; a second press stops it.
 function playClip() {
   const p = $("player");
-  if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
   if (!p.paused) { p.pause(); return; }
   p.currentTime = state.style.clip_from;
   p.play();
@@ -652,7 +652,10 @@ function fillAll() {
   updateStatus();
   showOutput();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
-  else $("player").removeAttribute("src");
+  else {
+    $("player").removeAttribute("src");
+    $("player").load();
+  }
   loadWave();
   $("time").max = Math.max(1, state.duration || 60);
   fillLook();
@@ -663,7 +666,7 @@ function fillAll() {
 function drawLines() {
   drawWave();
   const holder = $("lines");
-  holder.innerHTML = "";
+  holder.innerHTML = state.lines.length ? "" : '<p class="note lines-empty">가사를 넣으면 줄이 여기에 나옵니다.</p>';
   state.lines.forEach(([t, text], i) => {
     const row = document.createElement("div");
     row.className = "line";
@@ -791,6 +794,41 @@ function updateStatus() {
     n.textContent = ok ? "✓" : String(GROUPS.indexOf(key) + 1);
     n.classList.toggle("done", ok);
   }
+  showNeeds();
+}
+
+// What a step's main button still needs and the step that gives it, or null.
+function missing(art) {
+  if (!state.has_audio || (art && !state.has_art)) {
+    return { text: art ? "노래와 표지가 필요합니다" : "노래 파일이 필요합니다", group: "files" };
+  }
+  if (!state.lines.some(([, x]) => x)) return { text: "가사가 필요합니다", group: "lyrics" };
+  return null;
+}
+
+// A button that cannot work yet is greyed with one line under it naming what is missing.
+function showNeeds() {
+  for (const box of document.querySelectorAll(".needs")) {
+    const need = missing(box.dataset.needs === "make");
+    box.hidden = !need;
+    if (!need) continue;
+    const go = document.createElement("button");
+    go.className = "link";
+    go.textContent = `${GROUPS.indexOf(need.group) + 1} ${$(`tab-${need.group}`).lastElementChild.textContent}`;
+    go.addEventListener("click", () => openGroup(need.group));
+    box.replaceChildren(`${need.text} → `, go);
+  }
+  $("make").disabled = !$("progress").hidden || !!missing(true);
+  $("clip-make").disabled = !state.has_audio || !state.has_art;
+  $("auto-start").disabled = !$("auto-stop").hidden || !!missing(false);
+  $("tap-start").disabled = !!missing(false);
+  $("empty-pick").textContent = state.has_audio ? "앨범 표지 고르기" : "노래 파일 고르기";
+}
+
+// The first line on screen, so a preview opens on lyrics and not on the empty start of the song.
+function firstLine() {
+  const times = state.lines.map(([t]) => t).filter((t) => t != null);
+  return times.length ? Math.min(...times) + 0.3 : 0;
 }
 
 function lineAt(t) {
@@ -999,7 +1037,7 @@ function followPlayer() {
 
 function togglePlay() {
   const p = $("player");
-  if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
   if (p.paused) p.play(); else p.pause();
 }
 
@@ -1196,7 +1234,7 @@ function restoreLines() {
 function showAutoRunning(running) {
   $("auto-progress").hidden = !running;
   $("auto-stop").hidden = !running;
-  $("auto-start").disabled = running;
+  $("auto-start").disabled = running || !!missing(false);
 }
 
 async function pollAuto() {
@@ -1369,7 +1407,7 @@ async function pollRender() {
     return;
   }
   $("progress").hidden = true;
-  $("make").disabled = false;
+  $("make").disabled = !!missing(true);
   if (job.state === "done") {
     $("done").hidden = false;
     $("done-name").textContent = job.out.split(/[\\/]/).pop();
@@ -1486,8 +1524,8 @@ function bind() {
   $("check-next").addEventListener("click", () => moveCheck(1));
 
   $("tap-start").addEventListener("click", () => {
-    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
-    if (!state.lines.length) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣습니다."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
+    if (!state.lines.length) { toast("가사가 없습니다. 가사 단계에서 가사를 넣습니다."); return; }
     tapIndex = 0;
     tapUndo = [];
     diff = [];
@@ -1521,7 +1559,7 @@ function bind() {
     try {
       await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
       const data = await (await api("/api/prompt")).json();
-      if (!data.lines) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣습니다."); return; }
+      if (!data.lines) { toast("가사가 없습니다. 가사 단계에서 가사를 넣습니다."); return; }
       $("prompt").value = data.prompt;
       await navigator.clipboard.writeText(data.prompt);
       toast("복사했습니다. 채팅 AI에 노래 파일과 함께 붙여 넣습니다.", 5000);
@@ -1544,8 +1582,8 @@ function bind() {
   });
 
   $("auto-start").addEventListener("click", async () => {
-    if (!state.has_audio) { toast("노래 파일이 없습니다. 왼쪽 파일 묶음에서 넣습니다."); return; }
-    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 왼쪽 가사 묶음에서 가사를 넣습니다."); return; }
+    if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
+    if (!state.lines.some(([, x]) => x)) { toast("가사가 없습니다. 가사 단계에서 가사를 넣습니다."); return; }
     if (state.lines.some(([t]) => t != null) && !confirm("목록의 시간이 새로 찾은 시간으로 바뀝니다. 계속하시겠습니까?")) return;
     const model = document.querySelector('input[name="model"]:checked').value;
     try {
@@ -1750,15 +1788,25 @@ function bind() {
     diff = [];
     $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
     fillAll();
+    showAt(firstLine(), 0);
     openGroup("deco");
+  });
+  $("empty-pick").addEventListener("click", () => {
+    openGroup("files");
+    $(state.has_audio ? "art-file" : "audio-file").click();
   });
   $("new").addEventListener("click", async () => {
     if (!confirm("지금 작업을 지우고 새로 시작하시겠습니까? 만든 영상은 남습니다.")) return;
     try {
       state = await (await api("/api/new", { method: "POST" })).json();
       diff = [];
+      notes = {};
+      heard = {};
       $("lyrics-text").value = "";
       fillAll();
+      showCheck();
+      showAt(0, 0);
+      for (const id of ["done", "done-note", "make-error"]) $(id).hidden = true;
     } catch (e) {
       toast(e.message);
     }
@@ -1779,7 +1827,7 @@ async function boot() {
   pollRender();
   pollAuto();
   const params = new URLSearchParams(location.search);
-  if (params.get("t")) showAt(Number(params.get("t")));
+  showAt(params.get("t") ? Number(params.get("t")) : firstLine(), 0);
   setTab(document.querySelector(".tab:not(:disabled)").dataset.tab);
   const asked = params.get("group") || params.get("step");
   const group = OLD_GROUPS[asked] || asked;

@@ -15,7 +15,6 @@
 <header>
   <h1><svg class="i mark"><use href="#i-disc"/></svg>coverlyric</h1>
   <div class="top-buttons">
-    <button id="demo" class="quiet">데모 불러오기</button>
     <button id="new" class="quiet">새로 시작</button>
     <button id="quit" class="quiet">끝내기</button>
   </div>
@@ -67,6 +66,7 @@
           <button id="auto-start" class="big">자동으로 맞추기</button>
           <button id="auto-stop" class="quiet" hidden>취소</button>
         </div>
+        <p class="note needs" data-needs="song" hidden></p>
         <div id="auto-progress" hidden>
           <progress id="auto-bar" max="1" value="0"></progress>
           <p id="auto-text" class="note"></p>
@@ -86,6 +86,7 @@
 
       <div class="tab-body" data-body="tap" hidden>
         <button id="tap-start" class="big">재생하며 맞추기</button>
+        <p class="note needs" data-needs="song" hidden></p>
       </div>
 
       <div class="tab-body" data-body="file" hidden>
@@ -262,6 +263,7 @@
         <button id="clip-make" title="미리보기 시점부터 10초"><span id="clip-label">10초 미리보기</span></button>
         <button id="make" class="primary">영상 만들기</button>
       </div>
+      <p class="note needs" data-needs="make" hidden></p>
       <div id="progress" hidden>
         <div class="progress-head">
           <span class="state">영상 만드는 중</span>
@@ -290,7 +292,15 @@
         <img id="still" alt="미리보기">
         <div id="boxes"></div>
         <video id="clip" controls playsinline hidden></video>
-        <p id="stage-empty">노래와 표지를 넣으면 미리보기가 표시됩니다.</p>
+        <div id="stage-empty">
+          <div>
+            <p>노래와 표지를 넣으면 미리보기가 표시됩니다.</p>
+            <div class="row">
+              <button id="empty-pick" class="primary">노래 파일 고르기</button>
+              <button id="demo" class="quiet">데모로 둘러보기</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="transport">
