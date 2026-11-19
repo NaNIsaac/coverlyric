@@ -648,7 +648,7 @@ function fillAll() {
   $("artist").value = state.artist;
   $("clean_tags").checked = state.clean_tags !== false;
   $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
-  $("art-name").textContent = state.has_art ? "표지 있음" : "정사각형 권장";
+  $("art-name").textContent = state.has_art ? "표지 있음" : "없음";
   updateStatus();
   showOutput();
   if (state.has_audio) $("player").src = `/media/audio?v=${Date.now()}`;
@@ -816,7 +816,7 @@ function showNeeds() {
     go.className = "link";
     go.textContent = `${GROUPS.indexOf(need.group) + 1} ${$(`tab-${need.group}`).lastElementChild.textContent}`;
     go.addEventListener("click", () => openGroup(need.group));
-    box.replaceChildren(`${need.text} → `, go);
+    box.replaceChildren(`${need.text}: `, go);
   }
   $("make").disabled = !$("progress").hidden || !!missing(true);
   $("clip-make").disabled = !state.has_audio || !state.has_art;
