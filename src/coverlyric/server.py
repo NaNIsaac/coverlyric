@@ -125,6 +125,21 @@ def kill_tree(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
+def remove_part(path: Path, wait: float = 5.0) -> bool:
+    """Delete a stopped render's part file. On Windows a killed ffmpeg holds the file until it has
+    fully exited, a moment after the kill, so a held file is tried again until `wait` runs out."""
+    end = time.monotonic() + wait
+    while True:
+        try:
+            path.unlink(missing_ok=True)
+            return True
+        except PermissionError as e:
+            if time.monotonic() >= end:
+                LOG.warning("could not remove %s: %s", path.name, e)
+                return False
+            time.sleep(0.1)
+
+
 def safe_name(name: str) -> str:
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
     return name or "가사영상"
@@ -494,7 +509,7 @@ class App:
                 tail = (tail + [line])[-40:]
         code = proc.wait()
         # A stopped or crashed child cannot remove its own part file.
-        part.unlink(missing_ok=True)
+        remove_part(part)
         if self.proc is not proc:  # stopped and replaced by a newer render
             return
         if code == 0 and out.exists():

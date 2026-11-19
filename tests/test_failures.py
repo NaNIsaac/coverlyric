@@ -3,6 +3,7 @@
 import json
 import logging
 import sys
+import threading
 import time
 from concurrent.futures.process import BrokenProcessPool
 
@@ -117,6 +118,67 @@ def test_a_stopped_render_leaves_no_part_file(tmp_path):
     app.proc = proc
     app.job = {"state": "stopped"}
     app.watch(proc, out)
+    assert not part.exists()
+
+
+def held(monkeypatch, times):
+    """A part file the killed ffmpeg still holds for the first `times` deletes, as on Windows."""
+    unlink, tries = server.Path.unlink, []
+
+    def busy(self, missing_ok=False):
+        tries.append(self)
+        if len(tries) <= times:
+            raise PermissionError(32, "The process cannot access the file", str(self))
+        unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(server.Path, "unlink", busy)
+    return tries
+
+
+def stopped_watch(app, out):
+    proc = server.subprocess.Popen(
+        [sys.executable, "-I", "-c", "pass"], stdout=server.subprocess.PIPE, text=True
+    )
+    app.proc = proc
+    app.job = {"state": "stopped"}
+    app.watch(proc, out)
+
+
+def test_a_part_file_held_after_the_stop_is_removed_once_let_go(tmp_path, monkeypatch, caplog):
+    app = server.App(tmp_path)
+    out = app.output / "song.mp4"
+    part = out.with_name("song.making.mp4")
+    part.write_bytes(b"half a video")
+    tries = held(monkeypatch, 3)
+    with caplog.at_level(logging.INFO, logger="coverlyric"):
+        stopped_watch(app, out)
+    assert len(tries) == 4
+    assert not part.exists()
+    assert "render stopped by the user" in caplog.text
+
+
+def test_a_part_file_held_for_good_still_logs_the_stop(tmp_path, monkeypatch, caplog):
+    app = server.App(tmp_path)
+    out = app.output / "song.mp4"
+    part = out.with_name("song.making.mp4")
+    part.write_bytes(b"half a video")
+    held(monkeypatch, 10**6)
+    remove = server.remove_part
+    monkeypatch.setattr(server, "remove_part", lambda p: remove(p, wait=0.3))
+    with caplog.at_level(logging.INFO, logger="coverlyric"):
+        stopped_watch(app, out)
+    assert part.exists()
+    assert "could not remove song.making.mp4" in caplog.text
+    assert "render stopped by the user" in caplog.text
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="an open file blocks a delete only on Windows")
+def test_a_part_file_open_elsewhere_is_removed_when_closed(tmp_path):
+    part = tmp_path / "song.making.mp4"
+    part.write_bytes(b"half a video")
+    f = part.open("rb")
+    threading.Timer(0.4, f.close).start()
+    assert server.remove_part(part, wait=5.0)
     assert not part.exists()
 
 
