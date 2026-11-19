@@ -82,6 +82,11 @@ uv run coverlyric render demo-song
 `가사영상 만들기.bat` 은 `tools/start.ps1` 을 실행합니다. uv가 없으면 `%LOCALAPPDATA%\coverlyric\uv`
 에 설치한 뒤 `uv run --frozen --no-dev coverlyric` 으로 페이지를 엽니다.
 
+`업데이트.bat` 은 `tools/update.ps1` 을 실행합니다. GitHub의 main ZIP을 받아 프로그램 파일(ZIP 맨 위의
+이름들: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, README, 두 .bat 등)을 바꾸고, 이전 파일은
+`업데이트 백업/<날짜-시각>/` 에 옮겨 둡니다. `만든 영상`, `작업 중`, `settings.json`, `coverlyric.log`, `.venv`,
+`업데이트 백업` 은 건드리지 않습니다. `COVERLYRIC_UPDATE_ZIP` 에 ZIP 경로를 주면 내려받는 대신 그 파일을 씁니다.
+
 ## 프로젝트 파일
 
 페이지는 작업을 `작업 중/project.json` 에 저장합니다. 노래와 표지 경로, 줄마다 시작 시간과 글자,
