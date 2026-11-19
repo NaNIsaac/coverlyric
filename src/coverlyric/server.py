@@ -60,7 +60,7 @@ AUTO_NO_MEMORY = (
 AUTO_INSTEAD = ["chat", "tap"]
 AUTO_FAILED = (
     "자동 맞추기를 하지 못했습니다. 인터넷 연결을 확인하고 다시 합니다. "
-    "자세한 내용은 프로그램 폴더의 coverlyric.log 에 있습니다."
+    "자세한 내용은 데이터 폴더의 coverlyric.log 에 있습니다."
 )
 # What a process that ran out of memory leaves in its output when it dies before Python can
 # say so itself.

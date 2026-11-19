@@ -5,4 +5,6 @@ __pycache__/
 /만든 영상/
 dist/
 demo-still.png
+/installer/Output/
+/installer/uv/
 /업데이트 백업/

@@ -1,0 +1,74 @@
+name: installer
+
+# Builds coverlyric-setup.exe. A published release gets it attached; a pull request that touches the
+# installer or the launcher, and a manual run, keep it as an artifact only.
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - installer/**
+      - tools/start.ps1
+      - .github/workflows/installer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Bundle uv
+        shell: pwsh
+        run: |
+          # The version start.ps1 would install, checked against the hash of its release asset.
+          $url = 'https://github.com/astral-sh/uv/releases/download/0.11.32/uv-x86_64-pc-windows-msvc.zip'
+          Invoke-WebRequest -Uri $url -OutFile uv.zip
+          $hash = (Get-FileHash uv.zip -Algorithm SHA256).Hash
+          if ($hash -ne 'ACFDE570451CFDB8689FA159A138EE805BA4E241C466432750302C86254B0984') {
+            throw "uv.zip hash $hash differs from the pinned one"
+          }
+          Expand-Archive uv.zip -DestinationPath installer/uv
+
+      - name: Build the installer
+        shell: pwsh
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          $version = '0.0.0'
+          if ($env:EVENT -eq 'release') { $version = $env:TAG.TrimStart('v') }
+          & $iscc "/DVersion=$version" installer\coverlyric.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverlyric-setup
+          path: installer/Output/coverlyric-setup.exe
+
+  attach:
+    # The only job that can write, and only for a published release.
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverlyric-setup
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" coverlyric-setup.exe --clobber -R "$GITHUB_REPOSITORY"

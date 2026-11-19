@@ -7,6 +7,17 @@ runs on Windows 10/11 with 4 GB of RAM or more. The page is in Korean.
 
 ## Install
 
+1. [Download coverlyric-setup.exe](https://github.com/NaNIsaac/coverlyric/releases/latest/download/coverlyric-setup.exe)
+2. Run it. No administrator rights are needed. Choose the data folder (where videos, the song in
+   progress, settings and the log are kept; `Documents\coverlyric` at first) and install.
+3. Open **coverlyric** from the Start menu. The first start downloads what it needs and takes 1-3
+   minutes.
+
+A newer version installs over the old one the same way and keeps the data folder. Uninstalling from
+Windows Settings > **Apps** also keeps the data folder.
+
+Without the installer, use the ZIP:
+
 1. [Download coverlyric (ZIP)](https://github.com/NaNIsaac/coverlyric/archive/refs/heads/main.zip)
 2. Right-click the ZIP file → **Extract All**.
 3. In the extracted folder, double-click `가사영상 만들기.bat`.
@@ -15,7 +26,7 @@ runs on Windows 10/11 with 4 GB of RAM or more. The page is in Korean.
 
 If "Windows protected your PC" appears, click **More info** → **Run anyway**.
 
-To update, close the program and double-click `업데이트.bat` in the same folder. Only the program files
+To update a ZIP copy, close the program and double-click `업데이트.bat` in the same folder. Only the program files
 are replaced; your videos, the song in progress, settings, the log and downloaded models stay. The old
 program files are kept in the `업데이트 백업` folder, and a failed update puts them back.
 
@@ -53,7 +64,7 @@ in **모양** (look), band colour and background in **색** (colour).
 ## Video
 
 Click **이대로 영상 만들기** (make the video) → **확인**. The video and its subtitle files (SRT, LRC)
-are saved in the **저장 위치** (save folder): `만든 영상` in the program folder at first; **바꾸기**
+are saved in the **저장 위치** (save folder): `만든 영상` in the data folder at first; **바꾸기**
 (change) picks another folder and **열기** (open) opens it. If the song starts on its very
 first sound, put a number of seconds such as 1 in **앞 공백** (silence before).
 
@@ -87,7 +98,7 @@ such as the title and the artist. Colour, height and text size can be changed.
   programs and make it again. 720p uses less memory.
 - "영상 만들기 실패" (video failed): the reason is shown under the button.
 
-The log is `coverlyric.log` in the program folder. If the problem stays, attach that file to an
+The log is `coverlyric.log` in the data folder. If the problem stays, attach that file to an
 [issue](https://github.com/NaNIsaac/coverlyric/issues).
 
 ## Command line

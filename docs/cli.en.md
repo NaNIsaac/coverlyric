@@ -81,8 +81,12 @@ uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
 
-`가사영상 만들기.bat` runs `tools/start.ps1`. It installs uv into `%LOCALAPPDATA%\coverlyric\uv` if
-it is missing, then opens the page with `uv run --frozen --no-dev coverlyric`.
+`가사영상 만들기.bat` runs `tools/start.ps1`. It uses the `uv\uv.exe` the installer ships, else uv on PATH,
+else installs uv into `%LOCALAPPDATA%\coverlyric\uv`, then opens the page with
+`uv run --frozen --no-dev coverlyric`. The data folder is `COVERLYRIC_HOME`, else the first line of
+`%LOCALAPPDATA%\coverlyric\data-folder.txt` (written by the installer), else `Documents\coverlyric`.
+`작업 중`, `만든 영상`, `settings.json` and `coverlyric.log` found in the program folder are moved there once;
+a name the data folder already has is left where it is.
 
 `업데이트.bat` runs `tools/update.ps1`. It downloads the main ZIP from GitHub, replaces the program files
 (the names at the top of the ZIP: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, the READMEs, both

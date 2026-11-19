@@ -255,4 +255,4 @@ Off at first; switching them on shows their fields.
 | "영상 만들기 실패" (video failed) | Read the reason under the button. |
 | Sound and lyrics drift apart | Move that line with −0.1 / +0.1 and make it again. |
 
-The log is `coverlyric.log` in the program folder.
+The log is `coverlyric.log` in the data folder.
