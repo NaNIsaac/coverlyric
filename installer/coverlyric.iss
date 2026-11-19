@@ -30,7 +30,6 @@ Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-LicenseFile=LICENSE
 
 [Languages]
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
@@ -94,7 +93,7 @@ var
   Lines: TArrayOfString;
 begin
   Result := ExpandConstant('{userdocs}\coverlyric');
-  if LoadStringsFromUTF8File(SavedFile(), Lines) and (GetArrayLength(Lines) > 0) and (Trim(Lines[0]) <> '') then
+  if LoadStringsFromFile(SavedFile(), Lines) and (GetArrayLength(Lines) > 0) and (Trim(Lines[0]) <> '') then
     Result := Trim(Lines[0]);
 end;
 

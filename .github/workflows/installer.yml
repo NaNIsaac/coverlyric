@@ -1,10 +1,15 @@
 name: installer
 
-# Builds coverlyric-setup.exe. A published release gets it attached; a manual run keeps it as an
-# artifact only.
+# Builds coverlyric-setup.exe. A published release gets it attached; a pull request that touches the
+# installer or the launcher, and a manual run, keep it as an artifact only.
 on:
   release:
     types: [published]
+  pull_request:
+    paths:
+      - installer/**
+      - tools/start.ps1
+      - .github/workflows/installer.yml
   workflow_dispatch:
 
 permissions:
