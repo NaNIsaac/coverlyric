@@ -103,7 +103,21 @@ def hits(lyrics: list[str], own: list[str], line_of: list[int], heard: list[str]
         return matched(own, line_of, heard, once, 0, len(heard))
     # A single letter heard far off (a 요 in the next chorus) would stretch a line over the gap.
     hit = matched(own, line_of, heard, once, 0, len(heard), least=2)
-    anchors = placed_lines(hit, line_of, once)
+    # A line written once that shares words with a repeated line can match where the repeated
+    # line was sung, when the rest of it was misheard; it is placed with its neighbours instead (#41).
+    repeated = {t for t in texts if t and texts.count(t) > 1}
+    anchors = [
+        i
+        for i in placed_lines(hit, line_of, once)
+        if not any(
+            "".join(own[n] for n, li in enumerate(line_of) if li == i and n in hit) in t
+            for t in repeated
+        )
+    ]
+    if len(anchors) < len(placed_lines(hit, line_of, once)):
+        # Matched again without those lines, which pulled their neighbours' letters with them.
+        hit = matched(own, line_of, heard, set(anchors), 0, len(heard), least=2)
+        anchors = placed_lines(hit, line_of, set(anchors))
     hit = {n: b for n, b in hit.items() if line_of[n] in anchors}
     first = {i: min(b for n, b in hit.items() if line_of[n] == i) for i in anchors}
     last = {i: max(b for n, b in hit.items() if line_of[n] == i) for i in anchors}
