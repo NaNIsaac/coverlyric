@@ -297,6 +297,14 @@ def hear(audio: str, model: str, clip: tuple[float, float] | None = None) -> tup
     )
 
 
+def song_length(path: str) -> float | None:
+    """The song's length for automatic timing, or None when ffmpeg cannot tell."""
+    try:
+        return media.duration(path)
+    except (OSError, ValueError):
+        return None
+
+
 def auto_time(project: Project, model: str) -> dict:
     """Time the project's lyrics from its song: the lines get times and the unsure ones a note.
     Returns the model used and the seconds it took; the caller saves."""
@@ -306,7 +314,8 @@ def auto_time(project: Project, model: str) -> dict:
     started = time.monotonic()
     words, used = hear(project.path(project.audio), model)
     say("align")
-    lines, notes = auto.align(lyrics, words)
+    length = project.duration or song_length(project.path(project.audio))
+    lines, notes = auto.align(lyrics, words, length)
     number = [n for n, (_, text) in enumerate(lines, 1) if text]
     project.lines = lines
     project.notes = [

@@ -86,7 +86,7 @@ def run_auto(path: Path) -> None:
         print("error memory", flush=True)
         raise SystemExit(auto.NO_MEMORY_EXIT) from e
     report("align", 0.0, 0.0)
-    lines, notes = auto.align(data["lyrics"], words)
+    lines, notes = auto.align(data["lyrics"], words, cli.song_length(data["audio"]))
     result = {"lines": [list(line) for line in lines], "notes": notes, "heard": len(words)}
     path.with_name("auto-result.json").write_text(
         json.dumps(result, ensure_ascii=False), encoding="utf-8"
