@@ -67,6 +67,14 @@ OUTLINE_WIDTH = 0.06  # of the font size
 SHADOW_DROP, SHADOW_ALPHA = 0.05, 0.7  # offset as a share of the font size, and strength
 TITLE_Y, ARTIST_Y, TITLE_BOX = 100, 162, 240
 INTRO_FADE = 0.8  # seconds the opening title card takes to fade into the song's frame
+# In a long intro the title and the artist show in the lyric panel and go before the lines come in:
+# in and out over these seconds of a 16 s intro, stretched in proportion for a longer or shorter one.
+OPENING = ((5.0, 6.5), (9.5, 10.5))
+OPENING_FOR = 16.0
+OPENING_LEAST = 8.0  # seconds before the first line an intro needs for the title
+# The light that drifts over the frame: its peak in levels of 255, its size, and how slowly it goes
+# round (seconds across and down; unequal, so the path does not repeat within a song).
+LIGHT_PEAK, LIGHT_SIGMA, LIGHT_PERIODS = 16, 380, (53.0, 71.0)
 BAR = (110, 1000, 1850, 1040)
 # The album's tilt: at most this many degrees, seen from this many pixels away, close enough that
 # 20 degrees already reads as turned.
@@ -115,6 +123,8 @@ class Style:
     floor: float = 0.0  # 0 to 1: a soft shadow on the floor under the album
     reflection: bool = False  # the case mirrored on the floor under it (case layout)
     intro: float = 0.0  # seconds of a full-frame title card at the start, ended by the first line
+    opening: bool = True  # in a long intro the title and the artist show in the lyric panel
+    drift: bool = True  # a soft light drifts slowly over the frame
     lead: float = 0.0  # seconds of silence before the song starts
     tail: float = 0.0  # seconds of silence after the song ends
     shape: str = "wide"  # wide (16:9) or one of UPRIGHT: tall (9:16), square (1:1), portrait (4:5)
@@ -677,6 +687,76 @@ def veil(t: float, end: float) -> float:
     return round(min(1.0, (end - t) / INTRO_FADE), 3)
 
 
+def opening_steps(
+    lines: tuple[tuple[float, str], ...], style: Style
+) -> tuple[tuple[float, float], ...] | None:
+    """When the title comes in and goes in a long intro, or None: no opening, the full-frame card of
+    style.intro instead, or an intro shorter than OPENING_LEAST."""
+    if not (style.opening and style.intro <= 0 and lines and lines[0][1]):
+        return None
+    first = lines[0][0]
+    if first < OPENING_LEAST:
+        return None
+    k = first / OPENING_FOR
+    return tuple((a * k, b * k) for a, b in OPENING)
+
+
+def opening_at(t: float, steps: tuple[tuple[float, float], ...] | None) -> float:
+    """How much of the title in the panel shows at t."""
+    if steps is None:
+        return 0.0
+    (a, b), (c, d) = steps
+    return round(ease((t - a) / (b - a)) * (1 - ease((t - c) / (d - c))), 2)
+
+
+@lru_cache(maxsize=2)
+def opening_panel(song: Song, style: Style) -> Image.Image:
+    """The title and the artist large in the lyric panel, for a long intro."""
+    g = geometry(style)
+    k = style.panel_scale
+    face = fonts.resolve(style.font)
+    pw, ph = (g.panel[2] - g.panel[0]) * SS, (g.panel[3] - g.panel[1]) * SS
+    layer = Image.new("RGBA", (pw, ph), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    room = pw - 2 * 48 * k * SS
+    title = font(face, 72 * k * SS, 700)
+    while text_width(song.title, title, 0.04) > room and title.size > 30 * k * SS:
+        title = font(face, title.size * 0.92, 700)
+    rows = [(song.title, title, 255, 0.04, 0.0)]
+    if song.artist:
+        rows.append((song.artist, font(face, 32 * k * SS, 400), 205, 0.14, 86 * k * SS))
+    top = ph / 2 - rows[-1][4] / 2
+    for text, f, alpha, tracking, dy in rows:
+        lettered(d, (pw / 2, top + dy), text, f, alpha, style, tracking)
+    return layer.reduce(SS)
+
+
+def faded(layer: Image.Image, share: float) -> Image.Image:
+    """The layer with its alpha scaled by share."""
+    out = layer.copy()
+    out.putalpha(layer.getchannel("A").point(lambda v: round(v * share)))
+    return out
+
+
+def light_at(t: float) -> tuple[int, int]:
+    """Where the drifting light's centre is at t: wandering over the middle of the frame."""
+    px, py = LIGHT_PERIODS
+    x = W * (0.5 + 0.25 * math.sin(2 * math.pi * t / px))
+    y = H * (0.42 + 0.2 * math.sin(2 * math.pi * t / py + 1.0))
+    return round(x), round(y)
+
+
+@lru_cache(maxsize=2)
+def light(centre: tuple[int, int]) -> Image.Image:
+    """A soft warm light around centre, to add to a frame: RGB levels, no alpha."""
+    gx = np.exp(-(((np.arange(W) - centre[0]) / LIGHT_SIGMA) ** 2) / 2)
+    gy = np.exp(-(((np.arange(H) - centre[1]) / LIGHT_SIGMA) ** 2) / 2)
+    glow = np.outer(gy, gx)[..., None] * (np.array([1.0, 0.93, 0.85]) * LIGHT_PEAK)
+    rgba = np.zeros((H, W, 4), np.uint8)
+    rgba[..., :3] = np.rint(glow).astype(np.uint8)
+    return Image.fromarray(rgba, "RGBA")
+
+
 def panel_layer(g: Geometry, style: Style) -> Image.Image:
     panel = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(panel).rounded_rectangle(
@@ -1155,6 +1235,8 @@ class Painter:
         self.bg = bg
         self.intro = intro_end(lines, style)
         self.card = intro_card(song, style, stamped) if self.intro > 0 else None
+        self.steps = opening_steps(lines, style)
+        self.opening = opening_panel(song, style) if self.steps else None
         if shared and self.disc is not None and not tucked and (turning := turn_set(style)):
             self.turns = Turns(shared, *turning)
             # Outside the CD's box a turning frame is the background and the case, always.
@@ -1171,6 +1253,8 @@ class Painter:
                 None,
                 None,
                 1.0,
+                0.0,
+                None,
             )  # the card hides the frame: every such frame is the same
         disc = None
         if self.disc is not None:
@@ -1181,11 +1265,13 @@ class Painter:
         # The bar's fill grows by a fraction of a pixel each frame, so with it no two frames match.
         bar = t if self.style.bar else None
         picture = self.timing.index(t) if self.timing else None
-        return disc, panel_position(t, self.lines, self.style), bar, picture, cover
+        title = opening_at(t, self.steps)
+        glow = light_at(t) if self.style.drift else None
+        return disc, panel_position(t, self.lines, self.style), bar, picture, cover, title, glow
 
     def image(self, t: float, state: tuple | None = None) -> Image.Image:
         """The frame at t, RGBA."""
-        disc, pos, bar, picture, cover = state or self.state(t)
+        disc, pos, bar, picture, cover, title, glow = state or self.state(t)
         if cover == 1:
             return self.card.copy()
         g = self.g
@@ -1206,12 +1292,16 @@ class Painter:
         elif self.over:
             place(img, *self.over)
         place(img, panel_at(pos, self.lines, self.style), *g.panel[:2])
+        if title > 0:
+            place(img, faded(self.opening, title), *g.panel[:2])
         if bar is not None:
             place(img, progress_bar(t, self.song, self.style), *g.bar[:2])
         if picture is not None and self.style.anim_above:
             place(img, self.pictures[picture], *self.anim_box[:2])
         if cover > 0:
             img = Image.blend(img, self.card, cover)
+        if glow is not None:
+            img = ImageChops.add(img, light(glow))
         return img
 
     def draw_cd(self, img: Image.Image, x: int, turn: float, origin: tuple[int, int]) -> None:

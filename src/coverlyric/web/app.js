@@ -604,6 +604,7 @@ function fillLook() {
   $("intro").value = String(s.intro);
   $("bar").checked = s.bar;
   $("fade").checked = s.fade;
+  for (const key of ["opening", "drift"]) $(key).checked = s[key];
   $("height").value = String(s.height);
   $("fps").value = String(s.fps);
   $("lead").value = String(s.lead);
@@ -1698,6 +1699,12 @@ function bind() {
   $("intro").addEventListener("change", (e) => { state.style.intro = Number(e.target.value); scheduleSync(0); });
   $("bar").addEventListener("change", (e) => { state.style.bar = e.target.checked; scheduleSync(0); });
   $("fade").addEventListener("change", (e) => { state.style.fade = e.target.checked; scheduleSync(0); });
+  for (const key of ["opening", "drift"]) {
+    $(key).addEventListener("change", (e) => {
+      state.style[key] = e.target.checked;
+      scheduleSync(0);
+    });
+  }
   $("height").addEventListener("change", (e) => { state.style.height = Number(e.target.value); scheduleSync(0); });
   $("fps").addEventListener("change", (e) => { state.style.fps = Number(e.target.value); scheduleSync(0); });
   for (const key of ["lead", "tail"]) {

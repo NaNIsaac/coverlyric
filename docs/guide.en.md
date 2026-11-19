@@ -123,6 +123,8 @@ are in the **색** group, the rest in **모양**.
 - **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
 - **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
   the eye to the album and the lyrics.
+- **빛이 천천히 움직이기** (drifting light): a soft light crosses the frame slowly, about once a
+  minute. On by default.
 - **배경 색감** (background tone): **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백**
   (black and white) or **표지 색** (tinted with the cover's most telling colour).
 - **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, title and artist, with an outline or
@@ -136,6 +138,10 @@ are in the **색** group, the rest in **모양**.
   the lyric colour and edge.
 - **시작·끝 페이드** (fade in and out): the video fades in from black over 0.5 s and out to black
   over the last 1.5 s, with the sound. On by default.
+- **긴 전주에 제목 보이기** (title in a long intro): when the first lyric comes more than 8 s in,
+  the title and the artist fade in large where the lyric panel is, around the middle of the intro,
+  and fade out before the lyrics come in. When they come and go stretches with the length of the
+  intro. On by default.
 - **Preview time:** the slider under the preview picks the frame; while the song plays the preview
   follows it.
 
