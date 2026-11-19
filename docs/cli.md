@@ -49,7 +49,7 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 |---|---|
 | `project new <폴더> --audio <노래> --cover <표지> [--lyrics <가사>] [--title ..] [--artist ..] [--keep-tags]` | 노래와 표지를 복사해 새 프로젝트를 만듭니다. 가사는 텍스트, SRT, LRC, VTT. `--keep-tags` 는 대괄호 표시와 `#` 줄을 남깁니다. |
 | `project show <프로젝트>` | 제목, 바꾼 모양 설정, 줄마다 번호와 시간과 글자, 확인할 줄. |
-| `project set <프로젝트> 키=값 ...` | `title`, `artist`, `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. |
+| `project set <프로젝트> 키=값 ...` | `title`, `artist`, `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. 쇼츠는 `shape=tall fps=30 lyric_edge=outline`, 구간은 `clip_from=42 clip_to=72`(초, `clip_to=0` 은 끝까지), 끝을 처음과 이어지게 하려면 `loop=true`. |
 | `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
 | `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
 | `project lines <프로젝트> --import <자막>` / `--from-lyrics <가사>` | 줄과 시간을 자막 파일에서, 또는 시간 없이 가사 파일에서 다시 넣습니다. |

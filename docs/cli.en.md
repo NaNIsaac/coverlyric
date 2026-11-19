@@ -51,7 +51,7 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 |---|---|
 | `project new <folder> --audio <song> --cover <cover> [--lyrics <file>] [--title ..] [--artist ..] [--keep-tags]` | Copies the song and cover into a new project. Lyrics as text, SRT, LRC or VTT. `--keep-tags` keeps square-bracket marks and `#` lines. |
 | `project show <project>` | Title, the look settings that differ from the default, each line with number, time and text, and the lines to check. |
-| `project set <project> key=value ...` | `title`, `artist`, `clean_tags` and the look settings (`lead`, `tail`, `height`, `fps`, `fade`, `band`, ...). An unknown key is refused with the list of keys. |
+| `project set <project> key=value ...` | `title`, `artist`, `clean_tags` and the look settings (`lead`, `tail`, `height`, `fps`, `fade`, `band`, ...). An unknown key is refused with the list of keys. A Short is `shape=tall fps=30 lyric_edge=outline`, its part `clip_from=42 clip_to=72` (seconds, `clip_to=0` for the end), and `loop=true` joins its end to its start. |
 | `project lines <project> --shift -0.3` | Moves every timed line. |
 | `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
 | `project lines <project> --import <subtitles>` / `--from-lyrics <file>` | Lines and times again from a subtitle file, or lines without times from a lyrics file. |

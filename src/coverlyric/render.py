@@ -115,6 +115,10 @@ class Style:
     intro: float = 0.0  # seconds of a full-frame title card at the start, ended by the first line
     lead: float = 0.0  # seconds of silence before the song starts
     tail: float = 0.0  # seconds of silence after the song ends
+    shape: str = "wide"  # wide (1920x1080) | tall (1080x1920 for Shorts, drawn by tall.py)
+    loop: bool = False  # tall: the end blends into the start, so a Short repeats without a seam
+    clip_from: float = 0.0  # tall: the part of the song the video holds, in song seconds
+    clip_to: float = 0.0  # 0 is the end of the song
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -323,7 +327,9 @@ def boxes(
     style: Style, t: float = SLIDE[1], song: Song | None = None
 ) -> dict[str, tuple[int, ...]]:
     """The frame area of each movable element at time t, for the drag handles on the preview; the
-    moving picture's needs the song, which names its files."""
+    moving picture's needs the song, which names its files. A Short has none to drag."""
+    if style.shape == "tall":
+        return {}
     g = geometry(style)
     if style.layout == "case":
         right = (
@@ -1030,10 +1036,15 @@ def rate(style: Style) -> int:
     return style.fps if style.fps in RATES else FPS
 
 
+def frame_size(style: Style) -> tuple[int, int]:
+    """The size frames are drawn at: 1920x1080, or 1080x1920 for Shorts (the same bytes per frame)."""
+    return (H, W) if style.shape == "tall" else (W, H)
+
+
 def turn_set(style: Style) -> tuple[tuple[int, int, int, int], int] | None:
     """The frame box of the CD once it is out of the case, and the frames one turn takes, when one
     turn is a whole number of frames and its pictures fit in TURNS_MB."""
-    if style.layout != "case" or not style.show_cd or style.spin <= 0:
+    if style.shape == "tall" or style.layout != "case" or not style.show_cd or style.spin <= 0:
         return None
     period = style.spin * rate(style)
     if abs(period - round(period)) > 1e-6:
@@ -1241,6 +1252,10 @@ def painter(
 ) -> Painter:
     """The painter for these inputs, kept while scene() still returns the same layers (the page
     clears scene's cache when a file is replaced) and the moving picture's files are unchanged."""
+    if style.shape == "tall":
+        from . import tall
+
+        return tall.painter(lines, song, style)
     layers = scene(song, style, stamp(song.art))
     key = (lines, song, style, shared, moving, anim.stamps(song.anim))
     found = _painters.get(key)
@@ -1302,8 +1317,17 @@ def render(
     Returns what the user should know about the video: ANIM_DROPPED and SMALLER, or "" when it is
     as asked."""
     codec = "libx264" if quick else media.encoder()
-    lines, song = padded(lines, song, style)
-    tries = steps(workers, bool(song.anim), not quick and not HEIGHTS.get(style.height))
+    upright = style.shape == "tall"
+    if upright:
+        from . import tall
+
+        # A Short is the clip at 1080x1920 without the moving picture; there is no smaller size.
+        song = replace(song, anim=())
+        span = span or tall.span(style, song)
+    else:
+        lines, song = padded(lines, song, style)
+    smaller = not quick and not upright and not HEIGHTS.get(style.height)
+    tries = steps(workers, bool(song.anim), smaller)
     for k, (count, shared, moving, small) in enumerate(tries):
         part = song if moving else replace(song, anim=())
         look = replace(style, height=720) if small else style
@@ -1423,6 +1447,18 @@ def fades(style: Style, duration: float, first: float, last: float) -> tuple[lis
     holds the end. Times are within the part."""
     vf: list[str] = []
     af: list[str] = []
+    if style.shape == "tall":
+        # A Short starts on the line it is about: no fade from black, a short one in the sound so the
+        # cut does not click. A loop's end blends into its start instead of fading out.
+        from . import tall
+
+        length = last - first
+        af.append(f"afade=t=in:st=0:d={tall.AUDIO_FADE}")
+        if not style.loop:
+            af.append(
+                f"afade=t=out:st={max(0.0, length - tall.AUDIO_FADE):.3f}:d={tall.AUDIO_FADE}"
+            )
+        return vf, af
     if not style.fade:
         return vf, af
     if first <= 0.0:
@@ -1457,15 +1493,37 @@ def encode(
     heard = first - song.lead
     if song.lead or song.tail:
         af[:0] = [*([f"adelay={round(-heard * 1000)}:all=1"] if heard < 0 else []), "apad"]
-    if not quick and HEIGHTS.get(style.height):
+    size = frame_size(style)
+    upright = style.shape == "tall"
+    if not quick and not upright and HEIGHTS.get(style.height):
         vf.insert(0, "scale={}:{}".format(*HEIGHTS[style.height]))
     if quick:
-        vf.append("scale={}:{}".format(*QUICK_SIZE))
+        vf.append("scale={}:{}".format(*(QUICK_SIZE[::-1] if upright else QUICK_SIZE)))
         codec_args = ["-c:v", "libx264", *QUICK_X264]
     else:
         codec_args = ["-c:v", codec, *media.ENCODERS[codec]]
     video = [*(["-vf", ",".join(vf)] if vf else []), *codec_args]
     audio = ["-af", ",".join(af)] if af else []
+    sound, before = ["-map", "1:a"], []
+    overlap = 0.0
+    if upright:
+        from . import tall
+
+        overlap = tall.loop_length(style, song)
+    if overlap:
+        # The moments before the clip, mixed into its end (tall.loop_graph); the fade in stays on
+        # the start, which the end now leads into.
+        before = [
+            "-ss",
+            f"{max(0.0, heard - overlap):.3f}",
+            "-t",
+            f"{overlap:.3f}",
+            "-i",
+            song.audio,
+        ]
+        graph = tall.loop_graph(last - first, overlap)
+        graph = graph.replace("[1:a]", f"[1:a]{','.join(af)},") if af else graph
+        sound, audio = ["-map", "[sound]"], ["-filter_complex", graph]
     cmd = [
         media.ffmpeg(),
         "-y",
@@ -1476,7 +1534,7 @@ def encode(
         "-pix_fmt",
         "rgba",
         "-s",
-        f"{W}x{H}",
+        "{}x{}".format(*size),
         "-r",
         str(fps // step),
         "-i",
@@ -1487,10 +1545,10 @@ def encode(
         f"{last - first:.3f}",
         "-i",
         song.audio,
+        *before,
         "-map",
         "0:v",
-        "-map",
-        "1:a",
+        *sound,
         *video,
         "-pix_fmt",
         "yuv420p",

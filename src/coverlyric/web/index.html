@@ -105,7 +105,7 @@
     <section class="pane" id="g-deco" role="tabpanel" aria-labelledby="tab-deco" hidden>
       <h2 class="pane-head">꾸미기</h2>
       <div class="looks" id="looks" role="radiogroup" aria-label="모양"></div>
-      <details class="fold">
+      <details class="fold wide-only">
         <summary>앨범<small id="sum-album"></small></summary>
         <div class="seg">
           <label><input type="radio" name="layout" value="case" checked> CD 케이스</label>
@@ -156,7 +156,7 @@
           <label><input type="radio" name="tone" value="cover" title="표지에서 가장 눈에 띄는 색으로 배경을 물들입니다"> 표지 색</label>
         </div>
       </details>
-      <details class="fold">
+      <details class="fold wide-only">
         <summary>시작과 끝<small id="sum-ends"></small></summary>
         <label class="check"><input type="checkbox" id="fade"> 시작·끝 페이드</label>
         <label class="field">시작 제목 화면
@@ -169,7 +169,7 @@
           </select>
         </label>
       </details>
-      <details class="fold" id="anim-group">
+      <details class="fold wide-only" id="anim-group">
         <summary>움직이는 그림<small id="sum-anim"></small></summary>
         <label class="file-button small">움직이는 그림 추가<input type="file" id="anim-file" accept=".gif,.png,.jpg,.jpeg,.webp" multiple></label>
         <div id="anim-panel" hidden>
@@ -179,7 +179,7 @@
           <button id="anim-clear" class="quiet">움직이는 그림 빼기</button>
         </div>
       </details>
-      <details class="fold">
+      <details class="fold wide-only">
         <summary>위치와 크기<small id="sum-place"></small></summary>
         <table class="places">
           <thead><tr><th></th><th>가로</th><th>세로</th><th>크기</th></tr></thead>
@@ -199,8 +199,14 @@
 
     <section class="pane make" id="g-make" role="tabpanel" aria-labelledby="tab-make" hidden>
       <h2 class="pane-head">만들기</h2>
+      <div class="field shape-field">화면
+        <div class="seg shapes" role="radiogroup" aria-label="화면">
+          <label><input type="radio" name="shape" value="wide" checked> 가로</label>
+          <label><input type="radio" name="shape" value="tall"> 세로 (쇼츠)</label>
+        </div>
+      </div>
       <div class="output-options" id="output-options">
-        <label class="field">화질
+        <label class="field wide-only">화질
           <select id="height">
             <option value="1080">1080p</option>
             <option value="720">720p</option>
@@ -212,10 +218,10 @@
             <option value="30">30장</option>
           </select>
         </label>
-        <label class="field">앞 공백 (초)
+        <label class="field wide-only">앞 공백 (초)
           <input type="number" id="lead" min="0" max="10" step="0.5">
         </label>
-        <label class="field">뒤 공백 (초)
+        <label class="field wide-only">뒤 공백 (초)
           <input type="number" id="tail" min="0" max="10" step="0.5">
         </label>
       </div>

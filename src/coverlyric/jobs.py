@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import media, render, timing
+from . import media, render, tall, timing
 from .project import Project
 
 BASE_MB = 250  # kept free; encoder and main process measured about 320 MB with one worker
@@ -66,6 +66,9 @@ def beside(
     out: Path, project: Project, lines: tuple[tuple[float, str], ...], song: render.Song
 ) -> None:
     """The thumbnail and the timing files next to a finished video."""
+    if project.style.shape == "tall":
+        shorts_beside(out, project, lines, song)
+        return
     first = next((t for t, text in lines if text), 0.0)
     still = render.frame(min(song.duration, first + 0.6), lines, song, project.style)
     still.resize((1280, 720), Image.LANCZOS).save(out.with_suffix(".png"))
@@ -75,3 +78,19 @@ def beside(
         timing.to_lrc(list(timed), project.title, project.artist), encoding="utf-8"
     )
     out.with_suffix(".srt").write_text(timing.to_srt(list(timed), video.duration), encoding="utf-8")
+
+
+def shorts_beside(
+    out: Path, project: Project, lines: tuple[tuple[float, str], ...], song: render.Song
+) -> None:
+    """A Short's upright thumbnail, and timing files on the clip's own clock with only its lines."""
+    first, last = tall.span(project.style, song)
+    inside = [t for t, text in lines if text and first <= t < last]
+    at = min(last, inside[0] + 0.6) if inside else first
+    still = render.frame(at, lines, song, project.style)
+    still.resize((720, 1280), Image.LANCZOS).save(out.with_suffix(".png"))
+    timed = [(t - first, text) for t, text in project.lines if first <= t < last]
+    out.with_suffix(".lrc").write_text(
+        timing.to_lrc(timed, project.title, project.artist), encoding="utf-8"
+    )
+    out.with_suffix(".srt").write_text(timing.to_srt(timed, last - first), encoding="utf-8")

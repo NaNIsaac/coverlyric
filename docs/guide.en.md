@@ -166,6 +166,24 @@ Files in the save folder:
 | `title.png` | thumbnail (1280x720) |
 | `title.lrc`, `title.srt` | timing |
 
+## Shorts
+
+![Shorts](screenshots/6-shorts.png)
+
+In **만들기** (make), set **화면** (frame) to **세로 (쇼츠)** (upright, Shorts) for a YouTube Shorts video.
+
+- 1080x1920, 30 frames a second, H.264. The quality and silence fields do not apply and are hidden.
+- The title and the artist at the top, the cover under them, the line being sung large on a band in
+  the middle and the next line small under it. The lyrics get an outline (changeable in **색과 배경**).
+- The bottom fifth and the right 120 pixels stay empty: Shorts covers them with its buttons and
+  caption.
+- The picture starts at once, without rising from black; only the sound fades in and out over 0.3 s.
+- Album style, start and end, moving picture and place and size apply to the wide video only and are
+  hidden in **꾸미기** (decorate).
+- The file is `title_shorts.mp4`, with an upright thumbnail and the subtitle files beside it.
+
+Choosing **가로** (wide) again goes back to the wide video at 24 frames a second.
+
 ## Quitting and coming back
 
 - **끝내기** on the page, or closing the terminal window, quits.
