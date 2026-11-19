@@ -152,7 +152,7 @@ def test_a_part_file_held_after_the_stop_is_removed_once_let_go(tmp_path, monkey
     tries = held(monkeypatch, 3)
     with caplog.at_level(logging.INFO, logger="coverlyric"):
         stopped_watch(app, out)
-    assert len(tries) == 4
+    assert tries.count(part) == 4
     assert not part.exists()
     assert "render stopped by the user" in caplog.text
 
