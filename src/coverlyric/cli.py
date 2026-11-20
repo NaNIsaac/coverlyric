@@ -22,7 +22,7 @@ NOTE_TEXT = {
     "differs": "heard differently",
 }
 CHECK = ("unplaced", "doubtful")  # notes that make --strict exit 4; "differs" only reports
-TEXT_KEYS = ("title", "artist")
+TEXT_KEYS = ("title", "artist", "album", "released")
 STYLE_KEYS = tuple(f.name for f in fields(render.Style))
 
 
@@ -122,6 +122,8 @@ def show(project: Project, file: Path) -> dict:
         "project": str(file),
         "title": project.title,
         "artist": project.artist,
+        "album": project.album,
+        "released": project.released,
         "audio": project.path(project.audio),
         "cover": project.path(project.art),
         "duration": project.duration,
@@ -162,7 +164,7 @@ def truth(text: str) -> bool:
 
 
 def set_keys(project: Project, pairs: list[str]) -> list[str]:
-    """Apply key=value pairs; the keys are title, artist, clean_tags and the style's own keys."""
+    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags and the style's own keys."""
     style = project.style.to_dict()
     changed = []
     for pair in pairs:
@@ -484,7 +486,9 @@ def add_commands(sub) -> None:
     new.add_argument("--keep-tags", action="store_true", help="keep [..] marks and # lines")
     look = ps.add_parser("show", parents=[common], help="title, style and every line with its time")
     look.add_argument("project", type=Path)
-    keys = ps.add_parser("set", parents=[common], help="change title, artist or style keys")
+    keys = ps.add_parser(
+        "set", parents=[common], help="change title, artist, album, released or style keys"
+    )
     keys.add_argument("project", type=Path)
     keys.add_argument("pairs", nargs="+", metavar="KEY=VALUE")
     lines = ps.add_parser("lines", parents=[common], help="change line times or text")

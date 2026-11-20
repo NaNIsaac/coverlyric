@@ -18,6 +18,8 @@ class Project:
     art: str = ""
     title: str = ""
     artist: str = ""
+    album: str = ""  # the player look's line under the title
+    released: str = ""  # the player look's date badge, as typed
     duration: float = 0.0
     lines: list[timing.Line] = field(default_factory=list)
     style: Style = field(default_factory=Style)
@@ -44,6 +46,8 @@ class Project:
             art=data.get("art", ""),
             title=data.get("title", ""),
             artist=data.get("artist", ""),
+            album=data.get("album", ""),
+            released=data.get("released", ""),
             duration=float(data.get("duration", 0.0)),
             lines=lines,
             style=Style.from_dict(data.get("style", {})),
@@ -59,6 +63,8 @@ class Project:
             "art": self.art,
             "title": self.title,
             "artist": self.artist,
+            "album": self.album,
+            "released": self.released,
             "duration": self.duration,
             "lines": [list(line) for line in self.lines],
             "style": self.style.to_dict(),
@@ -86,6 +92,8 @@ class Project:
             duration=duration,
             anim=tuple(self.path(name) for name in self.anim),
             letters=self.letter_times(),
+            album=self.album,
+            released=self.released,
         )
 
     def letter_times(self) -> tuple[tuple[float, str, tuple[float, ...]], ...]:
