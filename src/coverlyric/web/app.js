@@ -572,6 +572,14 @@ function fillBars() {
   }
 }
 
+function fillKaraoke() {
+  const s = state.style;
+  $("upright_disc").checked = s.upright_look === "disc";
+  $("disc_wear").checked = s.disc_wear === "worn";
+  $("disc-wear-row").hidden = s.upright_look !== "disc";
+  $("letter_highlight").checked = s.highlight === "letter";
+}
+
 const RATIOS = { wide: "16 / 9", tall: "9 / 16", square: "1 / 1", portrait: "4 / 5" };
 
 function fillLook() {
@@ -583,6 +591,7 @@ function fillLook() {
   document.body.style.setProperty("--ratio", RATIOS[s.shape] || RATIOS.wide);
   fillClip();
   fillBars();
+  fillKaraoke();
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
@@ -1691,6 +1700,16 @@ function bind() {
     $(key).addEventListener("input", (e) => { state.style[key] = e.target.value; scheduleSync(); });
   }
   $("loop").addEventListener("change", (e) => { state.style.loop = e.target.checked; scheduleSync(0); });
+  $("upright_disc").addEventListener("change", (e) => {
+    state.style.upright_look = e.target.checked ? "disc" : "cover";
+    fillKaraoke();
+    scheduleSync(0);
+  });
+  $("disc_wear").addEventListener("change", (e) => { state.style.disc_wear = e.target.checked ? "worn" : "none"; scheduleSync(0); });
+  $("letter_highlight").addEventListener("change", (e) => {
+    state.style.highlight = e.target.checked ? "letter" : "line";
+    scheduleSync(0);
+  });
   // Leaving 16:9 sets what a phone video needs (the server's tall.SHORTS); 16:9 goes back to 24 fps.
   for (const r of document.querySelectorAll('input[name="shape"]')) {
     r.addEventListener("change", () => {

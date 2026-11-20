@@ -137,6 +137,9 @@ class Style:
     bars_top: str = ""  # a short text on the top band
     bars_bottom: str = ""
     bars_size: int = 48  # px of the band texts
+    highlight: str = "line"  # upright: line, or letter to light only the letter being sung
+    upright_look: str = "cover"  # upright: cover, or disc for the turning CD behind the lyrics
+    disc_wear: str = "none"  # upright disc: none, or worn for peeled paint and faint scratches
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -163,6 +166,8 @@ class Song:
     anim: tuple[str, ...] = ()  # the moving picture: one GIF or images in order
     lead: float = 0.0  # seconds of silence the video has before the audio starts; in duration
     tail: float = 0.0  # seconds of silence after the audio; in duration
+    # When each letter is sung, per line: (line start, line text, one time per letter but spaces).
+    letters: tuple[tuple[float, str, tuple[float, ...]], ...] = ()
 
 
 def band_rgb(style: Style) -> tuple[int, int, int]:

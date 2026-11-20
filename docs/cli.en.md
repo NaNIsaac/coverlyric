@@ -51,7 +51,7 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 |---|---|
 | `project new <folder> --audio <song> --cover <cover> [--lyrics <file>] [--title ..] [--artist ..] [--keep-tags]` | Copies the song and cover into a new project. Lyrics as text, SRT, LRC or VTT. `--keep-tags` keeps square-bracket marks and `#` lines. |
 | `project show <project>` | Title, the look settings that differ from the default, each line with number, time and text, and the lines to check. |
-| `project set <project> key=value ...` | `title`, `artist`, `clean_tags` and the look settings (`lead`, `tail`, `height`, `fps`, `fade`, `band`, ...). An unknown key is refused with the list of keys. An upright video is `shape=tall` (9:16), `square` (1:1) or `portrait` (4:5) with `fps=30 lyric_edge=outline`, its part `clip_from=42 clip_to=72` (seconds, `clip_to=0` for the end), `loop=true` joins its end to its start, and the bands are `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`. |
+| `project set <project> key=value ...` | `title`, `artist`, `clean_tags` and the look settings (`lead`, `tail`, `height`, `fps`, `fade`, `band`, ...). An unknown key is refused with the list of keys. An upright video is `shape=tall` (9:16), `square` (1:1) or `portrait` (4:5) with `fps=30 lyric_edge=outline`, its part `clip_from=42 clip_to=72` (seconds, `clip_to=0` for the end), `loop=true` joins its end to its start, and the bands are `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`, the turning CD behind the lyrics `upright_look=disc` (worn with `disc_wear=worn`), and lighting the letter being sung `highlight=letter`. |
 | `chorus <project> [--length 30] [--apply]` | The block of lines repeated most, as a Short's part (`from`, `to`). `--apply` makes the project an upright video of that part (9:16 if it was 16:9). Fails when no line comes back. |
 | `project lines <project> --shift -0.3` | Moves every timed line. |
 | `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
@@ -99,6 +99,12 @@ local ZIP to use instead of the download.
 The page saves the work in `작업 중/project.json`: the song and cover paths, each line's start time
 and text, the look (`style`) and the lines automatic timing asked to check (`notes`). Videos go to
 the save folder (`만든 영상/` at first). The command-line commands work on that folder too.
+
+`letters` holds when each letter of a line is sung, for `highlight=letter`. An entry is
+`{"n": 3, "text": "아리랑 아리랑", "times": [12.0, 12.3, ...]}`: the line number from 1, the line's
+text when it was timed, and seconds, one per letter but spaces or one per letter and digit. In the
+second case a punctuation mark takes the time of the letter before it. An entry whose line text has
+changed since, or whose line has no time, is not used.
 
 ## Environment variables
 
