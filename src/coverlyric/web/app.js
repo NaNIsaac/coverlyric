@@ -420,6 +420,11 @@ function fillClip() {
   const plain = (t) => clock(t).replace(/\.\d+$/, "");
   $("clip-range").textContent = `${plain(s.clip_from)} – ${plain(end)} (${Math.round(end - s.clip_from)}초)`;
   $("loop").checked = s.loop;
+  $("loop-lead-row").hidden = !s.loop;
+  const lead = s.loop_lead_line ? "line" : String(s.loop_lead);
+  const pick = $("loop_lead");
+  if (![...pick.options].some((o) => o.value === lead)) pick.add(new Option(`${s.loop_lead}초`, lead));
+  pick.value = lead;
   // The preview runs over what the video holds: the part, or the whole song.
   const time = $("time");
   const upright = s.shape !== "wide";
@@ -1773,7 +1778,17 @@ function bind() {
   for (const key of ["bars_top", "bars_bottom"]) {
     $(key).addEventListener("input", (e) => { state.style[key] = e.target.value; scheduleSync(); });
   }
-  $("loop").addEventListener("change", (e) => { state.style.loop = e.target.checked; scheduleSync(0); });
+  $("loop").addEventListener("change", (e) => {
+    state.style.loop = e.target.checked;
+    $("loop-lead-row").hidden = !e.target.checked;
+    scheduleSync(0);
+  });
+  $("loop_lead").addEventListener("change", (e) => {
+    const line = e.target.value === "line";
+    state.style.loop_lead_line = line;
+    state.style.loop_lead = line ? 0 : Number(e.target.value);
+    scheduleSync(0);
+  });
   $("upright_disc").addEventListener("change", (e) => {
     state.style.upright_look = e.target.checked ? "disc" : "cover";
     fillKaraoke();

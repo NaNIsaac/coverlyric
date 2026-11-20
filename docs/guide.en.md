@@ -272,6 +272,15 @@ line.
 - **끝을 처음과 이어지게** (join the end to the start) blends the last 0.5 s, picture and sound, with
   the moments before the part's start, so the last frame equals the first and a video on repeat does
   not jump. The sound then does not fade out at the end.
+  - **끝에 붙일 앞부분** (lead at the end: none, **바로 앞 줄** the line before, or 1-4 s): the video
+    ends with the song just before the part, so its last sound and frame run straight into the first.
+    **바로 앞 줄** takes it from the start of the line before the part. Over the part's last 0.5 s the
+    picture turns into the lead; the part's sound fades out over 0.9 s while the lead fades in over
+    0.45 s. The video gets longer by the lead less 0.5 s, and neither its start nor its end fades.
+    During the lead its own line shows, with the part's first line as the next one; no line after
+    the part shows. With a lead the 0.5 s blend above goes into the lead instead of into the moments
+    just before the part. The preview and **여기서 10초 재생** show the part only. Over a background
+    video there is no lead.
 
 **CD와 글자 강조** (disc and letter highlight): all off at first.
 
