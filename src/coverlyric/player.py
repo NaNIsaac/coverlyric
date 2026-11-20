@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from functools import lru_cache
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
 from . import anim, fonts, render
 from .render import SS, Song, Style
@@ -20,7 +20,7 @@ from .render import SS, Song, Style
 COVER = (158, 197, 704, 743)
 COVER_RADIUS = 24
 DISC_C, DISC_R = (672, 470), 248
-DISC_ALPHA = 0.72  # the CD lets the background through, as a clear disc would
+DISC_ALPHA = 0.6  # the CD lets the background through, as a clear disc would
 BADGE = (16, 14, 66)  # from the cover's top left: x, y, height
 BADGE_PX = 26
 TEXT_X, TEXT_RIGHT = 144, 816
@@ -33,7 +33,9 @@ TIMES_Y, TIMES_PX = 920, 19
 CONTROLS_Y = 972
 CONTROLS = (("shuffle", 165), ("previous", 358), ("pause", 480), ("next", 598), ("repeat", 797))
 ICON = 24  # half the size of a control icon
-GREY = (255, 255, 255, 120)
+# A player's screen is near-black grey: the background keeps this share of the cover's colour (none
+# when a colour tone is chosen, which sets its own) and goes this far towards SCREEN.
+KEEP_COLOUR, SCREEN_SHARE, SCREEN = 0.3, 0.5, (22, 22, 24)
 
 NOW_PX, OTHER_PX = 46, 46
 NOW_WEIGHT, OTHER_WEIGHT = 700, 600
@@ -339,10 +341,12 @@ def softened(layer: Image.Image, top: int, bottom: int) -> Image.Image:
 
 @lru_cache(maxsize=2)
 def base(song: Song, style: Style, art_stamp: float = 0.0) -> Image.Image:
-    """The background: the cover blurred and darkened, as the wide video's, without its title."""
-    return render.backdrop(
-        song.art, art_stamp, style.blur, style.dim, style.tone, style.vignette
-    ).copy()
+    """The background: the cover blurred and darkened, as the wide video's, without its title, then
+    greyer and darker still."""
+    bg = render.backdrop(song.art, art_stamp, style.blur, style.dim, style.tone, style.vignette)
+    if style.tone == "none":
+        bg = ImageEnhance.Color(bg).enhance(KEEP_COLOUR)
+    return Image.blend(bg, Image.new("RGBA", bg.size, (*SCREEN, 255)), SCREEN_SHARE)
 
 
 class Painter:
