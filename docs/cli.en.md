@@ -18,7 +18,6 @@ uv run coverlyric
 
 Make a project folder from the demo song and draw one frame:
 
-<!-- test -->
 ```sh
 uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
 uv run coverlyric still demo-song --at 7
