@@ -278,9 +278,14 @@
           <button id="make-stop" class="quiet">그만 만들기</button>
         </div>
       </div>
-      <p id="make-error" class="warn" role="alert" hidden></p>
+      <div id="make-error" class="error-line" hidden>
+        <p id="make-error-text" class="warn" role="alert"></p>
+        <button id="make-again" class="small">다시 만들기</button>
+      </div>
       <div id="done" class="done-line" hidden>
+        <span class="done-mark" aria-hidden="true"></span>
         <span id="done-name"></span>
+        <span id="done-meta" class="note"></span>
         <button id="done-play" class="quiet small">재생</button>
         <button id="open-folder" class="quiet small">폴더 열기</button>
       </div>

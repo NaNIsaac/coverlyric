@@ -160,12 +160,19 @@ are in the **색** group, the rest in **모양**.
   plays it in place of the still; **미리보기 닫기** closes it.
 - **이대로 영상 만들기** → **확인**. While it runs, the page shows how far into the song the video is
   made, the lyric there and the time left. **그만 만들기** stops it.
+- Before it starts, it checks that the save folder's drive has room for the video (about 36 MB a
+  minute at 1080p, half that at 720p). If not, it says how much is needed and how much is free, and
+  does not start.
+- When the video is done, the done line shows the file name, the video's length and the file size.
+  If it fails, **다시 만들기** (make again) under the reason starts it again.
+- If the program is closed or the PC goes off while a video is being made, the next start shows
+  "지난번 영상 만들기가 끝나지 않았습니다" (the last video was not finished) with **다시 만들기**. The
+  half-made file (`*.making.mp4`) is removed then.
 - It usually takes no longer than the song.
 - If a video of the same name is open in a player, the new one is saved as `title (2).mp4`.
 - **저장 위치** (save folder): where videos and timing files go. A folder picked with **바꾸기**
   (change) stays for the next run; **기본으로** (default) goes back to `만든 영상`. If the picked folder
-  is gone (an unplugged USB drive), files go to `만든 영상`. When the video is done, the done line
-  names the files it made.
+  is gone (an unplugged USB drive), files go to `만든 영상`.
 
 Files in the save folder:
 
@@ -258,7 +265,7 @@ Off at first; switching them on shows their fields.
 | "메모리가 부족해 영상을 만들지 못했습니다" (not enough memory to make the video) | Close other programs and make it again; 720p uses less memory. |
 | "메모리가 부족해 움직이는 그림 없이 만들었습니다" (made without the moving picture) | The video is made. To keep the moving picture, close other programs and make it again. |
 | "메모리가 부족해 720p로 만들었습니다" (made at 720p) | The video is made at 720p. For 1080p, close other programs and make it again. |
-| "영상 만들기 실패" (video failed) | Read the reason under the button. |
+| "영상 만들기 실패" (video failed) | Read the reason under the button and click **다시 만들기**. |
 | Sound and lyrics drift apart | Move that line with −0.1 / +0.1 and make it again. |
 
 The log is `coverlyric.log` in the data folder.
