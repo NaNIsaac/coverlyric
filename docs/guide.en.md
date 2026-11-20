@@ -128,6 +128,15 @@ and plays it in place of the still.
 - **앨범** (album)
   - **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
     **CD 돌기** hide or stop the CD.
+  - **플레이어** (player): drawn like a music app's playing screen. On the left the cover with rounded
+    corners and a see-through CD half out behind it; under the cover the title, an "artist — album"
+    line, a progress bar that fills with the song with the time played and the time left, and a row of
+    player buttons, which are only drawn. The blurred cover behind is darker and nearer grey. On the
+    right the lyrics, left aligned: the line being sung white and bold, the others grey, blurring
+    towards the bottom. The **앨범** (album) field shown then gives "title - Single" when empty, and
+    **표지 위 날짜** (date on the cover, such as 2026.06.23) puts a date badge on the cover's top left.
+    Tilt, floor shadow, band colour, the title on top and the progress bar option do nothing in the
+    player.
   - **기울기** (tilt, -40° to 40°): turns the album about its upright axis.
   - **바닥 그림자** (floor shadow): how strong the soft shadow on the floor under the album is.
   - **바닥에 비친 모습 (CD 케이스)** (reflection): the case mirrored on the floor under it, fading out

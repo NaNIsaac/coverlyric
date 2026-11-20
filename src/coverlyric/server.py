@@ -264,6 +264,8 @@ class App:
         p = self.project
         p.title = str(data.get("title", p.title))
         p.artist = str(data.get("artist", p.artist))
+        p.album = str(data.get("album", p.album))
+        p.released = str(data.get("released", p.released))
         if "lines" in data:
             p.lines = [
                 (None if t is None else round(float(t), 3), str(text)) for t, text in data["lines"]

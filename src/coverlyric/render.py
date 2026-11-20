@@ -58,6 +58,10 @@ HOLE = 0.075  # centre hole radius, as a fraction of the disc radius
 SLIDE = (0.3, 1.9)  # seconds: the disc slides out of the case once
 PANEL = (1010, 250, 1850, 970)
 ROW = 92
+PLAYER_PANEL, PLAYER_ROW = (
+    (985, 150, 1840, 1010),
+    97,
+)  # the player look's list: taller, left aligned
 SCROLL = 0.45
 ENTER = 1.2  # seconds the list takes to rise into the empty panel for the first line
 VISIBLE = 3.4
@@ -85,7 +89,9 @@ TILT_MAX, TILT_DISTANCE = 40.0, 1150
 class Style:
     """Everything the user can change. Offsets are in pixels of the 1920x1080 frame; scales are factors."""
 
-    layout: str = "case"  # case | disc
+    layout: str = (
+        "case"  # case | disc | player (player.py: the cover and buttons of a music player)
+    )
     font: str = fonts.DEFAULT
     band: str = "#c49668"
     lyric_colour: str = "#ffffff"
@@ -168,6 +174,8 @@ class Song:
     tail: float = 0.0  # seconds of silence after the audio; in duration
     # When each letter is sung, per line: (line start, line text, one time per letter but spaces).
     letters: tuple[tuple[float, str, tuple[float, ...]], ...] = ()
+    album: str = ""  # the player look's line under the title; empty: the title as a single
+    released: str = ""  # the player look's badge on the cover, as typed (2026.06.23); empty: none
 
 
 def band_rgb(style: Style) -> tuple[int, int, int]:
@@ -220,8 +228,13 @@ def geometry(style: Style) -> Geometry:
         disc_x=disc_x,
         round_c=round_c,
         round_r=round(DISC_R * s),
-        panel=scaled_box(PANEL, style.panel_scale, style.panel_x, style.panel_y),
-        row=ROW * style.panel_scale,
+        panel=scaled_box(
+            PLAYER_PANEL if style.layout == "player" else PANEL,
+            style.panel_scale,
+            style.panel_x,
+            style.panel_y,
+        ),
+        row=(PLAYER_ROW if style.layout == "player" else ROW) * style.panel_scale,
         title=(W // 2 + style.title_x, style.title_y, style.title_scale),
         bar=scaled_box(BAR, style.bar_scale, style.bar_x, style.bar_y),
     )
@@ -307,7 +320,7 @@ class Tilt:
 def tilt_of(style: Style) -> Tilt | None:
     """The album's tilt, or None when it faces the viewer."""
     angle = max(-TILT_MAX, min(TILT_MAX, style.tilt))
-    if abs(angle) < 0.05:
+    if abs(angle) < 0.05 or style.layout == "player":
         return None
     g = geometry(style)
     if style.layout == "case":
@@ -353,6 +366,10 @@ def boxes(
     moving picture's needs the song, which names its files. A Short has none to drag."""
     if is_upright(style):
         return {}
+    if style.layout == "player":
+        from . import player
+
+        return player.boxes(style)
     g = geometry(style)
     if style.layout == "case":
         right = (
@@ -1117,6 +1134,9 @@ def forget_art() -> None:
     """Drop every cached layer made from the cover, after a new cover is saved under the same name."""
     for cached in (square, backdrop, cover_colour, scene, round_album):
         cached.cache_clear()
+    from . import player
+
+    player.forget()
 
 
 def stamp(path: str) -> float:
@@ -1369,6 +1389,10 @@ def painter(
         from . import tall
 
         return tall.painter(lines, song, style)
+    if style.layout == "player":
+        from . import player
+
+        return player.painter(lines, song, style, moving)
     layers = scene(song, style, stamp(song.art))
     key = (lines, song, style, shared, moving, anim.stamps(song.anim))
     found = _painters.get(key)

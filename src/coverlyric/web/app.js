@@ -57,7 +57,7 @@ async function api(path, options = {}) {
 }
 
 function payload() {
-  return { title: state.title, artist: state.artist, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
+  return { title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
 }
 
 function scheduleSync(delay = 150) {
@@ -359,7 +359,7 @@ function sumDeco() {
   const font = $("font").selectedOptions[0];
   const tone = document.querySelector(`input[name="tone"][value="${s.tone}"]`);
   const moved = ["album", "panel", "title", "bar", "anim"].some((el) => s[`${el}_x`] || s[`${el}_y`] || s[`${el}_scale`] !== 1);
-  $("sum-album").textContent = s.layout === "case" ? "CD 케이스" : "둥근 표지";
+  $("sum-album").textContent = { case: "CD 케이스", disc: "둥근 표지", player: "플레이어" }[s.layout] || "";
   $("sum-text").textContent = font ? font.textContent : "";
   $("sum-colour").textContent = tone ? tone.parentElement.textContent.trim() : "";
   $("sum-ends").textContent = [s.fade ? "페이드" : "", s.intro ? `제목 ${s.intro}초` : ""].filter(Boolean).join(" · ") || "없음";
@@ -635,10 +635,13 @@ function fillLook() {
   fillKaraoke();
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
-  $("spin").disabled = !s.show_cd || s.layout !== "case";
+  $("spin").disabled = !s.show_cd || s.layout === "disc";
   $("tilt").value = s.tilt;
   $("tilt-label").textContent = s.tilt;
-  $("show_cd").disabled = s.layout !== "case";
+  $("show_cd").disabled = s.layout === "disc";
+  // The player look has its own title, bar and no floor: these do nothing there.
+  for (const id of ["tilt", "floor", "show_title", "bar", "band"]) $(id).disabled = s.layout === "player";
+  $("player-fields").hidden = s.layout !== "player";
   $("floor").value = s.floor;
   $("reflection").checked = s.reflection;
   $("reflection").disabled = s.layout !== "case";
@@ -697,6 +700,8 @@ async function saveTiming(fmt) {
 function fillAll() {
   $("title").value = state.title;
   $("artist").value = state.artist;
+  $("album").value = state.album || "";
+  $("released").value = state.released || "";
   $("clean_tags").checked = state.clean_tags !== false;
   $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
   $("art-name").textContent = state.has_art ? "표지 있음" : "없음";
@@ -1592,6 +1597,8 @@ function bind() {
   $("font-file").addEventListener("change", (e) => upload("font", e.target.files[0]));
   $("title").addEventListener("input", (e) => { state.title = e.target.value; scheduleSync(500); });
   $("artist").addEventListener("input", (e) => { state.artist = e.target.value; scheduleSync(500); });
+  $("album").addEventListener("input", (e) => { state.album = e.target.value; scheduleSync(500); });
+  $("released").addEventListener("input", (e) => { state.released = e.target.value; scheduleSync(500); });
   $("clean_tags").addEventListener("change", (e) => { state.clean_tags = e.target.checked; scheduleSync(0); });
 
   $("lyrics-apply").addEventListener("click", async () => {
