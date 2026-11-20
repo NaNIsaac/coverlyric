@@ -1,7 +1,8 @@
 name: installer
 
-# Builds coverlyric-setup.exe. A published release gets it attached; a pull request that touches the
-# installer or the launcher, and a manual run, keep it as an artifact only.
+# Builds coverlyric-setup.exe, installs it and starts the installed copy. A published release gets it
+# attached; a pull request that touches the installer or the launcher, and a manual run, keep it as an
+# artifact only.
 on:
   release:
     types: [published]
@@ -24,7 +25,7 @@ jobs:
       - name: Bundle uv
         shell: pwsh
         run: |
-          # The version start.ps1 would install, checked against the hash of its release asset.
+          # A pinned version, checked against the hash of its release asset.
           $url = 'https://github.com/astral-sh/uv/releases/download/0.11.32/uv-x86_64-pc-windows-msvc.zip'
           Invoke-WebRequest -Uri $url -OutFile uv.zip
           $hash = (Get-FileHash uv.zip -Algorithm SHA256).Hash
@@ -48,6 +49,18 @@ jobs:
           $version = '0.0.0'
           if ($env:EVENT -eq 'release') { $version = $env:TAG.TrimStart('v') }
           & $iscc "/DVersion=$version" installer\coverlyric.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # The README's only install path: the setup installs per user without questions here, and the
+      # installed copy must start with its own uv.
+      - name: Install and start
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:RUNNER_TEMP 'coverlyric'
+          $setup = Start-Process installer\Output\coverlyric-setup.exe -Wait -PassThru `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$app"
+          if ($setup.ExitCode -ne 0) { throw "setup exit code $($setup.ExitCode)" }
+          & "$app\uv\uv.exe" run --project $app --frozen --no-dev coverlyric --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4

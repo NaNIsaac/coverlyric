@@ -1,7 +1,6 @@
-"""The installer ships the program files only, and the user's data goes to its own folder, out of the
-program folder once (tools/start.ps1)."""
+"""The installer ships the program files only, and the user's data goes to its own folder
+(tools/start.ps1)."""
 
-import json
 import os
 import re
 import subprocess
@@ -95,64 +94,3 @@ def test_the_chosen_data_folder_and_coverlyric_home_win(tmp_path):
     assert powershell(f"Get-DataFolder '{saved}'").stdout.strip() == "D:\\노래 작업"
     got = powershell(f"Get-DataFolder '{saved}'", COVERLYRIC_HOME=str(tmp_path / "h"))
     assert got.stdout.strip() == str(tmp_path / "h")
-
-
-@windows
-def test_old_data_moves_out_of_the_program_folder_once(tmp_path):
-    root, data = tmp_path / "program", tmp_path / "data"
-    (root / "만든 영상").mkdir(parents=True)
-    (root / "만든 영상" / "노래.mp4").write_text("video", encoding="utf-8")
-    (root / "작업 중").mkdir()
-    (root / "작업 중" / "project.json").write_text("{}", encoding="utf-8")
-    (root / "settings.json").write_text(
-        json.dumps({"output": str(root / "만든 영상")}), encoding="utf-8"
-    )
-    (root / "src").mkdir()
-    run = powershell(f"Move-OldData '{root}' '{data}'")
-    assert (data / "만든 영상" / "노래.mp4").read_text(encoding="utf-8") == "video"
-    assert (data / "작업 중" / "project.json").exists()
-    assert not (root / "만든 영상").exists() and (root / "src").exists()
-    saved = json.loads((data / "settings.json").read_text(encoding="utf-8-sig"))
-    assert saved["output"] == str(data / "만든 영상")
-    assert "만든 영상 을" in run.stdout
-    assert powershell(f"Move-OldData '{root}' '{data}'").stdout.strip() == ""
-
-
-@windows
-def test_data_already_in_the_data_folder_is_never_overwritten(tmp_path):
-    root, data = tmp_path / "program", tmp_path / "data"
-    (root / "작업 중").mkdir(parents=True)
-    (root / "작업 중" / "project.json").write_text("old", encoding="utf-8")
-    (data / "작업 중").mkdir(parents=True)
-    (data / "작업 중" / "project.json").write_text("new", encoding="utf-8")
-    run = powershell(f"Move-OldData '{root}' '{data}'")
-    assert (data / "작업 중" / "project.json").read_text(encoding="utf-8") == "new"
-    assert (root / "작업 중" / "project.json").read_text(encoding="utf-8") == "old"
-    assert "두 곳에 있어" in run.stdout
-
-
-@windows
-def test_a_program_folder_used_as_the_data_folder_stays(tmp_path):
-    (tmp_path / "작업 중").mkdir()
-    assert powershell(f"Move-OldData '{tmp_path}' '{tmp_path}'").stdout.strip() == ""
-    assert (tmp_path / "작업 중").exists()
-
-
-@windows
-def test_moving_the_data_keeps_every_other_setting(tmp_path):
-    root, data = tmp_path / "program", tmp_path / "data"
-    (root / "만든 영상").mkdir(parents=True)
-    kept = {
-        "style": {"band": {"top": {"text": "제목 - 가수", "color": [17, 34, 51], "on": True}}},
-        "recent": [{"song": {"title": "노래", "times": [0.5]}}],
-        "one": [5],
-        "none": [],
-        "lead": 1.25,
-        "model": None,
-    }
-    (root / "settings.json").write_text(
-        json.dumps({**kept, "output": str(root / "만든 영상")}), encoding="utf-8"
-    )
-    powershell(f"Move-OldData '{root}' '{data}'")
-    saved = json.loads((data / "settings.json").read_text(encoding="utf-8-sig"))
-    assert saved == {**kept, "output": str(data / "만든 영상")}

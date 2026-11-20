@@ -752,7 +752,9 @@ class App:
         else:
             uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
             if not uv:
-                raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행합니다.")
+                raise ValueError(
+                    "uv를 찾지 못했습니다. 시작 메뉴의 coverlyric 으로 다시 실행합니다."
+                )
             cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
             cmd += ["python"]
         cmd += ["-m", "coverlyric", "auto-job"]
