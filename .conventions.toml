@@ -1,2 +1,3 @@
 [exempt]
 readme-language = "README.md is Korean, README.en.md English"
+readme-tests = "the README installs with coverlyric-setup.exe from a release, which a runner cannot click through; installer.yml builds it, installs it silently and starts the program instead, and docs.yml runs the marked blocks in docs/"

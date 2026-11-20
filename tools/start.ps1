@@ -115,49 +115,6 @@ function Get-DataFolder([string]$saved) {
     Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'coverlyric'
 }
 
-# The user's data from the program folder, where versions before the data folder kept it.
-$OldData = @('작업 중', '만든 영상', 'settings.json', 'coverlyric.log', 'coverlyric.log.1')
-
-# Moves the user's data out of the program folder once. A name already in the data folder is left
-# where it is and reported, never merged or overwritten. A video folder chosen inside the program
-# folder follows the move in settings.json. Writes one line per item for the console.
-function Move-OldData([string]$root, [string]$data) {
-    if ([IO.Path]::GetFullPath($root).TrimEnd('\') -eq [IO.Path]::GetFullPath($data).TrimEnd('\')) {
-        return
-    }
-    New-Item -ItemType Directory -Force -Path $data | Out-Null
-    foreach ($name in $OldData) {
-        $from = Join-Path $root $name
-        if (-not (Test-Path -LiteralPath $from)) { continue }
-        $to = Join-Path $data $name
-        if (Test-Path -LiteralPath $to) {
-            "$name 은 두 곳에 있어 옮기지 않았습니다: $from"
-            continue
-        }
-        if ([IO.Path]::GetPathRoot($from) -eq [IO.Path]::GetPathRoot($to)) {
-            Move-Item -LiteralPath $from -Destination $to
-        } else {
-            # Move-Item cannot take a folder to another drive: copy, and delete only once copied.
-            Copy-Item -LiteralPath $from -Destination $to -Recurse
-            Remove-Item -LiteralPath $from -Recurse -Force
-        }
-        "$name 을 $data 로 옮겼습니다."
-    }
-    $settings = Join-Path $data 'settings.json'
-    if (Test-Path -LiteralPath $settings) {
-        $text = [IO.File]::ReadAllText($settings)
-        $saved = $text | ConvertFrom-Json
-        $folder = [string]$saved.output
-        if ($folder -and $folder.StartsWith($root.TrimEnd('\') + '\', 'OrdinalIgnoreCase')) {
-            $moved = Join-Path $data $folder.Substring($root.TrimEnd('\').Length + 1)
-            if (Test-Path -LiteralPath $moved) {
-                $saved.output = $moved
-                [IO.File]::WriteAllText($settings, ($saved | ConvertTo-Json -Depth 32), (New-Object Text.UTF8Encoding $false))
-            }
-        }
-    }
-}
-
 # Dot-sourced by the tests for the functions above.
 if ($MyInvocation.InvocationName -eq '.') { return }
 
@@ -167,7 +124,6 @@ $Host.UI.RawUI.WindowTitle = 'coverlyric 가사 영상 만들기'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 $data = Get-DataFolder (Join-Path $env:LOCALAPPDATA 'coverlyric\data-folder.txt')
-Move-OldData $root $data | ForEach-Object { Write-Host $_ }
 $env:COVERLYRIC_HOME = $data
 # numpy fails to start on PCs with many cores and little free memory otherwise (issue #1).
 $env:OPENBLAS_NUM_THREADS = '1'
@@ -202,25 +158,12 @@ if ($first) {
     Write-Host ''
 }
 
-# The installer ships uv, so an installed copy never fetches the install script from the web.
+# The installer ships uv; a copy started from a source folder uses the uv on PATH.
 $uv = Join-Path $root 'uv\uv.exe'
 if (-not (Test-Path -LiteralPath $uv)) { $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source }
 if (-not $uv) {
-    $dir = Join-Path $env:LOCALAPPDATA 'coverlyric\uv'
-    $uv = Join-Path $dir 'uv.exe'
-    if (-not (Test-Path $uv)) {
-        $env:UV_INSTALL_DIR = $dir
-        $env:UV_NO_MODIFY_PATH = '1'
-        try {
-            Invoke-RestMethod 'https://astral.sh/uv/0.11.32/install.ps1' | Invoke-Expression
-        } catch {
-            Write-Host "내려받기 실패: $_"
-        }
-        if (-not (Test-Path $uv)) {
-            Write-Host '설치 실패. 인터넷 연결을 확인하고 다시 실행합니다.'
-            exit 1
-        }
-    }
+    Write-Host 'uv를 찾지 못했습니다. coverlyric-setup.exe 로 다시 설치합니다.'
+    exit 1
 }
 
 $env:COVERLYRIC_UV = $uv

@@ -184,6 +184,7 @@ class App:
         self.log = home / "coverlyric.log"
         self.auto: dict = {"state": "idle"}
         self.auto_proc: subprocess.Popen | None = None
+        self.beat_grid: tuple = (None, None)  # (song file and its time, sections.Grid)
         self.proc: subprocess.Popen | None = None
         self.clip: dict = {"state": "idle"}
         self.clip_proc: subprocess.Popen | None = None
@@ -425,6 +426,22 @@ class App:
         found = tall.chorus(tuple(p.lines), p.duration, length)
         first, last = found or (None, None)
         return {"from": first, "to": last}
+
+    def find_sections(self, length: float) -> dict:
+        """반복 구간 찾기: loop sections a whole number of bars long, best first."""
+        from . import align, sections
+
+        if why := align.missing(("librosa",)):
+            raise ValueError(f"반복 구간 찾기에는 추가 설치가 필요합니다. {why}")
+        p = self.project
+        if not p.audio:
+            raise ValueError("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다.")
+        song = p.song()
+        key = (song.audio, os.path.getmtime(song.audio))
+        if self.beat_grid[0] != key:
+            self.beat_grid = (key, sections.grid(song.audio))
+        lines = tuple(timing.ready([line for line in p.lines if line[0] is not None]))
+        return {"sections": sections.sections(lines, self.beat_grid[1], song.duration, length)}
 
     def look_stills(self, t: float, width: int = 320) -> dict:
         """Each look's keys and a small JPEG of the frame at time t in it, for the 꾸미기 cards."""
@@ -737,7 +754,9 @@ class App:
         else:
             uv = os.environ.get("COVERLYRIC_UV") or shutil.which("uv")
             if not uv:
-                raise ValueError("uv를 찾지 못했습니다. 가사영상 만들기.bat 으로 다시 실행합니다.")
+                raise ValueError(
+                    "uv를 찾지 못했습니다. 시작 메뉴의 coverlyric 으로 다시 실행합니다."
+                )
             cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
             cmd += ["python"]
         cmd += ["-m", "coverlyric", "auto-job"]
@@ -1041,6 +1060,11 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     if data:
                         app.update(data)
                     self.json(app.find_chorus(float(query.get("len", ["30"])[0])))
+                elif url.path == "/api/sections":
+                    data = json.loads(self.body() or b"{}")
+                    if data:
+                        app.update(data)
+                    self.json(app.find_sections(float(query.get("len", ["30"])[0])))
                 elif url.path == "/api/render":
                     self.json(app.start_render())
                 elif url.path == "/api/auto":

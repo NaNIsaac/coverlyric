@@ -2,7 +2,29 @@
 
 [English](cli.en.md) · [처음으로](../README.md)
 
-[uv](https://docs.astral.sh/uv/)가 있으면 저장소 폴더에서 바로 실행할 수 있습니다.
+프로그램을 쓰기만 하려면 [README](../README.md#설치)의 설치 프로그램으로 설치합니다. 이 문서는 소스에서
+실행하는 법과 페이지 없이 영상을 만드는 명령입니다.
+
+## 소스에서 실행
+
+[uv](https://docs.astral.sh/uv/)와 git이 있으면 저장소를 받아 그 폴더에서 실행합니다. Python과 패키지는
+`uv` 가 처음 한 번 설치합니다.
+
+```sh
+git clone https://github.com/NaNIsaac/coverlyric
+cd coverlyric
+uv run coverlyric
+```
+
+데모 노래로 프로젝트 폴더를 만들고 한 장면을 그려 봅니다:
+
+<!-- test -->
+```sh
+uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
+uv run coverlyric still demo-song --at 7
+```
+
+테스트는 `uv run pytest` 입니다.
 
 ## 페이지
 
@@ -51,6 +73,8 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 | `project show <프로젝트>` | 제목, 바꾼 모양 설정, 줄마다 번호와 시간과 글자, 확인할 줄. |
 | `project set <프로젝트> 키=값 ...` | `title`, `artist`, `album`, `released`(플레이어의 표지 위 날짜), `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. 세로 영상은 `shape=tall`(9:16), `square`(1:1), `portrait`(4:5)에 `fps=30 lyric_edge=outline`, 구간은 `clip_from=42 clip_to=72`(초, `clip_to=0` 은 끝까지), 끝을 처음과 이어지게 하려면 `loop=true`, 위아래 띠는 `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`, 가사 뒤에 도는 CD는 `upright_look=disc`(낡은 CD는 `disc_wear=worn`), 부르는 글자만 노랗게는 `highlight=letter`. 16:9 의 플레이어 모양은 `layout=player`. |
 | `chorus <프로젝트> [--length 30] [--apply]` | 가장 많이 되풀이되는 줄 묶음을 찾아 쇼츠 구간(`from`, `to`)으로 보여 줍니다. `--apply` 는 프로젝트를 그 구간의 세로 영상으로 바꿉니다(16:9 였으면 9:16). 되풀이되는 줄이 없으면 실패합니다. |
+| `sections <프로젝트> [--length 30] [--apply N]` | 마디 수가 정수인 반복 구간을 길이에 가깝게, 시작이 강한 순서로 8개까지 보여 줍니다. 구간은 줄이 시작하는 박(또는 그 앞 박)에서 시작하고, 다음 줄이 들어오기 직전에 끝나도록 한 마디 더하거나 뺍니다. `--apply N` 은 프로젝트를 N번 구간의 반복 세로 영상으로 바꿉니다(`loop=true`). `align` 추가 설치가 필요합니다. |
+| `align <프로젝트> [--from 1:35] [--to 2:42]` | 그 사이에 시작하는 줄의 글자마다 부르는 시간을 정해 프로젝트의 `letters` 에 저장합니다(`highlight=letter` 가 씁니다). 처음 값은 세로 영상이면 그 구간, 아니면 노래 전체. 노래에서 목소리만 떼어(demucs) 글자 하나를 한 음절로 맞춥니다(torchaudio MMS_FA). 처음 한 번 모델 약 1.2 GB를 내려받습니다. `align` 추가 설치가 필요합니다. |
 | `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
 | `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
 | `project lines <프로젝트> --import <자막>` / `--from-lyrics <가사>` | 줄과 시간을 자막 파일에서, 또는 시간 없이 가사 파일에서 다시 넣습니다. |
@@ -79,17 +103,20 @@ uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
 
-`가사영상 만들기.bat` 은 `tools/start.ps1` 을 실행합니다. 설치 프로그램이 넣은 `uv\uv.exe` 를 쓰고, 없으면
-PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤 `uv run --frozen --no-dev coverlyric`
-으로 페이지를 엽니다. 데이터 폴더는 `COVERLYRIC_HOME`, 없으면 `%LOCALAPPDATA%\coverlyric\data-folder.txt` 의
-첫 줄(설치 프로그램이 씀), 없으면 문서\coverlyric 입니다. 프로그램 폴더에 `작업 중`, `만든 영상`,
-`settings.json`, `coverlyric.log` 가 있으면 처음 한 번 데이터 폴더로 옮기고, 데이터 폴더에 이미 있는 이름은
-그대로 둡니다.
+## 설치된 프로그램
 
-`업데이트.bat` 은 `tools/update.ps1` 을 실행합니다. GitHub의 main ZIP을 받아 프로그램 파일(ZIP 맨 위의
-이름들: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, README, 두 .bat 등)을 바꾸고, 이전 파일은
-`업데이트 백업/<날짜-시각>/` 에 옮겨 둡니다. `만든 영상`, `작업 중`, `settings.json`, `coverlyric.log`, `.venv`,
-`업데이트 백업` 은 건드리지 않습니다. `COVERLYRIC_UPDATE_ZIP` 에 ZIP 경로를 주면 내려받는 대신 그 파일을 씁니다.
+시작 메뉴의 바로 가기가 `가사영상 만들기.bat` 을, 그것이 `tools/start.ps1` 을
+실행합니다. 설치 프로그램이 넣은 `uv\uv.exe` 로 `uv run --frozen --no-dev coverlyric` 을 실행하고,
+데이터 폴더는 `COVERLYRIC_HOME`, 없으면 `%LOCALAPPDATA%\coverlyric\data-folder.txt` 의 첫 줄(설치
+프로그램이 씀), 없으면 문서\coverlyric 입니다.
+
+`align` 과 `sections` 는 추가 설치 `align` 이 필요합니다. torch 2.7 이 Python 3.12, 3.13 에서만 돌기 때문에 따로 된 환경에서 실행합니다:
+
+```powershell
+uv run --isolated --python 3.13 --extra align coverlyric align <프로젝트>
+```
+
+없으면 이 명령을 알려 주고 종료 코드 1로 끝납니다.
 
 ## 프로젝트 파일
 
@@ -117,9 +144,3 @@ PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤
 포함된 글꼴은 SIL Open Font License 1.1이며, 라이선스 파일은 `src/coverlyric/fonts/` 에 글꼴과 함께
 있습니다: Noto Sans KR, NanumGothic Bold, Do Hyeon, Black Han Sans, Nanum Brush Script, East Sea
 Dokdo.
-
-## 테스트
-
-```sh
-uv run pytest
-```

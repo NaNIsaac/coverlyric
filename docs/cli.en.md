@@ -2,7 +2,28 @@
 
 [한국어](cli.md) · [Back](../README.en.md)
 
-With [uv](https://docs.astral.sh/uv/) installed, run it from the repository folder.
+To just use the program, install it with the setup in the [README](../README.en.md#install). This
+page is for running it from source and for the commands that make a video without the page.
+
+## Run from source
+
+With [uv](https://docs.astral.sh/uv/) and git, get the repository and run it from its folder. `uv`
+installs Python and the packages the first time.
+
+```sh
+git clone https://github.com/NaNIsaac/coverlyric
+cd coverlyric
+uv run coverlyric
+```
+
+Make a project folder from the demo song and draw one frame:
+
+```sh
+uv run coverlyric project new demo-song --audio src/coverlyric/demo/tone.wav --cover src/coverlyric/demo/cover.png --title "데모 노래"
+uv run coverlyric still demo-song --at 7
+```
+
+The tests run with `uv run pytest`.
 
 ## The page
 
@@ -53,6 +74,8 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `project show <project>` | Title, the look settings that differ from the default, each line with number, time and text, and the lines to check. |
 | `project set <project> key=value ...` | `title`, `artist`, `album`, `released` (the player's date on the cover), `clean_tags` and the look settings (`lead`, `tail`, `height`, `fps`, `fade`, `band`, ...). An unknown key is refused with the list of keys. An upright video is `shape=tall` (9:16), `square` (1:1) or `portrait` (4:5) with `fps=30 lyric_edge=outline`, its part `clip_from=42 clip_to=72` (seconds, `clip_to=0` for the end), `loop=true` joins its end to its start, and the bands are `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`, the turning CD behind the lyrics `upright_look=disc` (worn with `disc_wear=worn`), and lighting the letter being sung `highlight=letter`. The 16:9 player look is `layout=player`. |
 | `chorus <project> [--length 30] [--apply]` | The block of lines repeated most, as a Short's part (`from`, `to`). `--apply` makes the project an upright video of that part (9:16 if it was 16:9). Fails when no line comes back. |
+| `sections <project> [--length 30] [--apply N]` | Up to 8 loop sections a whole number of bars long, near the length, the strongest opening first. A section starts on the beat a line starts on (or the beat before it) and gets one bar more or less when that ends it just before the next line comes in. `--apply N` makes the project a looping upright video of section N (`loop=true`). Needs the `align` extra. |
+| `align <project> [--from 1:35] [--to 2:42]` | When each letter of the lines starting in that stretch is sung, saved as the project's `letters` (used by `highlight=letter`). By default an upright project's part, else the whole song. The vocals are separated from the song (demucs) and each letter is placed as one syllable (torchaudio MMS_FA). The first run downloads the models, about 1.2 GB, once. Needs the `align` extra. |
 | `project lines <project> --shift -0.3` | Moves every timed line. |
 | `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
 | `project lines <project> --import <subtitles>` / `--from-lyrics <file>` | Lines and times again from a subtitle file, or lines without times from a lyrics file. |
@@ -81,18 +104,20 @@ uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
 
-`가사영상 만들기.bat` runs `tools/start.ps1`. It uses the `uv\uv.exe` the installer ships, else uv on PATH,
-else installs uv into `%LOCALAPPDATA%\coverlyric\uv`, then opens the page with
-`uv run --frozen --no-dev coverlyric`. The data folder is `COVERLYRIC_HOME`, else the first line of
-`%LOCALAPPDATA%\coverlyric\data-folder.txt` (written by the installer), else `Documents\coverlyric`.
-`작업 중`, `만든 영상`, `settings.json` and `coverlyric.log` found in the program folder are moved there once;
-a name the data folder already has is left where it is.
+## The installed program
 
-`업데이트.bat` runs `tools/update.ps1`. It downloads the main ZIP from GitHub, replaces the program files
-(the names at the top of the ZIP: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, the READMEs, both
-.bat files and so on) and moves the old ones to `업데이트 백업/<date-time>/`. It never touches `만든 영상`,
-`작업 중`, `settings.json`, `coverlyric.log`, `.venv` or `업데이트 백업`. `COVERLYRIC_UPDATE_ZIP` names a
-local ZIP to use instead of the download.
+The Start menu shortcut runs `가사영상 만들기.bat`, which runs `tools/start.ps1`. It runs
+`uv run --frozen --no-dev coverlyric` with the `uv\uv.exe` the installer ships. The data folder is
+`COVERLYRIC_HOME`, else the first line of `%LOCALAPPDATA%\coverlyric\data-folder.txt` (written by the
+installer), else `Documents\coverlyric`.
+
+`align` and `sections` need the `align` extra. torch 2.7 runs on Python 3.12 and 3.13 only, so they run in an environment of their own:
+
+```powershell
+uv run --isolated --python 3.13 --extra align coverlyric align <project>
+```
+
+Without it they print this command and exit 1.
 
 ## Project file
 
@@ -118,21 +143,5 @@ changed since, or whose line has no time, is not used.
 ## Fonts
 
 The bundled fonts are under the SIL Open Font License 1.1; each licence file is next to its font in
-`src/coverlyric/fonts/`:
-
-| Font | Licence file |
-|---|---|
-| Noto Sans KR | `OFL-NotoSansKR.txt` |
-| NanumGothic Bold | `OFL-NanumGothic.txt` |
-| Do Hyeon | `OFL-DoHyeon.txt` |
-| Black Han Sans | `OFL-BlackHanSans.txt` |
-| Nanum Brush Script | `OFL-NanumBrushScript.txt` |
-| East Sea Dokdo | `OFL-EastSeaDokdo.txt` |
-
-The page also lists the fonts installed on the PC that can write Korean, and takes any font file.
-
-## Tests
-
-```sh
-uv run pytest
-```
+`src/coverlyric/fonts/`: Noto Sans KR, NanumGothic Bold, Do Hyeon, Black Han Sans, Nanum Brush Script,
+East Sea Dokdo.

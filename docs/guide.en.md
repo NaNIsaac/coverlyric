@@ -1,8 +1,9 @@
-# Full guide
+# Guide
 
 [한국어](guide.md) · [Back](../README.en.md)
 
-The page is in Korean; English names follow the Korean labels in brackets.
+Installing is in the [README](../README.en.md#install). The page is in Korean; English names follow
+the Korean labels in brackets.
 
 ## What you need
 
@@ -11,176 +12,202 @@ The page is in Korean; English names follow the Korean labels in brackets.
 - Cover: png, jpg, webp (square works best)
 - The lyrics as text
 
+## First start and the data folder
+
+- The first start downloads Python, ffmpeg and the packages (about 150 MB, about 300 MB on disk). It
+  needs no administrator rights. Keep the terminal window open until it is done.
+- If antivirus blocks it, add the program folder to its exceptions or click **Allow** on its notice.
+- The data folder is chosen during the install (`Documents\coverlyric` at first). It holds `작업 중`
+  (the song and project in progress), `만든 영상` (videos), `settings.json` and `coverlyric.log`. To
+  use another folder, run the setup again and choose it. Files in the old folder are not moved.
+
 ## The page
 
-The controls sit in four groups on the left rail: **파일** (files), **가사** (lyrics and timing),
-**모양** (look) and **색** (colour). Only the chosen group is open, and **이대로 영상 만들기** (make)
-shows in every group. A red dot marks a group that still lacks something (no song or cover, or a
-line without a time).
+The rail on the left has five steps: **노래·표지** (song and cover), **가사** (lyrics), **타이밍**
+(timing), **꾸미기** (decorate) and **만들기** (make). Only the chosen step is open, and a finished
+step's number turns into ✓. The **다음:** (next) link at the bottom of each step goes to the next one.
 
-## First start
+The right side is the preview: one frame of the video, redrawn on every change. The **미리보기 시점**
+(preview time) bar under it picks the frame, and while the song plays the preview follows it. On the
+**가사** and **타이밍** steps the song player and the timing list show under it.
 
-- `가사영상 만들기.bat` downloads uv, Python, ffmpeg and the packages once (about 150 MB, about 300 MB
-  on disk). It needs no administrator rights.
-- If the extracted folder holds another folder of the same name, run the `.bat` inside it.
-- If antivirus blocks it, add the folder to its exceptions or click **Allow** on its notice.
-- **데모로 둘러보기** (try the demo), in the empty preview, fills in a practice song, a cover and four lines.
+**새로 시작** (start over) at the top clears the current work (finished videos stay), and **끝내기**
+(quit) ends the program.
 
-## Song and cover
+**데모로 둘러보기** (try the demo), in the empty preview, fills in a practice song, a cover and four
+lines.
 
-![Files group](screenshots/1-files.png)
+## 1 Song and cover (노래·표지)
 
-- **앨범 표지 고르기** (pick cover) opens **표지 자르기** (crop cover). Drag the square, resize it from
-  a corner, set **확대** (zoom), then click **확인**.
+![Song and cover](screenshots/1-files.png)
+
+- Pick the files with **노래 파일 고르기** (pick song) and **앨범 표지 고르기** (pick cover), and type
+  **제목** (title) and **가수** (artist).
+- **앨범 표지 고르기** opens **표지 자르기** (crop cover). Drag the square, resize it from a corner,
+  set **확대** (zoom), then click **확인**.
 - Leave the artist empty to keep it off the video.
 
-## Lyrics
+## 2 Lyrics (가사)
 
-![Lyrics group](screenshots/2-lyrics.png)
+![Lyrics](screenshots/2-lyrics.png)
 
-- Each line becomes one line on screen. A line wider than the band is drawn smaller, and if it is
-  still too wide, on two rows. Such lines are underlined in the timing list, and the count shows
-  above it.
-- Blank lines, lines starting with `#` and square-bracket marks such as `[후렴]` or
-  `[Verse 1 — Conversational, rhythmic]` are dropped. A mark inside a line is removed and the rest of
-  the line stays. Round brackets such as `(echo)` stay. The same applies to pasted and loaded
-  subtitles.
-- **대괄호 표시와 # 줄 빼기** (drop bracket marks and # lines), next to **가사 넣기**, turns this on and
-  off (on at first, saved with the work). Off, the lyrics go in as typed, with only blank lines left
-  out. It applies to pasted lyrics, the pasted chat-AI answer and subtitle files alike.
+- Paste the lyrics and click **가사 넣기** (add lyrics). Each line becomes one line on screen. A line
+  wider than the band is drawn smaller, and if it is still too wide, on two rows. Such lines are
+  underlined in the timing list, and the count shows above it.
+- **대괄호 표시와 # 줄 빼기** (drop bracket marks and # lines; on at first, saved with the work): drops
+  blank lines, lines starting with `#` and square-bracket marks such as `[후렴]` or
+  `[Verse 1 — Conversational, rhythmic]`. A mark inside a line is removed and the rest of the line
+  stays. Round brackets such as `(echo)` stay. Off, the lyrics go in as typed, with only blank lines
+  left out. The same applies to the chat-AI answer and to subtitle files.
 
-## Timing
+## 3 Timing (타이밍)
 
-Pick the way under **타이밍**, lower in the **가사** group. The times go into the timing list under
-the preview, where they can be edited.
+![Timing](screenshots/3-timing.png)
 
-### Auto timing (자동 맞추기)
+Pick the way: **자동** (automatic), **직접** (tap along), **채팅 AI** (chat AI) or **파일** (file).
+The times go into the timing list, where they can be edited.
 
-![Auto timing](screenshots/3-auto.png)
+### Automatic (자동)
 
-- With the song and lyrics in, click **자동 맞추기** → **자동으로 맞추기**. The bar shows the phase,
-  the percentage and the time left, and the list fills in as lines are found.
-- A 4-minute song takes about 2-5 minutes. The first run downloads the listening model (464 MB).
-- At the start it picks the largest model that fits in the free memory (small, base, then tiny)
-  and says under the bar when it uses a smaller one. When not even tiny fits, the memory message
-  comes at once. When memory runs short while listening, it tries again with a smaller model. A smaller model places lines less exactly, so check the result once more.
-- The song is processed on this PC only.
+- With the song and lyrics in, click **자동으로 맞추기** (time automatically). The bar shows the
+  phase, the percentage and the time left, and the list fills in as lines are found. **취소** (cancel)
+  brings back the list as it was.
+- A 4-minute song takes about 2-5 minutes. The first run downloads the listening model (464 MB). The
+  song is processed on this PC only.
+- At the start it picks the largest model that fits in the free memory (small, base, then tiny) and
+  says under the bar when it uses a smaller one. When not even tiny fits, the memory message comes at
+  once. When memory runs short while listening, it tries again with a smaller model. A smaller model
+  places lines less exactly, so check the result once more.
 - Lines to check get a dashed border and a note: lines not found (given a time between their
   neighbours), lines within 1 second of the line before, and lines heard differently from the lyrics.
   Lines not found at the end share the time left before the song ends.
 - When a chorus repeats, the lines written once are placed first and each chorus is matched only to
   what was heard between them, so a first chorus that was not heard does not take a later one.
-- **취소** (cancel) brings back the list as it was.
+- When it is done, **SRT로 저장** (save SRT) next to the result line saves the timing.
 
-### Tap along (재생하며 직접 맞추기)
-
-![Tap along](screenshots/3-tap.png)
+### Tap along (직접)
 
 - **재생하며 맞추기** plays the song from the start and shows the next line large.
-- Press <kbd>Space</kbd> (or **지금**) as each line starts. <kbd>Backspace</kbd> undoes the last one,
-  <kbd>Esc</kbd> stops.
-- Fine-tune with **−0.1** / **+0.1** and listen from just before a line with **▶**.
-- The time box takes `10`, `10.5`, `1:05`, `1:05.3` or `0:01:05`.
+- Press <kbd>Space</kbd> (or **지금**, now) as each line starts. <kbd>Backspace</kbd> (**되돌리기**)
+  undoes the last one, <kbd>Esc</kbd> (**멈추기**) stops.
 
-### Subtitle file (자막 파일 불러오기)
-
-![Subtitle file](screenshots/3-file.png)
-
-- Open an SRT, LRC or VTT file with **자막 파일 고르기**.
-- Lines whose text differs from the lyrics are outlined; **내 가사로** replaces their text with yours.
-
-### Chat AI (채팅 AI로 맞추기)
+### Chat AI (채팅 AI)
 
 - It uses almost no memory on this PC, so it suits a PC with little memory.
 - **채팅 AI용 프롬프트 복사** copies the prompt; give it to a chat AI with the song file, paste the
   SRT it returns into **받은 자막** and click **넣기**.
 - The song file is sent to that AI service. Its times are often wrong, so check the list.
 
-### Saving the timing
+### File (파일)
 
-**LRC로 저장** and **SRT로 저장** save the timing as a file in the save folder and show the path.
-When automatic timing finishes, **SRT로 저장** next to its result line does the same. The same files
-are saved next to each video.
+- Open an SRT, LRC or VTT file with **자막 파일 고르기**.
+- Lines whose text differs from the lyrics are outlined; **내 가사로** replaces their text with yours.
 
-## Look and colour (모양, 색)
+### The timing list
 
-![Look group](screenshots/4-look.png)
+- Clicking a row moves the preview to its time. **▶** plays from just before that line.
+- Fine-tune with **−0.1** / **+0.1**. The time box takes `10`, `10.5`, `1:05`, `1:05.3` or
+  `0:01:05`.
+- **줄 추가** adds a line and ✕ removes one. A removed line shows **되돌리기** (undo) in a notice for a
+  few seconds.
+- **LRC로 저장** and **SRT로 저장** save the timing as a file in the save folder and show the path. The
+  same files are saved next to each video.
 
-The preview is one frame of the video and redraws on every change. Band, background and lyric colours
-are in the **색** group, the rest in **모양**.
+## 4 Decorate (꾸미기)
 
-- Move and resize: drag the dashed boxes in the preview; drag the lower-right corner to resize.
-  The **위치와 크기** table takes numbers; **위치·크기 처음대로** resets the layout.
-- **Album:** **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
-  **CD 돌기** hide or stop the CD. **기울기** (tilt, -40° to 40°) turns the album about its upright axis.
-- **플레이어** (player): drawn like a music app's playing screen. On the left the cover with rounded
-  corners and a see-through CD half out behind it; under the cover the title, an "artist — album"
-  line, a progress bar that fills with the song with the time played and the time left, and a row of
-  player buttons, which are only drawn. On the right the lyrics, left aligned: the line being sung
-  white and bold, the others grey, blurring towards the bottom. The **앨범** (album) field shown then
-  gives "title - Single" when empty, and **표지 위 날짜** (date on the cover, such as 2026.06.23) puts a
-  date badge on the cover's top left. Tilt, floor shadow, band colour, the title on top and the
-  progress bar option do nothing in the player.
-- **Font:** a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...** (ttf, otf).
-- **띠 색:** colour of the band behind the current line and of the progress bar. **표지 색으로**
-  beside it takes the cover's most telling colour, darkened (light lyrics) or lightened (dark lyrics) a
-  little if needed so the lyric colour stays readable on it.
-- **바닥 그림자** (floor shadow): a soft shadow on the floor under the album, case or round cover.
-- **바닥에 비친 모습** (reflection): the case mirrored on the floor under it, fading out (case only;
-  the CD out of the case is not mirrored).
-- **배경 흐림 / 배경 어둡게:** blur and darkness of the cover in the background.
-- **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
-  the eye to the album and the lyrics.
-- **빛이 천천히 움직이기** (drifting light): a soft light crosses the frame slowly, about once a
-  minute. On by default.
-- **배경 색감** (background tone): **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백**
-  (black and white) or **표지 색** (tinted with the cover's most telling colour).
-- **글자 색**, **테두리** (none, outline, shadow), **테두리 색:** colour of the lyrics, title and artist, with an outline or
-  shadow that keeps them readable on a light cover.
-- **움직이는 그림** (moving picture): one GIF or several images (png, jpg, webp) loop over the video.
-  Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장** (frames per second). Turn off
-  **앨범과 가사 위에 보이기** to draw it below them.
-- **제목과 가수 보이기**, **재생 바 넣기:** title and progress bar on or off.
-- **시작 제목 화면** (opening title card): for the first 2-5 seconds the title and the artist fill the
-  middle of the frame, then fade into the usual frame over 0.8 s; the first lyric ends it sooner. It uses
-  the lyric colour and edge.
-- **시작·끝 페이드** (fade in and out): the video fades in from black over 0.5 s and out to black
-  over the last 1.5 s, with the sound. On by default.
-- **긴 전주에 제목 보이기** (title in a long intro): when the first lyric comes more than 8 s in,
-  the title and the artist fade in large where the lyric panel is, around the middle of the intro,
-  and fade out before the lyrics come in. When they come and go stretches with the length of the
-  intro. On by default.
-- **Preview time:** the slider under the preview picks the frame; while the song plays the preview
-  follows it.
+![Decorate](screenshots/4-deco.png)
 
-## Making the video
+Drag the dashed boxes on the preview to move the album, the lyrics and the title; drag the lower-right
+corner to resize. The look cards at the top (**기본** default, **어둡게** dark, **따뜻하게** warm, **흑백**
+black and white, **밝게** light, **차갑게** cool) are drawn from the current frame; a click sets the
+band colour and the background (tone, blur, darkness, edges) at once and leaves the album, the text
+and the places as they are. Below them the settings sit in folded groups, each with a short summary of its values next to
+its name. **여기서 10초 재생** (play 10 s from here) makes 10 seconds from the preview time at small size
+and plays it in place of the still.
+
+- **앨범** (album)
+  - **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
+    **CD 돌기** hide or stop the CD.
+  - **플레이어** (player): drawn like a music app's playing screen. On the left the cover with rounded
+    corners and a see-through CD half out behind it; under the cover the title, an "artist — album"
+    line, a progress bar that fills with the song with the time played and the time left, and a row of
+    player buttons, which are only drawn. The blurred cover behind is darker and nearer grey. On the
+    right the lyrics, left aligned: the line being sung white and bold, the others grey, blurring
+    towards the bottom. The **앨범** (album) field shown then gives "title - Single" when empty, and
+    **표지 위 날짜** (date on the cover, such as 2026.06.23) puts a date badge on the cover's top left.
+    Tilt, floor shadow, band colour, the title on top and the progress bar option do nothing in the
+    player.
+  - **기울기** (tilt, -40° to 40°): turns the album about its upright axis.
+  - **바닥 그림자** (floor shadow): how strong the soft shadow on the floor under the album is.
+  - **바닥에 비친 모습 (CD 케이스)** (reflection): the case mirrored on the floor under it, fading out
+    (the CD out of the case is not mirrored).
+- **글자** (text)
+  - **글꼴** (font): a bundled font, a Korean font installed on the PC, or **다른 글꼴 파일...**
+    (ttf, otf).
+  - **제목과 가수 보이기**, **재생 바 넣기**: title and progress bar on or off.
+  - **글자 색**, **테두리** (none, outline, shadow), **테두리 색**: colour of the lyrics, title and
+    artist, with an outline or shadow that keeps them readable on a light cover.
+- **색과 배경** (colour and background)
+  - **띠 색** (band colour): the band behind the current line and the progress bar. **표지 색으로**
+    takes the cover's most telling colour, darkened (light lyrics) or lightened (dark lyrics) a little
+    if needed so the lyric colour stays readable on it.
+  - **배경 흐림**, **배경 어둡게**: blur and darkness of the cover in the background.
+  - **가장자리 어둡게** (vignette): darkens the background towards the edges and corners, which draws
+    the eye to the album and the lyrics.
+  - **빛이 천천히 움직이기** (drifting light): a soft light crosses the frame slowly, about once a
+    minute. On by default.
+  - Background tone: **그대로** (as is), **따뜻하게** (warm), **차갑게** (cool), **흑백** (black and
+    white) or **표지 색** (the cover's most telling colour).
+- **시작과 끝** (start and end)
+  - **시작·끝 페이드** (fade in and out): the video fades in from black over 0.5 s and out to black
+    over the last 1.5 s, with the sound. On by default.
+  - **긴 전주에 제목 보이기** (title in a long intro): when the first lyric comes more than 8 s in, the
+    title and the artist fade in large where the lyric panel is, around the middle of the intro, and
+    fade out before the lyrics come in. When they come and go stretches with the length of the intro.
+    On by default.
+  - **시작 제목 화면** (opening title card; none, 2-5 s): the title and the artist fill the middle of
+    the frame at the start, then fade into the usual frame over 0.8 s; the first lyric ends it sooner.
+    It uses the lyric colour and edge.
+- **움직이는 그림** (moving picture): **움직이는 그림 추가** adds one GIF or several images (png, jpg,
+  webp) that loop over the video. Reorder with ↑ ↓, remove with ✕, set the speed with **1초에 N장**
+  (frames per second). Turn off **앨범과 가사 위에 보이기** to draw it below them. **움직이는 그림 빼기**
+  removes them all.
+- **위치와 크기** (place and size): numbers for the across, down and size of the album, the lyrics, the
+  title, the moving picture and the progress bar. **위치·크기 처음대로** resets the layout.
+
+## 5 Make (만들기)
 
 ![Make](screenshots/5-make.png)
 
+- **화면 비율** (ratio): 16:9 (the default), **9:16 쇼츠**, **1:1** or **4:5**. The ratios other than
+  16:9 are in [Shorts and upright videos](#shorts-and-upright-videos).
 - **화질** (1080p or 720p) and **1초에 장면** (24 or 30 frames a second): size and frame rate of the
   video. A 720p file is smaller and a little faster to make.
-- **앞 공백** and **뒤 공백** (silence before and after, 0 to 10 s in 0.5 s steps): silent time
-  before and after the song. During the silence before, only the cover and the title show, and the
-  song and the lyrics start that much later. During the silence after, the last frame stays. The
-  fade is at the start and the end of the whole video, silence included. The saved lyric times do
-  not change; only the LRC and SRT files saved next to the video are moved to the video's clock.
-- **10초 미리보기** (10-second preview) makes 10 seconds from the preview time at small size and
-  plays it in place of the still; **미리보기 닫기** closes it.
-- **이대로 영상 만들기** → **확인**. While it runs, the page shows how far into the song the video is
-  made, the lyric there and the time left. **그만 만들기** stops it.
+- **앞 공백 (초)** and **뒤 공백 (초)** (silence before and after, 0 to 10 s in 0.5 s steps): silent
+  time before and after the song. If the song starts on its first sound, put 1 or so before it.
+  During the silence before, only the cover and the title show, and the song and the lyrics start that
+  much later. During the silence after, the last frame stays. The fade is at the start and the end of
+  the whole video, silence included. The saved lyric times do not change; only the LRC and SRT files
+  saved next to the video are moved to the video's clock.
+- **저장 위치** (save folder): where videos and timing files go; `만든 영상` in the data folder at
+  first. A folder picked with **바꾸기** (change) stays for the next run, **열기** opens it, and
+  **기본으로** (default) goes back to `만든 영상`. If the picked folder is gone (an unplugged USB drive),
+  files go to `만든 영상`.
+- **10초 미리보기** (10-second preview) makes 10 seconds from the preview time at small size and plays
+  it in place of the still; **미리보기 닫기** (close the preview) closes it.
+- **영상 만들기** (make video) → **확인**. While it runs, the page shows how far into the song the video
+  is made, the lyric there and the time left. **그만 만들기** stops it. It usually takes no longer than
+  the song.
 - Before it starts, it checks that the save folder's drive has room for the video (about 36 MB a
   minute at 1080p, half that at 720p). If not, it says how much is needed and how much is free, and
   does not start.
-- When the video is done, the done line shows the file name, the video's length and the file size.
-  If it fails, **다시 만들기** (make again) under the reason starts it again.
+- When the video is done, the done line shows the file name, the video's length and the file size,
+  with **재생** (play) and **폴더 열기** (open folder). If it fails, **다시 만들기** (make again) under
+  the reason starts it again.
 - If the program is closed or the PC goes off while a video is being made, the next start shows
   "지난번 영상 만들기가 끝나지 않았습니다" (the last video was not finished) with **다시 만들기**. The
   half-made file (`*.making.mp4`) is removed then.
-- It usually takes no longer than the song.
 - If a video of the same name is open in a player, the new one is saved as `title (2).mp4`.
-- **저장 위치** (save folder): where videos and timing files go. A folder picked with **바꾸기**
-  (change) stays for the next run; **기본으로** (default) goes back to `만든 영상`. If the picked folder
-  is gone (an unplugged USB drive), files go to `만든 영상`.
 
 Files in the save folder:
 
@@ -190,31 +217,27 @@ Files in the save folder:
 | `title.png` | thumbnail (1280x720) |
 | `title.lrc`, `title.srt` | timing |
 
-## Shorts and upright videos
+### Shorts and upright videos
 
 ![Shorts](screenshots/6-shorts.png)
 
-**화면 비율** (ratio) in **만들기** (make) is 16:9 (the default), **9:16 쇼츠** (Shorts, 1080x1920),
-**1:1** (1080x1080) or **4:5** (1080x1350). The ratios other than 16:9 are drawn for a phone.
+**9:16 쇼츠** (Shorts, 1080x1920), **1:1** (1080x1080) and **4:5** (1080x1350) are drawn for a phone.
 
-- 30 frames a second, H.264. The quality and silence fields do not apply and are hidden.
+- 30 frames a second, H.264. The quality and silence fields, and the **앨범**, **시작과 끝**,
+  **움직이는 그림** and **위치와 크기** groups in **꾸미기**, apply to 16:9 only and are hidden.
 - The title and the artist at the top, the cover under them, the line being sung large on a band in
   the middle and the next line small under it. The lower the frame, the smaller everything gets, the
-  text less so. The lyrics get an outline (changeable in **색과 배경**).
+  text less so. The lyrics get an outline (changeable in the **글자** group of **꾸미기**).
 - In 9:16 the bottom fifth and the right 120 pixels stay empty: Shorts covers them with its buttons
   and caption.
 - The picture starts at once, without rising from black; only the sound fades in and out over 0.3 s.
-- Album style, start and end, moving picture and place and size apply to 16:9 only and are hidden in
-  **꾸미기** (decorate).
-- The file is `title_shorts.mp4`, `title_1x1.mp4` or `title_4x5.mp4`, with a thumbnail in the same
-  ratio and the subtitle files beside it.
+- The file is `title_shorts.mp4`, `title_1x1.mp4` or `title_4x5.mp4`, saved apart from the 16:9
+  video, with a thumbnail in the same ratio and the subtitle files beside it.
+- The first change away from 16:9 sets 30 frames a second and the lyric outline; changes between the
+  other ratios keep them. Choosing **16:9** again goes back to 24 frames a second.
 
-The first change away from 16:9 sets 30 frames a second and the lyric outline; changes between the
-other ratios keep them. Choosing **16:9** again goes back to 24 frames a second.
-
-### Part (구간)
-
-Which part of the song the video holds; at first, 30 seconds from the first lyric line.
+**구간** (part): which part of the song the video holds; at first, 30 seconds from the first lyric
+line.
 
 - The light stretch on the waveform is the part. Drag the bar at either end; it lands on the nearest
   line start (the end bar also on the song's end). Its start, end and length are shown above.
@@ -225,13 +248,15 @@ Which part of the song the video holds; at first, 30 seconds from the first lyri
   more lines repeat together, the higher it ranks) and moves the part, at its length, to start on that
   block's first line. Spaces, punctuation and case do not count. When no line comes back it only says
   so.
+- **반복 구간 찾기** (find loop sections) lists parts a whole number of bars long, near the current
+  length, the strongest opening first. A press on one makes it the part, turns on **끝을 처음과
+  이어지게** and plays it on repeat; a second press stops it. It needs the `align` extra and says how
+  to install it when missing ([command line](cli.en.md)).
 - **끝을 처음과 이어지게** (join the end to the start) blends the last 0.5 s, picture and sound, with
   the moments before the part's start, so the last frame equals the first and a video on repeat does
   not jump. The sound then does not fade out at the end.
 
-### Disc and letter highlight
-
-All off at first.
+**CD와 글자 강조** (disc and letter highlight): all off at first.
 
 - **가사 뒤에 도는 CD** (turning CD behind the lyrics): the 16:9 video's CD turns behind the line being
   sung instead of the cover. It is darkened by 40 percent so white letters read on it, and turns the
@@ -246,14 +271,13 @@ All off at first.
   back to white at its size when the next letter starts. The letter times come from `letters` in the
   project file ([command line](cli.en.md)). A line without letter times is drawn all white.
 
-### Bands (위아래 띠)
-
-Off at first; switching them on shows their fields.
+**위아래 띠** (bands): off at first; switching them on shows their fields.
 
 - Colour: black (the default), white, the lyric band's colour, or any colour from the last field.
-- Height: 5 to 25 percent of the frame each. The cover and the lyrics shrink to fit between the bands.
-- Top and bottom text: one line each, dark on a light band and white on a dark one, made smaller when
-  wider than the frame or taller than the band.
+- **띠 높이** (height): 5 to 25 percent of the frame each. The cover and the lyrics shrink to fit
+  between the bands.
+- **위 글자**, **아래 글자** (top and bottom text): one line each, dark on a light band and white on a
+  dark one, made smaller when larger than **글자 크기** (text size) or taller than the band.
 - With a top text, the title and the artist are not drawn inside the frame, so they do not show twice.
 - In 9:16 the bottom band's text can be covered by the Shorts caption; put what must be seen on the
   top band.
@@ -262,25 +286,20 @@ Off at first; switching them on shows their fields.
 
 - **끝내기** on the page, or closing the terminal window, quits.
 - Work is saved as you go and comes back on the next start.
-- **새로 시작** (start over) clears the current work. Finished videos stay.
 
-## Keys and tips
+## Keys and dropping files
 
-- Each group's title shows its state (for example 노래 ✓ 표지 ✓, 4줄, 4/4 ✓).
 - <kbd>Space</kbd> plays and pauses, <kbd>←</kbd> <kbd>→</kbd> move 5 seconds (outside text boxes).
-- Clicking a row in the timing list moves the preview to its time.
 - Files can be dropped anywhere on the page: song, cover, SRT/LRC/VTT, TXT lyrics, font files. Images
   dropped on the moving-picture box become moving pictures.
-- Deleting a line shows **되돌리기** (undo) in a notice for a few seconds.
 
 ## Problems
 
 | Symptom | What to do |
 |---|---|
-| Nothing happens on double-click | Run it from the extracted folder, not from inside the ZIP. |
-| "디스크 공간 부족" (not enough disk) | Free space on the drive it names and start again. |
-| "내려받기 실패", "설치 실패" (download or install failed) | Check the internet connection and start again. |
-| "프로그램이 오류로 끝났습니다" (program ended with an error) | Post the error from the terminal window as an [issue](https://github.com/NaNIsaac/coverlyric/issues). |
+| "uv를 찾지 못했습니다" (uv not found) | Install again with `coverlyric-setup.exe`. The data folder stays. |
+| "디스크 공간 부족" (not enough disk) | Free space on the drive it names and start again. For a video, a save folder on another drive also works. |
+| "프로그램이 오류로 끝났습니다" (program ended with an error) | Post the error from the terminal window as an [issue](https://github.com/NaNIsaac/coverlyric/issues). On the first start, check the internet connection first. |
 | The browser does not open | Paste the `http://127.0.0.1:...` address from the terminal window into the browser. |
 | Letters show as boxes | The font has no Korean; pick another. |
 | "N번째 줄에 시간이 없습니다" (line N has no time) | Give that line a time in the list or remove it with ✕. |
@@ -293,4 +312,4 @@ Off at first; switching them on shows their fields.
 | "영상 만들기 실패" (video failed) | Read the reason under the button and click **다시 만들기**. |
 | Sound and lyrics drift apart | Move that line with −0.1 / +0.1 and make it again. |
 
-The log is `coverlyric.log` in the data folder.
+The log is `coverlyric.log` in the data folder. If a problem stays, attach it to an issue.
