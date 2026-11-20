@@ -96,4 +96,6 @@ def shorts_beside(
     out.with_suffix(".lrc").write_text(
         timing.to_lrc(timed, project.title, project.artist), encoding="utf-8"
     )
-    out.with_suffix(".srt").write_text(timing.to_srt(timed, last - first), encoding="utf-8")
+    # The same cues as `coverlyric srt`: with a loop lead, the lead's line closes the file.
+    rows, _ = tall.cues(project.style, song, project.lines)
+    out.with_suffix(".srt").write_text(timing.srt(rows), encoding="utf-8")
