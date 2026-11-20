@@ -127,6 +127,7 @@ def show(project: Project, file: Path) -> dict:
         "released": project.released,
         "audio": project.path(project.audio),
         "cover": project.path(project.art),
+        "video": project.path(project.video),
         "duration": project.duration,
         "clean_tags": project.clean_tags,
         "style": {k: v for k, v in project.style.to_dict().items() if v != default[k]},
@@ -165,7 +166,7 @@ def truth(text: str) -> bool:
 
 
 def set_keys(project: Project, pairs: list[str]) -> list[str]:
-    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags and the style's own keys."""
+    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags, video and the style's own keys."""
     style = project.style.to_dict()
     changed = []
     for pair in pairs:
@@ -177,6 +178,8 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             setattr(project, key, value)
         elif key == "clean_tags":
             project.clean_tags = truth(value)
+        elif key == "video":
+            project.video = put_video(project, value.strip())
         elif key in STYLE_KEYS:
             default = getattr(render.Style, key)
             try:
@@ -184,11 +187,30 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             except ValueError:
                 raise Usage(f"{key} takes a {type(default).__name__}: {value!r}") from None
         else:
-            keys = ", ".join((*TEXT_KEYS, "clean_tags", *STYLE_KEYS))
+            keys = ", ".join((*TEXT_KEYS, "clean_tags", "video", *STYLE_KEYS))
             raise Usage(f"unknown key {key!r}; keys: {keys}")
         changed.append(key)
     project.style = render.Style.from_dict(style)
     return changed
+
+
+def put_video(project: Project, value: str) -> str:
+    """The project's video after `video=value`: the file copied in as video + its suffix in place
+    of the one before, or none for an empty value."""
+    from . import overlay
+
+    source = Path(value) if value else None
+    if source is not None:
+        if not source.is_file():
+            raise FileNotFoundError(f"no file at {source}")
+        try:
+            overlay.length(str(source))
+        except ValueError:
+            raise Usage(f"not a video ffmpeg can read: {source}") from None
+    for old in project.folder.glob("video.*"):
+        if source is None or old.resolve() != source.resolve():
+            old.unlink()
+    return copy_in(source, project.folder, "video") if source is not None else ""
 
 
 def line_number(project: Project, text: str) -> int:
@@ -542,7 +564,9 @@ def add_commands(sub) -> None:
     look = ps.add_parser("show", parents=[common], help="title, style and every line with its time")
     look.add_argument("project", type=Path)
     keys = ps.add_parser(
-        "set", parents=[common], help="change title, artist, album, released or style keys"
+        "set",
+        parents=[common],
+        help="change title, artist, album, released, the video or style keys",
     )
     keys.add_argument("project", type=Path)
     keys.add_argument("pairs", nargs="+", metavar="KEY=VALUE")

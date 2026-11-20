@@ -364,6 +364,7 @@ function sumDeco() {
   $("sum-colour").textContent = tone ? tone.parentElement.textContent.trim() : "";
   $("sum-ends").textContent = [s.fade ? "페이드" : "", s.intro ? `제목 ${s.intro}초` : ""].filter(Boolean).join(" · ") || "없음";
   $("sum-anim").textContent = state.anim && state.anim.length ? `${state.anim.length}장` : "없음";
+  $("sum-video").textContent = state.has_video ? "있음" : "없음";
   $("sum-place").textContent = moved ? "바꿈" : "처음대로";
   if (looks) {
     for (const card of document.querySelectorAll(".look")) {
@@ -613,6 +614,16 @@ function fillBars() {
   }
 }
 
+// The text over a video has its own colours and place; the cover's own look keys do not apply.
+function fillVideo() {
+  const s = state.style;
+  $("video-panel").hidden = !state.has_video;
+  $("video_letter").checked = s.highlight === "letter";
+  for (const key of ["video_ink", "video_lit", "video_edge", "video_band", "video_band_alpha", "video_text", "video_offset", "video_end"]) $(key).value = s[key];
+  $("video-band-alpha-row").hidden = s.video_band === "none";
+  $("video_sound").checked = s.video_sound;
+}
+
 function fillKaraoke() {
   const s = state.style;
   $("upright_disc").checked = s.upright_look === "disc";
@@ -633,6 +644,7 @@ function fillLook() {
   fillClip();
   fillBars();
   fillKaraoke();
+  fillVideo();
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout === "disc";
@@ -1845,6 +1857,39 @@ function bind() {
   });
   $("anim_above").addEventListener("change", (e) => { state.style.anim_above = e.target.checked; scheduleSync(0); });
   $("anim-clear").addEventListener("click", () => setAnim([]));
+  $("video-file").addEventListener("change", async (e) => {
+    await upload("video", e.target.files[0]);
+    e.target.value = "";
+  });
+  $("video-clear").addEventListener("click", async () => {
+    try {
+      state = await (await api("/api/state", { method: "POST", body: JSON.stringify({ ...payload(), video: "" }) })).json();
+      fillAll();
+    } catch (e) { toast(e.message); }
+  });
+  $("video_letter").addEventListener("change", (e) => {
+    state.style.highlight = e.target.checked ? "letter" : "line";
+    fillKaraoke();
+    scheduleSync(0);
+  });
+  for (const key of ["video_ink", "video_lit", "video_band_alpha"]) {
+    $(key).addEventListener("input", (e) => {
+      state.style[key] = key === "video_band_alpha" ? Number(e.target.value) : e.target.value;
+      scheduleSync();
+    });
+  }
+  for (const key of ["video_edge", "video_band", "video_text", "video_end"]) {
+    $(key).addEventListener("change", (e) => {
+      state.style[key] = e.target.value;
+      $("video-band-alpha-row").hidden = state.style.video_band === "none";
+      scheduleSync(0);
+    });
+  }
+  $("video_offset").addEventListener("change", (e) => {
+    state.style.video_offset = Number(e.target.value) || 0;
+    scheduleSync(0);
+  });
+  $("video_sound").addEventListener("change", (e) => { state.style.video_sound = e.target.checked; scheduleSync(0); });
   for (const tr of document.querySelectorAll(".places tr[data-el]")) {
     for (const input of tr.querySelectorAll("input")) {
       input.addEventListener("change", () => {
