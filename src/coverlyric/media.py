@@ -102,6 +102,25 @@ def duration(path: str) -> float:
     raise ValueError(f"not an audio file ffmpeg can read: {path}")
 
 
+def samples(
+    path: str, rate: int, channels: int = 1, start: float = 0.0, length: float | None = None
+):
+    """The audio as float32 samples, shape (frames, channels), from `start` for `length` seconds."""
+    import numpy as np
+
+    cut = ["-ss", f"{max(0.0, start):.3f}"] + (["-t", f"{length:.3f}"] if length else [])
+    run = subprocess.run(
+        [ffmpeg(), "-v", "error", *cut, "-i", path, "-f", "f32le", "-acodec", "pcm_f32le"]
+        + ["-ac", str(channels), "-ar", str(rate), "-"],
+        capture_output=True,
+        check=False,
+        **quiet(),
+    )
+    if run.returncode or not run.stdout:
+        raise ValueError(f"not an audio file ffmpeg can read: {path}")
+    return np.frombuffer(run.stdout, np.float32).reshape(-1, channels)
+
+
 class _Status(ctypes.Structure):
     _fields_ = [
         ("length", ctypes.c_ulong),

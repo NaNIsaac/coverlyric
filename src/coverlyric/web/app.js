@@ -553,6 +553,47 @@ function playClip() {
   requestAnimationFrame(watch);
 }
 
+// 반복 구간 찾기: parts a whole number of bars long, best first. A press on one makes it the part and
+// plays it on repeat, as a Short is watched; a second press stops it.
+let looping = null;
+
+function playLoop(item, button) {
+  const p = $("player");
+  for (const b of document.querySelectorAll("#sections button")) b.setAttribute("aria-pressed", "false");
+  if (looping === item && !p.paused) { p.pause(); looping = null; return; }
+  if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
+  setClip(item.from, item.to);
+  state.style.loop = true;
+  fillClip();
+  scheduleSync(0);
+  looping = item;
+  button.setAttribute("aria-pressed", "true");
+  p.currentTime = item.from;
+  p.play();
+  const watch = () => {
+    if (looping !== item) return;
+    if (p.paused) { looping = null; button.setAttribute("aria-pressed", "false"); return; }
+    if (p.currentTime >= item.to) p.currentTime = item.from;
+    requestAnimationFrame(watch);
+  };
+  requestAnimationFrame(watch);
+}
+
+function showSections(found) {
+  const list = $("sections");
+  const plain = (t) => clock(t).replace(/\.\d+$/, "");
+  list.replaceChildren(...found.map((item) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.className = "quiet small";
+    b.textContent = `${plain(item.from)} – ${plain(item.to)} (${Math.round(item.to - item.from)}초, ${item.bars}마디) ${item.text}`;
+    b.addEventListener("click", () => playLoop(item, b));
+    li.append(b);
+    return li;
+  }));
+  list.hidden = !found.length;
+}
+
 function swatchColour(b) {
   return b.dataset.colour === "band" ? state.style.band : b.dataset.colour;
 }
@@ -1685,6 +1726,20 @@ function bind() {
       else setClip(found.from, found.to);
     } catch (e) {
       toast(e.message);
+    }
+  });
+  $("clip-sections").addEventListener("click", async () => {
+    const length = Math.round(clipEnd() - state.style.clip_from) || 30;
+    $("clip-sections").disabled = true;
+    try {
+      const res = await api(`/api/sections?len=${length}`, { method: "POST", body: JSON.stringify(payload()) });
+      const found = (await res.json()).sections;
+      if (!found.length) toast("이 길이에 맞는 반복 구간이 없습니다.");
+      showSections(found);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      $("clip-sections").disabled = false;
     }
   });
   bindClip();

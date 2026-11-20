@@ -51,6 +51,8 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 | `project show <프로젝트>` | 제목, 바꾼 모양 설정, 줄마다 번호와 시간과 글자, 확인할 줄. |
 | `project set <프로젝트> 키=값 ...` | `title`, `artist`, `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. 세로 영상은 `shape=tall`(9:16), `square`(1:1), `portrait`(4:5)에 `fps=30 lyric_edge=outline`, 구간은 `clip_from=42 clip_to=72`(초, `clip_to=0` 은 끝까지), 끝을 처음과 이어지게 하려면 `loop=true`, 위아래 띠는 `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`, 가사 뒤에 도는 CD는 `upright_look=disc`(낡은 CD는 `disc_wear=worn`), 부르는 글자만 노랗게는 `highlight=letter`. |
 | `chorus <프로젝트> [--length 30] [--apply]` | 가장 많이 되풀이되는 줄 묶음을 찾아 쇼츠 구간(`from`, `to`)으로 보여 줍니다. `--apply` 는 프로젝트를 그 구간의 세로 영상으로 바꿉니다(16:9 였으면 9:16). 되풀이되는 줄이 없으면 실패합니다. |
+| `sections <프로젝트> [--length 30] [--apply N]` | 마디 수가 정수인 반복 구간을 길이에 가깝게, 시작이 강한 순서로 8개까지 보여 줍니다. 구간은 줄이 시작하는 박(또는 그 앞 박)에서 시작하고, 다음 줄이 들어오기 직전에 끝나도록 한 마디 더하거나 뺍니다. `--apply N` 은 프로젝트를 N번 구간의 반복 세로 영상으로 바꿉니다(`loop=true`). `align` 추가 설치가 필요합니다. |
+| `align <프로젝트> [--from 1:35] [--to 2:42]` | 그 사이에 시작하는 줄의 글자마다 부르는 시간을 정해 프로젝트의 `letters` 에 저장합니다(`highlight=letter` 가 씁니다). 처음 값은 세로 영상이면 그 구간, 아니면 노래 전체. 노래에서 목소리만 떼어(demucs) 글자 하나를 한 음절로 맞춥니다(torchaudio MMS_FA). 처음 한 번 모델 약 1.2 GB를 내려받습니다. `align` 추가 설치가 필요합니다. |
 | `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
 | `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
 | `project lines <프로젝트> --import <자막>` / `--from-lyrics <가사>` | 줄과 시간을 자막 파일에서, 또는 시간 없이 가사 파일에서 다시 넣습니다. |
@@ -90,6 +92,14 @@ PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤
 이름들: `src`, `tools`, `docs`, `tests`, `pyproject.toml`, `uv.lock`, README, 두 .bat 등)을 바꾸고, 이전 파일은
 `업데이트 백업/<날짜-시각>/` 에 옮겨 둡니다. `만든 영상`, `작업 중`, `settings.json`, `coverlyric.log`, `.venv`,
 `업데이트 백업` 은 건드리지 않습니다. `COVERLYRIC_UPDATE_ZIP` 에 ZIP 경로를 주면 내려받는 대신 그 파일을 씁니다.
+
+`align` 과 `sections` 는 추가 설치 `align` 이 필요합니다. torch 2.7 이 Python 3.12, 3.13 에서만 돌기 때문에 따로 된 환경에서 실행합니다:
+
+```powershell
+uv run --isolated --python 3.13 --extra align coverlyric align <프로젝트>
+```
+
+없으면 이 명령을 알려 주고 종료 코드 1로 끝납니다.
 
 ## 프로젝트 파일
 
