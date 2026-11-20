@@ -26,6 +26,9 @@ class Project:
     # What automatic timing said about a line: {"n": line number from 1, "kind": unplaced | doubtful
     # | differs, "heard": the words heard, for differs}. Kept so a later look can list them.
     notes: list[dict] = field(default_factory=list)
+    # When each letter of a line is sung: {"n": line number from 1, "text": the line as it was timed,
+    # "times": seconds}. An entry whose line text has changed since is left out of the render.
+    letters: list[dict] = field(default_factory=list)
 
     @classmethod
     def load(cls, path: Path) -> Project:
@@ -47,6 +50,7 @@ class Project:
             anim=[str(name) for name in data.get("anim", [])],
             clean_tags=bool(data.get("clean_tags", True)),
             notes=[dict(note) for note in data.get("notes", [])],
+            letters=[dict(entry) for entry in data.get("letters", [])],
         )
 
     def to_dict(self) -> dict:
@@ -61,6 +65,7 @@ class Project:
             "anim": list(self.anim),
             "clean_tags": self.clean_tags,
             "notes": list(self.notes),
+            "letters": list(self.letters),
         }
 
     def save(self, path: Path) -> None:

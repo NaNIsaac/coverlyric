@@ -24,6 +24,7 @@ NOTE_TEXT = {
 CHECK = ("unplaced", "doubtful")  # notes that make --strict exit 4; "differs" only reports
 TEXT_KEYS = ("title", "artist")
 STYLE_KEYS = tuple(f.name for f in fields(render.Style))
+COMMANDS = ("render", "still", "project", "auto", "words", "make", "chorus", "align", "sections")
 
 
 class Usage(Exception):
@@ -448,6 +449,46 @@ def make_video(
     return result
 
 
+def align_letters(project: Project, file: Path, start: str | None, end: str | None) -> dict:
+    """Align the letters of the lines starting in the part (an upright project's clip, else the
+    whole song, unless --from and --to say) and save them into the project."""
+    from . import align
+
+    if why := align.missing():
+        raise ValueError(why)
+    song = project.song()
+    first, last = tall.span(project.style, song) if render.is_upright(project.style) else (0, 0)
+    first = seconds(start) if start else first
+    last = seconds(end) if end else (last or song.duration)
+    found = align.align(song.audio, project.lines, first, last, note=say)
+    project.letters = align.merged(project.letters, found)
+    project.save(file)
+    return {"aligned": [e["n"] for e in found], "from": first, "to": last}
+
+
+def loop_sections(project: Project, file: Path, length: float, apply: int | None) -> dict:
+    """The loop sections of the song; with `apply`, the project becomes a looping Short of one."""
+    from . import align, sections
+
+    if why := align.missing(("librosa",)):
+        raise ValueError(why)
+    lines = tuple(timing.ready(project.lines))
+    song = project.song()
+    found = sections.sections(lines, sections.grid(song.audio), song.duration, length)
+    if not found:
+        raise ValueError("no section of that length fits the song")
+    if apply is not None:
+        pick = next((s for s in found if s["n"] == apply), None)
+        if pick is None:
+            raise Usage(f"no section {apply}; there are {len(found)}")
+        shape = project.style.shape if render.is_upright(project.style) else "tall"
+        project.style = replace(
+            tall.shorts(project.style, shape), clip_from=pick["from"], clip_to=pick["to"], loop=True
+        )
+        project.save(file)
+    return {"sections": found, "applied": apply}
+
+
 def add_commands(sub) -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="answer with one JSON object")
@@ -469,6 +510,20 @@ def add_commands(sub) -> None:
     c.add_argument("project", type=Path)
     c.add_argument("--length", type=float, default=30, help="seconds (15, 30, 60, ...)")
     c.add_argument("--apply", action="store_true", help="make the project a Short of that part")
+
+    al = sub.add_parser(
+        "align", parents=[common], help="when each letter is sung, for highlight=letter"
+    )
+    al.add_argument("project", type=Path)
+    al.add_argument("--from", dest="start", help="first line start, e.g. 1:35 (default: the part)")
+    al.add_argument("--to", dest="end", help="last line start (default: the part's end)")
+
+    se = sub.add_parser(
+        "sections", parents=[common], help="loop sections a whole number of bars long"
+    )
+    se.add_argument("project", type=Path)
+    se.add_argument("--length", type=float, default=30, help="seconds (15, 30, 60, ...)")
+    se.add_argument("--apply", type=int, metavar="N", help="make the project a Short of section N")
 
     p = sub.add_parser("project", help="make, look at and change a project")
     ps = p.add_subparsers(dest="action", required=True)
@@ -566,6 +621,12 @@ def run(args: argparse.Namespace) -> dict:
             )
             project.save(file)
         return {"from": found[0], "to": found[1], "applied": args.apply}
+    if args.command == "align":
+        project, file = load(args.project)
+        return align_letters(project, file, args.start, args.end)
+    if args.command == "sections":
+        project, file = load(args.project)
+        return loop_sections(project, file, args.length, args.apply)
     if args.command == "still":
         project, _ = load(args.project)
         out = args.out or project.folder / "still.png"
@@ -597,6 +658,12 @@ def run(args: argparse.Namespace) -> dict:
 
 
 def text(result: dict) -> str:
+    if "sections" in result:
+        return "\n".join(
+            f"{s['n']}. {clock(s['from'])} - {clock(s['to'])}  {s['bars']} bars  {s['score']:+.1f}"
+            f"  {s['text']}"
+            for s in result["sections"]
+        )
     if "words" in result:
         return "\n".join(f"{clock(w['start'])}  {w['word']}" for w in result["words"])
     if "timed" in result:

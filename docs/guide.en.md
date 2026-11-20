@@ -210,6 +210,10 @@ Which part of the song the video holds; at first, 30 seconds from the first lyri
   more lines repeat together, the higher it ranks) and moves the part, at its length, to start on that
   block's first line. Spaces, punctuation and case do not count. When no line comes back it only says
   so.
+- **반복 구간 찾기** (find loop sections) lists parts a whole number of bars long, near the current
+  length, the strongest opening first. A press on one makes it the part, turns on **끝을 처음과
+  이어지게** and plays it on repeat; a second press stops it. It needs the `align` extra and says how
+  to install it when missing ([command line](cli.en.md)).
 - **끝을 처음과 이어지게** (join the end to the start) blends the last 0.5 s, picture and sound, with
   the moments before the part's start, so the last frame equals the first and a video on repeat does
   not jump. The sound then does not fade out at the end.

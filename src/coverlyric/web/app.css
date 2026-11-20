@@ -361,6 +361,9 @@ body:not(.upright) .upright-only { display: none; }
 .clip-head { display: flex; justify-content: space-between; }
 .clip-wave { display: block; width: 100%; height: 48px; margin: 6px 0; background: var(--field); touch-action: none; }
 .clip-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.sections { margin: 0 0 8px; padding: 0; list-style: none; }
+.sections button { display: block; width: 100%; text-align: left; margin: 2px 0; font-size: 12px; }
+.sections button[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
 .bars-field { margin-bottom: 12px; }
 .bars-options { padding-left: 22px; }
 .swatches { display: flex; align-items: center; gap: 6px; margin: 6px 0 8px; }
