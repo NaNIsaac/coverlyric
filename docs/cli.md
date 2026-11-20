@@ -49,7 +49,7 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 |---|---|
 | `project new <폴더> --audio <노래> --cover <표지> [--lyrics <가사>] [--title ..] [--artist ..] [--keep-tags]` | 노래와 표지를 복사해 새 프로젝트를 만듭니다. 가사는 텍스트, SRT, LRC, VTT. `--keep-tags` 는 대괄호 표시와 `#` 줄을 남깁니다. |
 | `project show <프로젝트>` | 제목, 바꾼 모양 설정, 줄마다 번호와 시간과 글자, 확인할 줄. |
-| `project set <프로젝트> 키=값 ...` | `title`, `artist`, `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. 세로 영상은 `shape=tall`(9:16), `square`(1:1), `portrait`(4:5)에 `fps=30 lyric_edge=outline`, 구간은 `clip_from=42 clip_to=72`(초, `clip_to=0` 은 끝까지), 끝을 처음과 이어지게 하려면 `loop=true`, 위아래 띠는 `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`. |
+| `project set <프로젝트> 키=값 ...` | `title`, `artist`, `clean_tags` 와 모양 설정(`lead`, `tail`, `height`, `fps`, `fade`, `band` 등). 모르는 키는 쓸 수 있는 키 목록과 함께 거절합니다. 세로 영상은 `shape=tall`(9:16), `square`(1:1), `portrait`(4:5)에 `fps=30 lyric_edge=outline`, 구간은 `clip_from=42 clip_to=72`(초, `clip_to=0` 은 끝까지), 끝을 처음과 이어지게 하려면 `loop=true`, 위아래 띠는 `bars=true bars_colour=#000000 bars_height=0.12 bars_top=.. bars_bottom=.. bars_size=48`, 가사 뒤에 도는 CD는 `upright_look=disc`(낡은 CD는 `disc_wear=worn`), 부르는 글자만 노랗게는 `highlight=letter`. |
 | `chorus <프로젝트> [--length 30] [--apply]` | 가장 많이 되풀이되는 줄 묶음을 찾아 쇼츠 구간(`from`, `to`)으로 보여 줍니다. `--apply` 는 프로젝트를 그 구간의 세로 영상으로 바꿉니다(16:9 였으면 9:16). 되풀이되는 줄이 없으면 실패합니다. |
 | `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
 | `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
@@ -96,6 +96,12 @@ PATH의 uv, 그것도 없으면 `%LOCALAPPDATA%\coverlyric\uv` 에 설치한 뒤
 페이지는 작업을 `작업 중/project.json` 에 저장합니다. 노래와 표지 경로, 줄마다 시작 시간과 글자,
 모양 설정(`style`), 자동 맞추기가 남긴 확인할 줄(`notes`)이 들어 있습니다. 만든 영상은 저장 위치
 폴더(처음에는 `만든 영상/`)에 저장됩니다. 명령줄 명령은 이 폴더에도 그대로 쓸 수 있습니다.
+
+`letters` 는 줄마다 글자를 부르는 시간으로, `highlight=letter` 가 씁니다. 항목 하나가
+`{"n": 3, "text": "아리랑 아리랑", "times": [12.0, 12.3, ...]}` 처럼 줄 번호(1부터), 시간을 정할 때의
+그 줄 글자, 초 단위 시간을 갖습니다. 시간은 띄어쓰기를 뺀 글자마다 하나이거나, 글자와 숫자마다 하나입니다.
+뒤의 경우 문장부호는 앞 글자의 시간을 씁니다. 줄 글자가 그 뒤에 바뀌었거나 줄에 시간이 없으면 그 항목은
+쓰지 않습니다.
 
 ## 환경 변수
 
