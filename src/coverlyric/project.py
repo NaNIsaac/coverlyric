@@ -24,6 +24,7 @@ class Project:
     lines: list[timing.Line] = field(default_factory=list)
     style: Style = field(default_factory=Style)
     anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
+    video: str = ""  # the user's own video under the lyrics, in place of the cover
     clean_tags: bool = True  # lyrics put in lose [..] notes and # lines (timing.sung)
     # What automatic timing said about a line: {"n": line number from 1, "kind": unplaced | doubtful
     # | differs, "heard": the words heard, for differs}. Kept so a later look can list them.
@@ -52,6 +53,7 @@ class Project:
             lines=lines,
             style=Style.from_dict(data.get("style", {})),
             anim=[str(name) for name in data.get("anim", [])],
+            video=str(data.get("video", "")),
             clean_tags=bool(data.get("clean_tags", True)),
             notes=[dict(note) for note in data.get("notes", [])],
             letters=[dict(entry) for entry in data.get("letters", [])],
@@ -69,6 +71,7 @@ class Project:
             "lines": [list(line) for line in self.lines],
             "style": self.style.to_dict(),
             "anim": list(self.anim),
+            "video": self.video,
             "clean_tags": self.clean_tags,
             "notes": list(self.notes),
             "letters": list(self.letters),
@@ -91,6 +94,7 @@ class Project:
             artist=self.artist,
             duration=duration,
             anim=tuple(self.path(name) for name in self.anim),
+            video=self.path(self.video),
             letters=self.letter_times(),
             album=self.album,
             released=self.released,

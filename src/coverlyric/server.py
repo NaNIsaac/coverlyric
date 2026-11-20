@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import anim, auto, fonts, looks, media, render, tall, timing
+from . import anim, auto, fonts, looks, media, overlay, render, tall, timing
 from .project import Project
 from .render import Style
 
@@ -84,6 +84,7 @@ def contrast(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
 
 AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+VIDEOS = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
 CLIP_S = 10.0  # seconds in the preview clip
 
 
@@ -255,6 +256,7 @@ class App:
         data = self.project.to_dict()
         data["has_audio"] = bool(self.project.audio)
         data["has_art"] = bool(self.project.art)
+        data["has_video"] = bool(self.project.video)
         data["output"] = str(self.output)
         data["output_default"] = self.output == self.default_output
         data["shorts"] = tall.SHORTS
@@ -279,6 +281,8 @@ class App:
                     "이 글꼴은 쓸 수 없습니다. 목록의 글꼴을 고르거나 글꼴 파일을 넣습니다."
                 )
             p.style = style
+        if "video" in data and not data["video"]:
+            self.drop_video()
         if "anim" in data:
             # Reorder or remove the moving picture's files; new ones come through upload.
             kept = [str(name) for name in data["anim"] if str(name) in p.anim]
@@ -292,6 +296,11 @@ class App:
             path = (self.work / name).resolve()
             if path.parent == folder:  # never a file outside the project's anim folder
                 path.unlink(missing_ok=True)
+
+    def drop_video(self) -> None:
+        for old in self.work.glob("video.*"):
+            old.unlink()
+        self.project.video = ""
 
     def upload(self, kind: str, name: str, body: bytes) -> dict:
         suffix = Path(name).suffix.lower()
@@ -361,6 +370,20 @@ class App:
                 target = folder / f"{stem}-{n}{suffix}"
             target.write_bytes(body)
             p.anim.append(f"anim/{target.name}")
+        elif kind == "video":
+            if suffix not in VIDEOS:
+                raise ValueError(
+                    "지원하지 않는 영상 형식입니다. mp4, mov, webm, mkv, avi 파일을 고릅니다."
+                )
+            trial = self.work / f"upload{suffix}"
+            trial.write_bytes(body)
+            if not overlay.streams(str(trial))[0]:
+                trial.unlink()
+                raise ValueError("영상 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.")
+            self.drop_video()
+            target = self.work / f"video{suffix}"
+            trial.replace(target)
+            self.project.video = target.name
         else:
             raise ValueError(f"unknown upload kind {kind}")
         render.forget_art()
@@ -371,6 +394,7 @@ class App:
         for old in [*self.work.glob("song.*"), *self.work.glob("cover.*")]:
             old.unlink()
         self.drop_anim(set(self.project.anim))
+        self.drop_video()
         shutil.copy(DEMO / "tone.wav", self.work / "song.wav")
         shutil.copy(DEMO / "cover.png", self.work / "cover.png")
         demo = Project.load(DEMO / "demo.json")

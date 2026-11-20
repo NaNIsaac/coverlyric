@@ -106,6 +106,47 @@
     <section class="pane" id="g-deco" role="tabpanel" aria-labelledby="tab-deco" hidden>
       <h2 class="pane-head">꾸미기</h2>
       <div class="looks" id="looks" role="radiogroup" aria-label="모양"></div>
+      <details class="fold" id="video-group">
+        <summary>배경 영상<small id="sum-video"></small></summary>
+        <label class="file-button small">영상 고르기<input type="file" id="video-file" accept=".mp4,.mov,.m4v,.webm,.mkv,.avi"></label>
+        <div id="video-panel" hidden>
+          <label class="check"><input type="checkbox" id="video_letter"> 부르는 글자만 강조</label>
+          <div class="grid">
+            <label class="color">글자 색<input type="color" id="video_ink"></label>
+            <label class="color">강조 색<input type="color" id="video_lit"></label>
+            <label class="field">테두리
+              <select id="video_edge">
+                <option value="shadow">그림자</option>
+                <option value="none">없음</option>
+              </select>
+            </label>
+            <label class="field">가사 뒤 띠
+              <select id="video_band">
+                <option value="none">없음</option>
+                <option value="paper">밝은 종이</option>
+                <option value="dark">어둡게</option>
+              </select>
+            </label>
+            <label id="video-band-alpha-row">띠 진하기<input type="range" id="video_band_alpha" min="0.2" max="1" step="0.05"></label>
+            <label class="field">가사 자리
+              <select id="video_text">
+                <option value="bottom">아래</option>
+                <option value="middle">가운데</option>
+                <option value="low">더 아래 (쇼츠 자막에 가릴 수 있음)</option>
+              </select>
+            </label>
+            <label class="field">영상 시작 (초)<input type="number" id="video_offset" step="0.1"></label>
+            <label class="field">영상이 노래보다 짧으면
+              <select id="video_end">
+                <option value="loop">처음부터 다시</option>
+                <option value="hold">마지막 장면에서 멈춤</option>
+              </select>
+            </label>
+          </div>
+          <label class="check"><input type="checkbox" id="video_sound"> 노래 대신 영상 소리</label>
+          <button id="video-clear" class="quiet">배경 영상 빼기</button>
+        </div>
+      </details>
       <details class="fold wide-only">
         <summary>앨범<small id="sum-album"></small></summary>
         <div class="seg">

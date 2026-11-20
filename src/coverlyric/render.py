@@ -146,6 +146,19 @@ class Style:
     highlight: str = "line"  # upright: line, or letter to light only the letter being sung
     upright_look: str = "cover"  # upright: cover, or disc for the turning CD behind the lyrics
     disc_wear: str = "none"  # upright disc: none, or worn for peeled paint and faint scratches
+    # Over the user's own video (Song.video), any shape: its first frame goes with the start of
+    # the song (of a Short's part) moved by video_offset seconds; a shorter video starts again
+    # (loop) or holds its last frame (hold); video_sound takes its sound instead of the song's.
+    video_offset: float = 0.0
+    video_end: str = "loop"
+    video_sound: bool = False
+    video_ink: str = "#ffffff"  # the text over the video
+    video_lit: str = "#ffd23f"  # the letter being sung, with highlight=letter
+    video_edge: str = "shadow"  # shadow | none
+    video_band: str = "none"  # none | paper | dark, behind the lines
+    video_band_alpha: float = 0.85
+    # Where the lines go: bottom | middle | low (lower, where a Short's caption can cover them).
+    video_text: str = "bottom"
 
     @classmethod
     def from_dict(cls, data: dict) -> Style:
@@ -170,6 +183,7 @@ class Song:
     artist: str = ""
     duration: float = 0.0
     anim: tuple[str, ...] = ()  # the moving picture: one GIF or images in order
+    video: str = ""  # the user's video, drawn in place of the cover (overlay.py)
     lead: float = 0.0  # seconds of silence the video has before the audio starts; in duration
     tail: float = 0.0  # seconds of silence after the audio; in duration
     # When each letter is sung, per line: (line start, line text, one time per letter but spaces).
@@ -363,8 +377,9 @@ def boxes(
     style: Style, t: float = SLIDE[1], song: Song | None = None
 ) -> dict[str, tuple[int, ...]]:
     """The frame area of each movable element at time t, for the drag handles on the preview; the
-    moving picture's needs the song, which names its files. A Short has none to drag."""
-    if is_upright(style):
+    moving picture's needs the song, which names its files. A Short and the text over a video
+    have none to drag."""
+    if is_upright(style) or (song is not None and song.video):
         return {}
     if style.layout == "player":
         from . import player
@@ -1385,6 +1400,10 @@ def painter(
 ) -> Painter:
     """The painter for these inputs, kept while scene() still returns the same layers (the page
     clears scene's cache when a file is replaced) and the moving picture's files are unchanged."""
+    if song.video:
+        from . import overlay
+
+        return overlay.painter(lines, song, style)
     if is_upright(style):
         from . import tall
 
@@ -1455,6 +1474,13 @@ def render(
     as asked."""
     codec = "libx264" if quick else media.encoder()
     upright = is_upright(style)
+    if song.video:
+        from . import overlay
+
+        # The video is the picture: no moving picture over it.
+        song = replace(song, anim=())
+        if style.video_sound and not overlay.has_sound(song.video):
+            raise ValueError("배경 영상에 소리가 없습니다. 노래 소리를 쓰도록 바꿉니다.")
     if upright:
         from . import tall
 
@@ -1648,6 +1674,8 @@ def encode(
         from . import tall
 
         overlap = tall.loop_length(style, song)
+    if song.video and style.video_sound:
+        overlap = 0.0  # the video's own sound has no moments before the clip to mix in
     if overlap:
         # The moments before the clip, mixed into its end (tall.loop_graph); the fade in stays on
         # the start, which the end now leads into.
@@ -1662,6 +1690,25 @@ def encode(
         graph = tall.loop_graph(last - first, overlap)
         graph = graph.replace("[1:a]", f"[1:a]{','.join(af)},") if af else graph
         sound, audio = ["-map", "[sound]"], ["-filter_complex", graph]
+    shown, under = ["-map", "0:v"], []
+    if song.video:
+        from . import overlay
+
+        # The video comes last; ffmpeg lays the text layer (input 0) over it, then the fades.
+        n = 3 if before else 2
+        opts, picture, heard_video = overlay.inputs(style, song, first, fps // step)
+        under = opts
+        graph = f"[{n}:v]{picture}[under];[under][0:v]overlay=0:0:format=auto:shortest=1"
+        graph += ("," + ",".join(vf) if vf else "") + "[shown]"
+        if style.video_sound:
+            graph += f";[{n}:a]{heard_video}" + ("," + ",".join(af) if af else "") + "[sound]"
+            sound, audio = ["-map", "[sound]"], []
+        if audio and audio[0] == "-filter_complex":
+            graph += ";" + audio[1]
+        elif audio:
+            graph += ";[1:a]" + audio[1] + "[sound]"
+            sound = ["-map", "[sound]"]
+        shown, video, audio = ["-map", "[shown]"], codec_args, ["-filter_complex", graph]
     cmd = [
         media.ffmpeg(),
         "-y",
@@ -1684,8 +1731,8 @@ def encode(
         "-i",
         song.audio,
         *before,
-        "-map",
-        "0:v",
+        *under,
+        *shown,
         *sound,
         *video,
         "-pix_fmt",
@@ -1705,7 +1752,7 @@ def encode(
     # the song is; a chunk's slots are free again once the main process has written them out.
     ahead = workers + 1
     ring = ahead * CHUNK * FRAME
-    turning = turn_set(style) if shared else None
+    turning = turn_set(style) if shared and not song.video else None
     if turning and not room_for((turns_bytes(*turning) + ring) / 2**20):
         turning = None  # each worker draws the CD turn itself
     turns = pictures = moving = frames = None

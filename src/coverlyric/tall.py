@@ -361,6 +361,42 @@ def pop(t: float, times: tuple[float, ...], j: int) -> float:
     return round(1 + (LETTER_POP - 1) * ease(u), 2)
 
 
+def letters(
+    d: ImageDraw.ImageDraw,
+    part: dict,
+    alpha: int,
+    times: tuple[float, ...],
+    t: float,
+    cx: float,
+    ink: render.Style,
+    lit: render.Style,
+) -> None:
+    """A line letter by letter, centred on cx: the letter being sung in `lit` and grown, the rest in
+    `ink`. Rows are centred on their width at that moment, so a grown letter pushes the others aside."""
+    face = fonts.resolve(ink.font)
+    f = render.font(face, part["size"], part["weight"])
+    track = f.size * render.TRACKING
+    pitch = part["size"] * PITCH
+    j = 0
+    for r, row in enumerate(part["rows"]):
+        y = part["centre"] + (r - (len(part["rows"]) - 1) / 2) * pitch
+        cells = []
+        for ch in row:
+            if ch == " ":
+                cells.append((ch, f, f.getlength(ch), False))
+                continue
+            sung = j < len(times) and ch.isalnum()
+            s = pop(t, times, j) if sung else 1.0
+            cf = render.font(face, part["size"] * s, part["weight"]) if s > 1 else f
+            cells.append((ch, cf, cf.getlength(ch), sung and times[j] <= t < later(times, j)))
+            j += 1
+        x = cx - (sum(c[2] for c in cells) + track * (len(cells) - 1)) / 2
+        for ch, cf, width, on in cells:
+            if ch != " ":
+                render.lettered(d, (x + width / 2, y), ch, cf, alpha, lit if on else ink)
+            x += width + track
+
+
 def disc_place(fr: Frame) -> tuple[int, int, int]:
     """The disc look's disc: centre x and y, and side. Centred on the line being sung and moved up
     when its lower edge would go under the bottom band."""
@@ -560,37 +596,6 @@ class Painter:
             return (state, round(t * self.fps))
         return state
 
-    def letters(
-        self, d: ImageDraw.ImageDraw, part: dict, alpha: int, times: tuple[float, ...], t: float
-    ) -> None:
-        """The line being sung letter by letter: the letter being sung lit and grown, the rest as
-        the line. Rows are centred on their width at that moment, so a grown letter pushes the
-        others aside."""
-        face = fonts.resolve(self.style.font)
-        f = render.font(face, part["size"], part["weight"])
-        track = f.size * render.TRACKING
-        pitch = part["size"] * PITCH
-        fr = self.frame
-        j = 0
-        for r, row in enumerate(part["rows"]):
-            y = part["centre"] + (r - (len(part["rows"]) - 1) / 2) * pitch
-            cells = []
-            for ch in row:
-                if ch == " ":
-                    cells.append((ch, f, f.getlength(ch), False))
-                    continue
-                sung = j < len(times) and ch.isalnum()
-                s = pop(t, times, j) if sung else 1.0
-                cf = render.font(face, part["size"] * s, part["weight"]) if s > 1 else f
-                cells.append((ch, cf, cf.getlength(ch), sung and times[j] <= t < later(times, j)))
-                j += 1
-            x = fr.cx - (sum(c[2] for c in cells) + track * (len(cells) - 1)) / 2
-            for ch, cf, width, lit in cells:
-                if ch != " ":
-                    style = self.lit if lit else self.ink
-                    render.lettered(d, (x + width / 2, y), ch, cf, alpha, style)
-                x += width + track
-
     def plain(self, t: float) -> Image.Image:
         fr = self.frame
         img = self.background(t)
@@ -612,7 +617,7 @@ class Painter:
             alpha = round(255 * part["alpha"])
             times = self.times[k] if part is now else None
             if times:
-                self.letters(d, part, alpha, times, t)
+                letters(d, part, alpha, times, t, fr.cx, self.ink, self.lit)
                 continue
             f = render.font(face, part["size"], part["weight"])
             pitch = part["size"] * PITCH

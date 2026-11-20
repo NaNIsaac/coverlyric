@@ -125,6 +125,23 @@ and the places as they are. Below them the settings sit in folded groups, each w
 its name. **여기서 10초 재생** (play 10 s from here) makes 10 seconds from the preview time at small size
 and plays it in place of the still.
 
+- **배경 영상** (background video): **영상 고르기** takes a video file (mp4, mov, webm, mkv, avi)
+  that fills the frame in place of the cover, with the title and the artist at the top and the line
+  being sung, with the next one small under it, at the bottom. It works for the wide and the
+  upright videos. The video starts with the song (an upright video: with its part); **영상 시작
+  (초)** moves it later (+) or earlier (-) in seconds. A video shorter than the song starts again
+  (**처음부터 다시**) or stops on its last frame (**마지막 장면에서 멈춤**). The sound is the song;
+  **노래 대신 영상 소리** uses the video's own sound instead.
+  - **부르는 글자만 강조** (light the letter being sung): only that letter, in the **강조 색**
+    (highlight colour), a little larger. A line without letter times lights its letters one after
+    another from its start.
+  - **글자 색** (text colour), **테두리** (edge: shadow or none), **가사 뒤 띠** (band behind the
+    lines: none, light paper or dark) with **띠 진하기** (how solid), and **가사 자리** (bottom,
+    middle, or **더 아래**, lower: for a video with room under its picture, in the part of a Short
+    its caption and music line can cover). It starts as white text with a shadow and no band; on the paper band a dark text colour
+    without an edge reads best.
+  - The album, background, moving picture and place settings do not apply over a video. **배경
+    영상 빼기** goes back to the cover.
 - **앨범** (album)
   - **CD 케이스** (CD half out, spinning) or **둥근 표지** (round cover). **CD 보이기** and
     **CD 돌기** hide or stop the CD.
