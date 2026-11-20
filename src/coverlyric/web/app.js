@@ -572,6 +572,14 @@ function fillBars() {
   }
 }
 
+function fillKaraoke() {
+  const s = state.style;
+  $("upright_disc").checked = s.upright_look === "disc";
+  $("disc_wear").checked = s.disc_wear === "worn";
+  $("disc-wear-row").hidden = s.upright_look !== "disc";
+  $("letter_highlight").checked = s.highlight === "letter";
+}
+
 const RATIOS = { wide: "16 / 9", tall: "9 / 16", square: "1 / 1", portrait: "4 / 5" };
 
 function fillLook() {
@@ -583,6 +591,7 @@ function fillLook() {
   document.body.style.setProperty("--ratio", RATIOS[s.shape] || RATIOS.wide);
   fillClip();
   fillBars();
+  fillKaraoke();
   $("spin").checked = s.spin > 0;
   $("show_cd").checked = s.show_cd;
   $("spin").disabled = !s.show_cd || s.layout !== "case";
@@ -1381,6 +1390,17 @@ function bindRail() {
   }
 }
 
+function megabytes(bytes) {
+  const mb = bytes / 1e6;
+  if (mb >= 1000) return `${(mb / 1000).toFixed(1)} GB`;
+  return mb < 1 ? "1 MB 미만" : `${Math.round(mb)} MB`;
+}
+
+function minutes(seconds) {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 async function pollRender() {
   let job;
   try {
@@ -1390,7 +1410,7 @@ async function pollRender() {
     // One lost request must not end the watch: the render keeps running in its own process.
     pollRender.failed = (pollRender.failed || 0) + 1;
     if (pollRender.failed === 5) {
-      showRenderError("프로그램에 연결할 수 없습니다. 터미널 창이 열려 있는지 확인합니다.");
+      showRenderError("프로그램에 연결할 수 없습니다. 터미널 창이 열려 있는지 확인합니다.", { again: false });
     }
     setTimeout(pollRender, 2000);
     return;
@@ -1404,19 +1424,31 @@ async function pollRender() {
     $("progress-bar").value = share;
     $("progress-text").textContent = `${Math.round(share * 100)}%${job.eta != null ? timeLeft(job.eta) : " · 남은 시간 계산 중"}`;
     showRenderPlace(job.done || 0, job.total || videoLength());
+    pollRender.watched = true;
     setTimeout(pollRender, 1000);
     return;
   }
   $("progress").hidden = true;
   $("make").disabled = !!missing(true);
+  const finished = pollRender.watched;
+  pollRender.watched = false;
   if (job.state === "done") {
+    const name = job.out.split(/[\\/]/).pop();
     $("done").hidden = false;
-    $("done-name").textContent = job.out.split(/[\\/]/).pop();
+    $("done-name").textContent = name;
     $("done-name").title = job.out;
+    const meta = [job.length ? minutes(job.length) : "", job.size != null ? megabytes(job.size) : ""];
+    $("done-meta").textContent = meta.filter(Boolean).map((x) => ` · ${x}`).join("");
     $("done-note").textContent = job.note || "";
     $("done-note").hidden = !job.note;
+    if (finished) {
+      toast(`영상을 만들었습니다: ${name}`, 8000, { label: "폴더 열기", run: () => api("/api/open", { method: "POST" }) });
+    }
   } else if (job.state === "error") {
     showRenderError(`영상 만들기 실패: ${job.message}${job.log ? `\n기록 파일: ${job.log}` : ""}`);
+  } else if (job.state === "interrupted") {
+    // The program was closed in the middle of a render; its half-made file is already gone.
+    showRenderError("지난번 영상 만들기가 끝나지 않았습니다.", { quiet: true });
   }
 }
 
@@ -1474,11 +1506,29 @@ function showRenderPlace(done, total) {
   el.classList.toggle("gap", !text);
 }
 
-function showRenderError(message) {
-  const el = $("make-error");
-  el.textContent = message;
-  el.hidden = false;
-  toast(message.split("\n")[0], 9000);
+function showRenderError(message, { again = true, quiet = false } = {}) {
+  $("make-error-text").textContent = message;
+  $("make-again").hidden = !again;
+  $("make-error").hidden = false;
+  if (!quiet) toast(message.split("\n")[0], 9000);
+}
+
+async function makeVideo() {
+  const untimed = state.lines.findIndex(([t]) => t == null);
+  if (untimed >= 0) {
+    toast(`${untimed + 1}번째 줄에 시간이 없습니다. 타이밍 목록에서 시간을 넣거나 줄을 지웁니다.`, 6000);
+    openGroup("timing");
+    return;
+  }
+  const minutes = Math.max(1, Math.round((state.duration || 60) / 60));
+  if (!confirm(`미리보기 모양 그대로 영상을 만드시겠습니까?\n예상 시간: 약 ${minutes}분 이하`)) return;
+  try {
+    await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
+    await api("/api/render", { method: "POST" });
+    pollRender();
+  } catch (e) {
+    toast(e.message, 6000);
+  }
 }
 
 function bind() {
@@ -1650,6 +1700,16 @@ function bind() {
     $(key).addEventListener("input", (e) => { state.style[key] = e.target.value; scheduleSync(); });
   }
   $("loop").addEventListener("change", (e) => { state.style.loop = e.target.checked; scheduleSync(0); });
+  $("upright_disc").addEventListener("change", (e) => {
+    state.style.upright_look = e.target.checked ? "disc" : "cover";
+    fillKaraoke();
+    scheduleSync(0);
+  });
+  $("disc_wear").addEventListener("change", (e) => { state.style.disc_wear = e.target.checked ? "worn" : "none"; scheduleSync(0); });
+  $("letter_highlight").addEventListener("change", (e) => {
+    state.style.highlight = e.target.checked ? "letter" : "line";
+    scheduleSync(0);
+  });
   // Leaving 16:9 sets what a phone video needs (the server's tall.SHORTS); 16:9 goes back to 24 fps.
   for (const r of document.querySelectorAll('input[name="shape"]')) {
     r.addEventListener("change", () => {
@@ -1760,23 +1820,8 @@ function bind() {
     }
   });
 
-  $("make").addEventListener("click", async () => {
-    const untimed = state.lines.findIndex(([t]) => t == null);
-    if (untimed >= 0) {
-      toast(`${untimed + 1}번째 줄에 시간이 없습니다. 타이밍 목록에서 시간을 넣거나 줄을 지웁니다.`, 6000);
-      openGroup("timing");
-      return;
-    }
-    const minutes = Math.max(1, Math.round((state.duration || 60) / 60));
-    if (!confirm(`미리보기 모양 그대로 영상을 만드시겠습니까?\n예상 시간: 약 ${minutes}분 이하`)) return;
-    try {
-      await api("/api/state", { method: "POST", body: JSON.stringify(payload()) });
-      await api("/api/render", { method: "POST" });
-      pollRender();
-    } catch (e) {
-      toast(e.message, 6000);
-    }
-  });
+  $("make").addEventListener("click", makeVideo);
+  $("make-again").addEventListener("click", makeVideo);
   $("make-stop").addEventListener("click", async () => {
     if (!confirm("영상 만들기를 멈추시겠습니까?")) return;
     await api("/api/render/stop", { method: "POST" });

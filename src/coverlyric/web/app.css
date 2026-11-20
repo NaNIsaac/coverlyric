@@ -319,7 +319,11 @@ progress::-webkit-progress-value { background: var(--accent); transition: width 
 progress::-moz-progress-bar { background: var(--accent); }
 #make-stop { padding: 0 8px; margin-right: -8px; }
 .done-line { display: flex; align-items: center; gap: 4px; margin-top: 12px; }
-#done-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#done-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#done-meta { flex: 1 0 auto; white-space: nowrap; }
+.done-mark::before { content: "\2713"; color: var(--accent); font-weight: 700; margin-right: 2px; }
+.error-line { margin-top: 12px; }
+.error-line button.small { height: 26px; padding: 0 10px; font-size: 12px; margin-top: 6px; }
 .done-line button.small { height: 26px; padding: 0 8px; font-size: 12px; }
 
 .preview {
@@ -524,7 +528,7 @@ body.timing-open .stage-well { padding: 16px 24px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
-#make-error { white-space: pre-line; }
+#make-error-text { white-space: pre-line; margin: 0; }
 #stage-empty p { margin: 0 0 14px; font-size: 15px; }
 #stage-empty .row { display: flex; align-items: center; gap: 16px; margin: 0; }
 #stage-empty .primary { width: auto; padding: 0 20px; }

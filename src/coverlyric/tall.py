@@ -11,7 +11,8 @@ import re
 from dataclasses import dataclass, replace
 from functools import lru_cache
 
-from PIL import Image, ImageDraw, ImageFilter
+import numpy as np
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from . import fonts, render
 
@@ -39,6 +40,17 @@ CHANGE = 0.3  # seconds a new line takes to move up into the middle
 LOOP = 0.5  # seconds of the end that blend into the moments before the start
 MAX_BLOCK = 8  # the longest block of lines 후렴 찾기 compares
 AUDIO_FADE = 0.3
+# highlight=letter: only the letter being sung is lit, in HIGHLIGHT and LETTER_POP times its size,
+# growing over POP_IN seconds and going back as the next letter starts. The line is drawn at
+# LETTER_PX with a shadow and no band; an outline and a band were too heavy around the lit letter.
+HIGHLIGHT = "#ffd23f"
+LETTER_PX = 106
+LETTER_POP, POP_IN = 1.3, 0.1
+# upright_look=disc: the 16:9 video's CD behind the line being sung, darkened by DISC_DIM so white
+# letters read on its silver hub.
+DISC_SIDE = 860
+DISC_DIM = 0.4
+WEAR_SEED = 11
 
 # What an upright shape sets; the colours, font and background stay as the user made them.
 SHORTS = {"shape": "tall", "fps": 30, "lyric_edge": "outline", "intro": 0.0}
@@ -250,7 +262,8 @@ def layout(
         round(fr.y((ARTIST_Y if song.artist else TITLE_Y) + 30)),
     )
     now_y, gap = fr.y(NOW_Y), NEXT_GAP * fr.scale
-    now_px, next_px = NOW_PX * fr.text, NEXT_PX * fr.text
+    now_px = (LETTER_PX if style.highlight == "letter" else NOW_PX) * fr.text
+    next_px = NEXT_PX * fr.text
     pad_x, pad_y = BAND_PAD[0] * fr.text, BAND_PAD[1] * fr.text
     k = current(t, lines)
     p = ease(moved(t, k, lines, span(style, song)[0]))
@@ -333,21 +346,168 @@ def draw_bars(img: Image.Image, style: render.Style, fr: Frame) -> None:
         render.tracked(d, (fr.w / 2, y), text, f, ink)
 
 
+def later(times: tuple[float, ...], j: int) -> float:
+    """When letter j stops being sung: the next later time. A punctuation mark shares its letter's
+    time, so it does not end it."""
+    return next((x for x in times[j + 1 :] if x > times[j]), math.inf)
+
+
+def pop(t: float, times: tuple[float, ...], j: int) -> float:
+    """How big letter j is at t: 1, rising to LETTER_POP as it is sung and back as the next starts."""
+    start, end = times[j], later(times, j)
+    if t < start:
+        return 1.0
+    u = min(1.0, (t - start) / POP_IN) if t < end else max(0.0, 1 - (t - end) / POP_IN)
+    return round(1 + (LETTER_POP - 1) * ease(u), 2)
+
+
+def disc_place(fr: Frame) -> tuple[int, int, int]:
+    """The disc look's disc: centre x and y, and side. Centred on the line being sung and moved up
+    when its lower edge would go under the bottom band."""
+    side = min(DISC_SIDE, round(0.8 * fr.w), round(0.75 * (fr.bottom - fr.top)))
+    return fr.cx, min(round(fr.y(NOW_Y)), fr.h - fr.bar - side // 2), side
+
+
+def worn(face: Image.Image, radius: int) -> tuple[Image.Image, Image.Image]:
+    """An old disc: the print with its paint come off in a few places (short stretches of its outer
+    and inner edge, and two or three small flakes, the silver showing through), and seven very faint
+    scratches along the tracks on a layer that turns with it. Colours and brightness stay; the same
+    seed every time, so every frame and every render wears alike."""
+    side = radius * 2
+    rng = np.random.default_rng(WEAR_SEED)
+    y, x = np.mgrid[0:side, 0:side] - (side - 1) / 2
+    dist, ang = np.hypot(x, y) / radius, np.arctan2(y, x)
+    blot = Image.fromarray((rng.random((side // 8, side // 8)) * 255).astype(np.uint8))
+    blot = blot.resize((side, side), Image.BICUBIC).filter(ImageFilter.GaussianBlur(2))
+    blot = np.asarray(blot, np.float32) / 255
+    where = np.zeros_like(dist, dtype=np.float32)
+    for centre, width in [(rng.uniform(-np.pi, np.pi), rng.uniform(0.25, 0.5)) for _ in range(3)]:
+        off = np.angle(np.exp(1j * (ang - centre)))
+        where = np.maximum(where, np.clip(1 - np.abs(off) / width, 0, 1))
+    outer = np.clip(1 - (0.975 - dist) / 0.05, 0, 1)
+    inner = np.clip(1 - (dist - 0.36) / 0.035, 0, 1) * (dist > 0.36)
+    near = (outer + inner * 0.8) * where
+    for _ in range(3):
+        a, r0 = rng.uniform(0, 2 * np.pi), rng.uniform(0.5, 0.88)
+        fx, fy = r0 * np.cos(a), r0 * np.sin(a)
+        flake = np.hypot(x / radius - fx, y / radius - fy) / rng.uniform(0.02, 0.04)
+        near = np.maximum(near, np.clip(1 - flake, 0, 1))
+    kept = np.asarray(face.getchannel("A"), np.float32) * (blot * near <= 0.3)
+    face = face.copy()
+    face.putalpha(Image.fromarray(kept.astype(np.uint8), "L"))
+    wear = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    d = ImageDraw.Draw(wear)
+    for _ in range(7):
+        r = radius * rng.uniform(0.45, 0.95)
+        a0 = rng.uniform(0, 360)
+        d.arc(
+            (radius - r, radius - r, radius + r, radius + r),
+            a0,
+            a0 + rng.uniform(15, 50),
+            fill=(255, 255, 255, int(rng.uniform(22, 38))),
+            width=1,
+        )
+    ring = render.circle_mask(side, render.HOLE, 0.975)
+    wear.putalpha(ImageChops.multiply(wear.getchannel("A"), ring))
+    return face, wear
+
+
 class Painter:
     """The upright frames of one song and style. The background, title, cover and bands are drawn
     once; a frame adds the lines, and a frame whose lines stand where they stood is the last one
-    again."""
+    again. With the disc look the disc turns under the bands on every frame."""
 
     def __init__(
         self, lines: tuple[tuple[float, str], ...], song: render.Song, style: render.Style
     ):
-        self.lines, self.song, self.style = lines, song, style
+        self.song, self.style = song, style
+        self.letter = style.highlight == "letter"
+        given = {(start, text): times for start, text, times in song.letters}
+        # Per line, its letter times; a line comes in no later than its first letter.
+        self.times = [given.get(line) if self.letter else None for line in lines]
+        self.lines = tuple(
+            (min(start, times[0]) if times else start, text)
+            for (start, text), times in zip(lines, self.times, strict=True)
+        )
+        self.ink = replace(style, lyric_edge="shadow") if self.letter else style
+        self.lit = replace(self.ink, lyric_colour=HIGHLIGHT)
         self.frame = frame_of(style)
-        self.base = self.still_layer()
         self.span = span(style, song)
+        self.disc = style.upright_look == "disc"
+        self.base = self.disc_layer() if self.disc else self.still_layer()
+        if self.disc:
+            self.make_disc()
         self.overlap = loop_length(style, song)
         self.last: tuple = (None, b"")
         self.fps = render.rate(style)
+
+    def make_disc(self) -> None:
+        """The disc, its shadow and veil, and the bands drawn over it, made once."""
+        song, style, fr = self.song, self.style, self.frame
+        cx, cy, side = disc_place(fr)
+        radius = side // 2
+        face = render.disc_print(render.square(song.art, render.stamp(song.art)), radius)
+        self.wear = None
+        if style.disc_wear == "worn":
+            face, self.wear = worn(face, radius)
+        self.cd = render.Disc(face, radius)
+        self.veil = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+        self.veil.putalpha(self.cd.at(0).getchannel("A").point(lambda v: round(v * DISC_DIM)))
+        self.shade = Image.new("RGBA", (side + 160, side + 160), (0, 0, 0, 0))
+        ImageDraw.Draw(self.shade).ellipse((80, 100, side + 80, side + 100), fill=(0, 0, 0, 150))
+        self.shade = self.shade.filter(ImageFilter.GaussianBlur(28))
+        self.disc_at = (cx - radius, cy - radius)
+        self.bars = None
+        if fr.bar:
+            self.bars = Image.new("RGBA", (fr.w, fr.h), (0, 0, 0, 0))
+            draw_bars(self.bars, style, fr)
+        # Whole turns over the clip, nearest one per style.spin seconds, so a loop meets itself.
+        first, last = self.span
+        self.turns = max(1, round((last - first) / style.spin)) if style.spin > 0 else 0
+
+    def turn(self, t: float) -> float:
+        first, last = self.span
+        return 360 * self.turns * (t - first) / (last - first) if self.turns else 0.0
+
+    def disc_layer(self) -> Image.Image:
+        """The disc look's background: the blurred cover, and the title and the artist in the room
+        between the top band and the disc."""
+        song, style, fr = self.song, self.style, self.frame
+        img = backdrop(song, style).copy()
+        if style.show_title:
+            _, cy, side = disc_place(fr)
+            mid = (fr.top + cy - side / 2) / 2
+            face = fonts.resolve(style.font)
+            d = ImageDraw.Draw(img)
+            title = render.font(face, 64, 600)
+            while (
+                render.text_width(song.title, title, 0.06) > fr.w - 2 * fr.margin
+                and title.size > 28
+            ):
+                title = render.font(face, title.size * 0.92, 600)
+            y = mid - 24 if song.artist else mid
+            render.lettered(d, (fr.w / 2, y), song.title, title, 255, self.ink, 0.06)
+            if song.artist:
+                artist = render.font(face, 30, 400)
+                render.lettered(d, (fr.w / 2, mid + 40), song.artist, artist, 175, self.ink, 0.18)
+        return img
+
+    def background(self, t: float) -> Image.Image:
+        img = self.base.copy()
+        if not self.disc:
+            return img
+        x, y = self.disc_at
+        img.alpha_composite(self.shade, (x - 80, y - 80))
+        turn = self.turn(t)
+        cd = self.cd.at(turn)
+        cd.alpha_composite(self.veil)
+        # The wear catches the light over the darkened disc, so it stays visible.
+        if self.wear is not None:
+            cd.alpha_composite(self.wear.rotate(-turn, Image.BICUBIC))
+        img.alpha_composite(cd, (x, y))
+        if self.bars is not None:
+            img.alpha_composite(self.bars)
+        return img
 
     def still_layer(self) -> Image.Image:
         song, style, fr = self.song, self.style, self.frame
@@ -381,7 +541,13 @@ class Painter:
     def lyric_state(self, t: float) -> tuple:
         k = current(t, self.lines)
         p = moved(t, k, self.lines, self.span[0])
-        return (k, round(p * self.fps))
+        times = self.times[k] if k >= 0 else None
+        letters = (
+            tuple((pop(t, times, j), times[j] <= t < later(times, j)) for j in range(len(times)))
+            if times
+            else ()
+        )
+        return (k, round(p * self.fps), letters)
 
     def state(self, t: float) -> tuple:
         state = self.lyric_state(t)
@@ -389,31 +555,70 @@ class Painter:
             first, last = self.span
             if t > last - self.overlap:
                 u = round((t - (last - self.overlap)) / self.overlap * self.fps)
-                return (state, self.lyric_state(first - (last - t)), u)
+                state = (state, self.lyric_state(first - (last - t)), u)
+        if self.disc and self.turns:
+            return (state, round(t * self.fps))
         return state
+
+    def letters(
+        self, d: ImageDraw.ImageDraw, part: dict, alpha: int, times: tuple[float, ...], t: float
+    ) -> None:
+        """The line being sung letter by letter: the letter being sung lit and grown, the rest as
+        the line. Rows are centred on their width at that moment, so a grown letter pushes the
+        others aside."""
+        face = fonts.resolve(self.style.font)
+        f = render.font(face, part["size"], part["weight"])
+        track = f.size * render.TRACKING
+        pitch = part["size"] * PITCH
+        fr = self.frame
+        j = 0
+        for r, row in enumerate(part["rows"]):
+            y = part["centre"] + (r - (len(part["rows"]) - 1) / 2) * pitch
+            cells = []
+            for ch in row:
+                if ch == " ":
+                    cells.append((ch, f, f.getlength(ch), False))
+                    continue
+                sung = j < len(times) and ch.isalnum()
+                s = pop(t, times, j) if sung else 1.0
+                cf = render.font(face, part["size"] * s, part["weight"]) if s > 1 else f
+                cells.append((ch, cf, cf.getlength(ch), sung and times[j] <= t < later(times, j)))
+                j += 1
+            x = fr.cx - (sum(c[2] for c in cells) + track * (len(cells) - 1)) / 2
+            for ch, cf, width, lit in cells:
+                if ch != " ":
+                    style = self.lit if lit else self.ink
+                    render.lettered(d, (x + width / 2, y), ch, cf, alpha, style)
+                x += width + track
 
     def plain(self, t: float) -> Image.Image:
         fr = self.frame
-        img = self.base.copy()
+        img = self.background(t)
         spots = layout(t, self.lines, self.song, self.style)
         layer = Image.new("RGBA", (fr.w, fr.h), (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
         now = spots["now"]
-        if now and now["band_alpha"] > 0:
+        if now and now["band_alpha"] > 0 and not self.letter:
             d.rounded_rectangle(
                 now["band"],
                 radius=round(14 * fr.text),
                 fill=(*render.band_rgb(self.style), round(render.BAND_ALPHA * now["band_alpha"])),
             )
         face = fonts.resolve(self.style.font)
+        k = current(t, self.lines)
         for part in (spots["gone"], now, spots["next"]):
             if not part or part["alpha"] <= 0:
+                continue
+            alpha = round(255 * part["alpha"])
+            times = self.times[k] if part is now else None
+            if times:
+                self.letters(d, part, alpha, times, t)
                 continue
             f = render.font(face, part["size"], part["weight"])
             pitch = part["size"] * PITCH
             for i, row in enumerate(part["rows"]):
                 y = part["centre"] + (i - (len(part["rows"]) - 1) / 2) * pitch
-                render.lettered(d, (fr.cx, y), row, f, round(255 * part["alpha"]), self.style)
+                render.lettered(d, (fr.cx, y), row, f, alpha, self.ink)
         img.alpha_composite(layer)
         return img
 

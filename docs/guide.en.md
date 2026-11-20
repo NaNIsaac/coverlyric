@@ -185,7 +185,7 @@ and plays it in place of the still.
   **기본으로** (default) goes back to `만든 영상`. If the picked folder is gone (an unplugged USB drive),
   files go to `만든 영상`.
 - **10초 미리보기** (10-second preview) makes 10 seconds from the preview time at small size and plays
-  it in place of the still.
+  it in place of the still; **미리보기 닫기** (close the preview) closes it.
 - **영상 만들기** (make video) → **확인**. While it runs, the page shows how far into the song the video
   is made, the lyric there and the time left. **그만 만들기** stops it. It usually takes no longer than
   the song.
@@ -242,6 +242,21 @@ line.
 - **끝을 처음과 이어지게** (join the end to the start) blends the last 0.5 s, picture and sound, with
   the moments before the part's start, so the last frame equals the first and a video on repeat does
   not jump. The sound then does not fade out at the end.
+
+**CD와 글자 강조** (disc and letter highlight): all off at first.
+
+- **가사 뒤에 도는 CD** (turning CD behind the lyrics): the 16:9 video's CD turns behind the line being
+  sung instead of the cover. It is darkened by 40 percent so white letters read on it, and turns the
+  whole number of times nearest one turn per `spin` seconds (7 at first) over the part, so a video on
+  repeat meets itself. The title and the artist go between the top band and the disc, also with a top
+  text.
+- **오래된 CD** (old CD), shown only with the CD on: the print peels at a few places of its edges and in
+  two or three small flakes, with seven very faint scratches. Colours and brightness stay; the wear is
+  the same every time.
+- **부르는 글자만 노랗게** (light the letter being sung): the line being sung is drawn at 106 pixels with
+  a shadow and no band; only the letter being sung is yellow (#ffd23f) and 1.3 times its size, and goes
+  back to white at its size when the next letter starts. The letter times come from `letters` in the
+  project file ([command line](cli.en.md)). A line without letter times is drawn all white.
 
 **위아래 띠** (bands): off at first; switching them on shows their fields.
 
