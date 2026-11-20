@@ -64,7 +64,7 @@ def test_align_places_letters_on_the_separated_vocals(monkeypatch):
 
     def word_starts(voice, rate, words):
         seen["words"] = words
-        return [0.5 + 0.3 * k for k in range(len(words))]
+        return [5.5 + 0.3 * k for k in range(len(words))]
 
     monkeypatch.setitem(
         sys.modules,
@@ -79,7 +79,7 @@ def test_align_places_letters_on_the_separated_vocals(monkeypatch):
     got = align.align("song.wav", lines, 10.0, 20.0, note=notes.append)
     assert seen["part"] == (12.0 - align.AROUND, 30.0 - 12.0 + 2 * align.AROUND)
     assert seen["words"] == ["da"]
-    assert got == [{"n": 2, "text": "다", "times": [round(7.0 + 0.5 - align.LEAD, 3)]}]
+    assert got == [{"n": 2, "text": "다", "times": [round(7.0 + 5.5 - align.LEAD, 3)]}]
     assert any("1.2 GB" in n for n in notes), "the first run says it downloads"
 
 
@@ -135,3 +135,33 @@ def test_without_the_extra_align_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(align, "missing", lambda names=(): "this needs the 'align' extra")
     assert cli.main(parse(["align", str(folder), "--json"])) == 1
     assert "align" in json.loads(capsys.readouterr().out.splitlines()[-1])["error"]
+
+
+def test_a_stray_letter_goes_between_its_neighbours():
+    assert align.settled([10.0, 3.0, 10.4], 10.0, 20.0) == [10.0, 10.2, 10.4]
+    assert align.settled([10.0, 25.0, 10.4], 10.0, 20.0) == [10.0, 10.2, 10.4]
+
+
+def test_letters_aligned_before_their_line_start_from_it():
+    got = align.settled([142.85, 143.05, 152.3, 152.6], 152.16, 160.0)
+    assert got[2:] == [152.3, 152.6]
+    assert 152.16 < got[0] < got[1] < 152.3
+
+
+def test_letters_aligned_past_the_next_line_stop_before_it():
+    got = align.settled([10.0, 10.3, 30.0, 31.0], 10.0, 11.0)
+    assert got[:2] == [10.0, 10.3]
+    assert 10.3 < got[2] < got[3] <= 11.0
+
+
+def test_a_line_with_no_letter_inside_it_is_left_out():
+    picked = [(0, 10.0, "가나")]
+    _, marks = align.tokens(picked, romanise)
+    assert align.entries(picked, marks, [1.0, 2.0], {0: 20.0}) == []
+
+
+def test_entries_keep_letters_inside_the_line():
+    picked = [(0, 10.0, "가나다")]
+    _, marks = align.tokens(picked, romanise)
+    got = align.entries(picked, marks, [10.04, 2.0, 10.6], {0: 20.0})
+    assert got[0]["times"] == [10.0, 10.28, 10.56], "the stray is halfway, after the lead"

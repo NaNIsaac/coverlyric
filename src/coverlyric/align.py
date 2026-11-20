@@ -9,8 +9,10 @@ downloaded once, about 1.2 GB, into torch's cache (`downloads`)."""
 from __future__ import annotations
 
 import importlib.util
+import math
 import re
 from collections.abc import Callable
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,7 @@ import numpy as np
 from . import media
 
 LEAD = 0.04  # seconds before the aligned start: the letter lights as its syllable sounds
+EARLY = 0.5  # seconds a letter may come before its line's start
 AROUND = 5.0  # seconds of song kept on each side of the part, so the separation hears the context
 SEPARATOR = "htdemucs"
 MODULES = ("torch", "torchaudio", "demucs", "uroman", "librosa")
@@ -73,24 +76,50 @@ def tokens(
     return words, marks
 
 
+def settled(times: list[float], start: float, end: float) -> list[float] | None:
+    """Aligned starts kept inside their line, from EARLY before its `start` to the next line's
+    `end`. A letter outside goes between its neighbours inside, spread evenly; before the first one
+    inside, from the line's start, and after the last, 0.3 s a letter up to `end`. None when no
+    letter is inside."""
+    inside = [k for k, x in enumerate(times) if start - EARLY <= x <= end]
+    if not inside:
+        return None
+    first, last, count = inside[0], inside[-1], len(times)
+    anchors = [(k, times[k]) for k in inside]
+    if first > 0:
+        anchors.insert(0, (-1, min(start, times[first])))
+    if last < count - 1:
+        anchors.append((count, min(end, times[last] + 0.3 * (count - last))))
+    out = list(times)
+    for (a, xa), (b, xb) in pairwise(anchors):
+        for k in range(a + 1, b):
+            out[k] = xa + (xb - xa) * (k - a) / (b - a)
+    return out
+
+
 def entries(
     picked: list[tuple[int, float, str]],
     marks: dict[int, list[int | None]],
     starts: list[float],
+    ends: dict[int, float] | None = None,
 ) -> list[dict]:
-    """The project's `letters` for the picked lines from each aligned word's start (song seconds):
-    LEAD earlier, punctuation on the letter before it, a line's opening mark on its first letter."""
+    """The project's `letters` for the picked lines from each aligned word's start (song seconds),
+    LEAD earlier and then kept from EARLY before the line's start to the next one's (`ends`),
+    punctuation on the letter before it, a line's opening mark on its first letter."""
     out = []
-    for i, _, text in picked:
+    for i, start, text in picked:
+        refs = [ref for ref in marks.get(i, []) if ref is not None]
+        kept = settled([starts[ref] - LEAD for ref in refs], start, (ends or {}).get(i, math.inf))
+        if kept is None:
+            continue
+        at = dict(zip(refs, kept, strict=True))
         row: list[float | None] = []
         last = None
         for ref in marks.get(i, []):
             if ref is not None:
-                last = round(starts[ref] - LEAD, 3)
+                last = round(at[ref], 3)
             row.append(last)
-        first = next((x for x in row if x is not None), None)
-        if first is None:
-            continue
+        first = next(x for x in row if x is not None)
         out.append({"n": i + 1, "text": text, "times": [first if x is None else x for x in row]})
     return out
 
@@ -152,4 +181,6 @@ def align(
     voice, rate = vocals(path, begin, stop - begin)
     note("placing the letters")
     starts = [begin + s for s in word_starts(voice, rate, words)]
-    return entries(picked, marks, starts)
+    timed = sorted(t for t, _ in lines if t is not None)
+    ends = {i: next((x for x in timed if x > t), math.inf) for i, t, _ in picked}
+    return entries(picked, marks, starts, ends)
