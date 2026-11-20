@@ -105,7 +105,9 @@ uv run coverlyric render songs/demo --json
 fails with exit 1. To pick the part and the look by hand:
 `project set songs/demo shape=square fps=30 lyric_edge=outline clip_from=42 clip_to=72 loop=true
 bars=true "bars_top=Title - Artist"`. `shape` is `tall` (9:16), `square` (1:1) or `portrait` (4:5);
-the video is `<title>_shorts.mp4`, `_1x1.mp4` or `_4x5.mp4`.
+the video is `<title>_shorts.mp4`, `_1x1.mp4` or `_4x5.mp4`. `upright_look=disc disc_wear=worn
+highlight=letter` gives the turning CD and the lit letter; letter times are `letters` in the project
+file ([command line](cli.en.md)).
 `sections songs/demo --length 30` lists loop sections a whole number of bars long and
 `--apply N` makes the project a looping Short of one; `align songs/demo` saves when each letter is
 sung, for `highlight=letter`. Both need the `align` extra ([command line](cli.en.md)).

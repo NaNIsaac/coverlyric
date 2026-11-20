@@ -143,6 +143,26 @@ def ready(lines: list[Line]) -> list[tuple[float, str]]:
     return sorted(((float(t), text) for t, text in lines), key=lambda r: r[0])
 
 
+def letter_times(text: str, times: list[float]) -> tuple[float, ...] | None:
+    """One time per letter of `text` but spaces, from `times` given either for those letters or only
+    for its letters and digits. In the second case a punctuation mark takes the time of the letter
+    before it, or of the first letter when it opens the line. None when the count fits neither."""
+    marks = [ch for ch in text if not ch.isspace()]
+    if len(times) == len(marks):
+        return tuple(float(x) for x in times)
+    sung = [float(x) for x in times]
+    if not sung or len(sung) != sum(ch.isalnum() for ch in marks):
+        return None
+    out, k = [], 0
+    for ch in marks:
+        if ch.isalnum():
+            out.append(sung[k])
+            k += 1
+        else:
+            out.append(out[-1] if out else sung[0])
+    return tuple(out)
+
+
 def plain(text: str) -> str:
     """Text reduced for comparison: no spaces, punctuation or case."""
     return re.sub(r"[\W_]+", "", text).lower()

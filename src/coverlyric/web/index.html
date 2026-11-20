@@ -221,6 +221,11 @@
         <ol id="sections" class="sections" hidden></ol>
         <label class="check"><input type="checkbox" id="loop"> 끝을 처음과 이어지게</label>
       </div>
+      <div class="field upright-only">
+        <label class="check"><input type="checkbox" id="upright_disc"> 가사 뒤에 도는 CD</label>
+        <label class="check" id="disc-wear-row"><input type="checkbox" id="disc_wear"> 오래된 CD</label>
+        <label class="check"><input type="checkbox" id="letter_highlight"> 부르는 글자만 노랗게</label>
+      </div>
       <div class="field upright-only bars-field">
         <label class="check"><input type="checkbox" id="bars"> 위아래 띠</label>
         <div id="bars-options" class="bars-options" hidden>
@@ -280,9 +285,14 @@
           <button id="make-stop" class="quiet">그만 만들기</button>
         </div>
       </div>
-      <p id="make-error" class="warn" role="alert" hidden></p>
+      <div id="make-error" class="error-line" hidden>
+        <p id="make-error-text" class="warn" role="alert"></p>
+        <button id="make-again" class="small">다시 만들기</button>
+      </div>
       <div id="done" class="done-line" hidden>
+        <span class="done-mark" aria-hidden="true"></span>
         <span id="done-name"></span>
+        <span id="done-meta" class="note"></span>
         <button id="done-play" class="quiet small">재생</button>
         <button id="open-folder" class="quiet small">폴더 열기</button>
       </div>

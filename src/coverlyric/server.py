@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import colorsys
+import contextlib
 import importlib.util
 import io
 import json
@@ -140,6 +141,18 @@ def remove_part(path: Path, wait: float = 5.0) -> bool:
             time.sleep(0.1)
 
 
+# What a finished video takes on disk, to check before a render: megabytes per second of video at
+# each height (above what x264 makes of a busy frame), and room for the encoder's own files.
+VIDEO_MB_S = {1080: 0.6, 720: 0.3}
+VIDEO_MB_EXTRA = 50
+
+
+def video_mb(seconds: float, style: render.Style) -> int:
+    """About how many megabytes a video of this length and style needs while it is made."""
+    rate = VIDEO_MB_S[1080] if render.is_upright(style) else VIDEO_MB_S.get(style.height, 0.6)
+    return math.ceil(seconds * rate) + VIDEO_MB_EXTRA
+
+
 def safe_name(name: str) -> str:
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
     return name or "가사영상"
@@ -164,7 +177,10 @@ class App:
         self.lock = threading.Lock()
         self.starting = threading.Lock()  # a double click must not start two jobs
         self.project = Project.load(self.file) if self.file.exists() else Project(self.work)
-        self.job: dict = {"state": "idle"}
+        # Written when a render starts and removed when it ends: still there now, the program was
+        # closed or the PC went off in the middle of one.
+        self.marker = self.work / "rendering.json"
+        self.job: dict = self.interrupted() or {"state": "idle"}
         self.log = home / "coverlyric.log"
         self.auto: dict = {"state": "idle"}
         self.auto_proc: subprocess.Popen | None = None
@@ -176,6 +192,23 @@ class App:
 
     def save(self) -> None:
         self.project.save(self.file)
+
+    def interrupted(self) -> dict | None:
+        """The job left by a render that never finished, after its half-made video is removed."""
+        if not self.marker.exists():
+            return None
+        try:
+            out = Path(json.loads(self.marker.read_text(encoding="utf-8"))["out"])
+        except (OSError, ValueError, KeyError, TypeError):
+            out = None
+        parts = {out.with_name(out.stem + ".making.mp4")} if out else set()
+        parts.update(self.output.glob("*.making.mp4"))
+        for part in parts:
+            remove_part(part, wait=0)
+        with contextlib.suppress(OSError):
+            self.marker.unlink(missing_ok=True)
+        LOG.info("the last render did not finish: %s", out.name if out else "?")
+        return {"state": "interrupted", "out": str(out) if out else ""}
 
     def saved_output(self) -> Path | None:
         """The folder the user picked for finished videos, while it is still there (a USB drive may
@@ -473,12 +506,18 @@ class App:
             raise ValueError("가사가 없습니다. 가사 단계에서 가사를 넣습니다.")
         timing.ready(p.lines)
         out = self.output / video_file(p.title, p.style)
+        total = p.duration + p.style.lead + p.style.tail
+        if render.is_upright(p.style):
+            first, last = tall.span(p.style, p.song())
+            total = last - first
+        self.check_room(total, p.style)
         job = self.work / "job.json"
         data = p.to_dict()
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
         data["anim"] = [p.path(name) for name in p.anim]
         data["out"] = str(out)
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        self.marker.write_text(json.dumps({"out": str(out)}, ensure_ascii=False), encoding="utf-8")
         cmd = [sys.executable, "-m", "coverlyric", "render-job", str(job)]
         self.proc = subprocess.Popen(
             cmd,
@@ -490,10 +529,6 @@ class App:
             **media.below_normal(),
             **new_group(),
         )
-        total = p.duration + p.style.lead + p.style.tail
-        if render.is_upright(p.style):
-            first, last = tall.span(p.style, p.song())
-            total = last - first
         self.job = {"state": "running", "done": 0.0, "total": total, "started": time.time()}
         LOG.info("render started: %s (%.1f s)", out.name, p.duration)
         threading.Thread(target=self.watch, args=(self.proc, out), daemon=True).start()
@@ -532,6 +567,8 @@ class App:
         remove_part(part)
         if self.proc is not proc:  # stopped and replaced by a newer render
             return
+        with contextlib.suppress(OSError):  # a stale marker only shows one needless line later
+            self.marker.unlink(missing_ok=True)
         if code == 0 and out.exists():
             spent = time.time() - self.job.get("started", time.time())
             LOG.info("render done in %.0f s: %s", spent, out)
@@ -541,6 +578,8 @@ class App:
                 "out": str(out),
                 "folder": str(out.parent),
                 "files": [name for name in files if (out.parent / name).exists()],
+                "length": self.job.get("total", 0.0),
+                "size": out.stat().st_size,
             }
             if notice:
                 self.job["note"] = notice
@@ -651,6 +690,17 @@ class App:
             name: {"size_mb": size, "ready": auto.has_model(name)}
             for name, (_, size) in auto.MODELS.items()
         }
+
+    def check_room(self, seconds: float, style: render.Style) -> None:
+        """A full drive would stop the render near its end, after minutes of work."""
+        mb = video_mb(seconds, style)
+        free = shutil.disk_usage(self.output)[2] / 1e6
+        if free < mb:
+            raise ValueError(
+                f"디스크 공간 부족: 이 영상을 만들려면 {self.output.anchor or self.output}에 "
+                f"여유 공간 약 {mb} MB가 필요합니다 (현재 {free:.0f} MB). "
+                "공간을 늘리거나 저장 위치를 바꾼 뒤 다시 누릅니다."
+            )
 
     def check_disk(self, model: str) -> None:
         """The first run installs faster-whisper into the program's environment and downloads the

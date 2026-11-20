@@ -85,7 +85,26 @@ class Project:
             artist=self.artist,
             duration=duration,
             anim=tuple(self.path(name) for name in self.anim),
+            letters=self.letter_times(),
         )
+
+    def letter_times(self) -> tuple[tuple[float, str, tuple[float, ...]], ...]:
+        """The letter times that still fit their line: the line is timed and reads as it did."""
+        out = []
+        for entry in self.letters:
+            n = int(entry.get("n", 0)) - 1
+            if not 0 <= n < len(self.lines):
+                continue
+            start, text = self.lines[n]
+            if start is None or text != entry.get("text"):
+                continue
+            try:
+                times = timing.letter_times(text, list(entry.get("times", [])))
+            except (TypeError, ValueError):
+                continue
+            if times:
+                out.append((float(start), text, times))
+        return tuple(out)
 
     def preview_lines(self) -> tuple[tuple[float, str], ...]:
         """Timed lines for a still. Before any line has a time, the lines are spread 4 s apart so the
