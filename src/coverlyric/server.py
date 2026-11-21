@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import anim, auto, fonts, looks, media, overlay, render, tall, timing
+from . import __version__, anim, auto, fonts, looks, media, overlay, render, tall, timing
 from .project import Project
 from .render import Style
 
@@ -268,6 +268,7 @@ class App:
         data["output"] = str(self.output)
         data["output_default"] = self.output == self.default_output
         data["shorts"] = tall.SHORTS
+        data["version"] = __version__
         return data
 
     def update(self, data: dict) -> None:

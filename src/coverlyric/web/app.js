@@ -715,6 +715,7 @@ async function saveTiming(fmt) {
 }
 
 function fillAll() {
+  $("version").textContent = state.version ? `v${state.version}` : "";
   $("title").value = state.title;
   $("artist").value = state.artist;
   $("album").value = state.album || "";
