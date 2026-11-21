@@ -546,7 +546,7 @@ class App:
             total = last - first
         self.check_room(total, p.style)
         job = self.work / "job.json"
-        data = p.to_dict()
+        data = p.flat()
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
         data["anim"] = [p.path(name) for name in p.anim]
         data["out"] = str(out)
@@ -649,7 +649,7 @@ class App:
         end = min(song.duration, start + CLIP_S)
         out = self.work / "preview-clip.mp4"
         job = self.work / "clip-job.json"
-        data = p.to_dict()
+        data = p.flat()
         data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
         data["out"], data["clip"] = str(out), [start, end]
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

@@ -127,6 +127,11 @@ The page saves the work in `작업 중/project.json`: the song and cover paths, 
 and text, the look (`style`) and the lines automatic timing asked to check (`notes`). Videos go to
 the save folder (`만든 영상/` at first). The command-line commands work on that folder too.
 
+The videos made from the song are listed in `outputs`, each with its `id`, look (`style`), moving
+picture (`anim`) and video (`video`); `current` is the one being worked on. Lines and letter times
+belong to the song, once, and every output uses them. An older file without `outputs` opens as one
+output.
+
 `letters` holds when each letter of a line is sung, for `highlight=letter`. An entry is
 `{"n": 3, "text": "아리랑 아리랑", "times": [12.0, 12.3, ...]}`: the line number from 1, the line's
 text when it was timed, and seconds, one per letter but spaces or one per letter and digit. In the
@@ -140,7 +145,6 @@ changed since, or whose line has no time, is not used.
 | `COVERLYRIC_HOME` | folder for work and videos (same as `--home`) |
 | `COVERLYRIC_NO_BROWSER` | any value: do not open the browser |
 | `COVERLYRIC_ENCODER` | H.264 encoder (`libx264`, `h264_nvenc`, `h264_qsv`, `h264_amf`); default: the first that works on this PC |
-| `COVERLYRIC_WORKERS` | processes that draw the frames (1-8); default: set from free memory |
 
 ## Fonts
 

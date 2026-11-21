@@ -1,5 +1,9 @@
-"""A project: the song, the cover, the lines with their times and the style, kept as one JSON file whose
-paths are relative to it."""
+"""A project: one song (the sound, the cover, the lines with their times) and the videos made from it,
+its outputs, each with its own style; kept as one JSON file whose paths are relative to it.
+
+Format 2 lists the outputs. A file without a format is format 1, one song with one style, and loads as
+one output. Saving also writes the current output's style, moving picture and video at the top level,
+as format 1 had them, so the release before format 2 can still open the file."""
 
 from __future__ import annotations
 
@@ -9,6 +13,37 @@ from pathlib import Path
 
 from . import media, timing
 from .render import Song, Style
+
+FORMAT = 2
+# The first output's id by shape, for a format 1 file.
+FIRST_ID = {"wide": "wide", "tall": "short", "square": "square", "portrait": "portrait"}
+
+
+@dataclass
+class Output:
+    """One video made from the song: how it looks, and what it puts over or under the lyrics."""
+
+    id: str = "wide"
+    style: Style = field(default_factory=Style)
+    anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
+    video: str = ""  # the user's own video under the lyrics, in place of the cover
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Output:
+        return cls(
+            id=str(data.get("id", "")),
+            style=Style.from_dict(data.get("style", {})),
+            anim=[str(name) for name in data.get("anim", [])],
+            video=str(data.get("video", "")),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "style": self.style.to_dict(),
+            "anim": list(self.anim),
+            "video": self.video,
+        }
 
 
 @dataclass
@@ -22,9 +57,6 @@ class Project:
     released: str = ""  # the player look's date badge, as typed
     duration: float = 0.0
     lines: list[timing.Line] = field(default_factory=list)
-    style: Style = field(default_factory=Style)
-    anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
-    video: str = ""  # the user's own video under the lyrics, in place of the cover
     clean_tags: bool = True  # lyrics put in lose [..] notes and # lines (timing.sung)
     # What automatic timing said about a line: {"n": line number from 1, "kind": unplaced | doubtful
     # | differs, "heard": the words heard, for differs}. Kept so a later look can list them.
@@ -32,6 +64,36 @@ class Project:
     # When each letter of a line is sung: {"n": line number from 1, "text": the line as it was timed,
     # "times": seconds}. An entry whose line text has changed since is left out of the render.
     letters: list[dict] = field(default_factory=list)
+    outputs: list[Output] = field(default_factory=lambda: [Output()])
+    current: str = "wide"  # the output the page and the commands work on when none is named
+
+    @property
+    def output(self) -> Output:
+        return next((o for o in self.outputs if o.id == self.current), self.outputs[0])
+
+    @property
+    def style(self) -> Style:
+        return self.output.style
+
+    @style.setter
+    def style(self, value: Style) -> None:
+        self.output.style = value
+
+    @property
+    def anim(self) -> list[str]:
+        return self.output.anim
+
+    @anim.setter
+    def anim(self, value: list[str]) -> None:
+        self.output.anim = value
+
+    @property
+    def video(self) -> str:
+        return self.output.video
+
+    @video.setter
+    def video(self, value: str) -> None:
+        self.output.video = value
 
     @classmethod
     def load(cls, path: Path) -> Project:
@@ -41,6 +103,20 @@ class Project:
     @classmethod
     def from_dict(cls, folder: Path, data: dict) -> Project:
         lines = [(None if t is None else float(t), str(text)) for t, text in data.get("lines", [])]
+        outputs = [Output.from_dict(o) for o in data.get("outputs", [])]
+        if not outputs:
+            style = Style.from_dict(data.get("style", {}))
+            outputs = [
+                Output(
+                    id=FIRST_ID.get(style.shape, "wide"),
+                    style=style,
+                    anim=[str(name) for name in data.get("anim", [])],
+                    video=str(data.get("video", "")),
+                )
+            ]
+        current = str(data.get("current", ""))
+        if current not in {o.id for o in outputs}:
+            current = outputs[0].id
         return cls(
             folder=folder,
             audio=data.get("audio", ""),
@@ -51,15 +127,15 @@ class Project:
             released=data.get("released", ""),
             duration=float(data.get("duration", 0.0)),
             lines=lines,
-            style=Style.from_dict(data.get("style", {})),
-            anim=[str(name) for name in data.get("anim", [])],
-            video=str(data.get("video", "")),
             clean_tags=bool(data.get("clean_tags", True)),
             notes=[dict(note) for note in data.get("notes", [])],
             letters=[dict(entry) for entry in data.get("letters", [])],
+            outputs=outputs,
+            current=current,
         )
 
-    def to_dict(self) -> dict:
+    def flat(self) -> dict:
+        """The song with the current output, in format 1: what a render job reads."""
         return {
             "audio": self.audio,
             "art": self.art,
@@ -75,6 +151,14 @@ class Project:
             "clean_tags": self.clean_tags,
             "notes": list(self.notes),
             "letters": list(self.letters),
+        }
+
+    def to_dict(self) -> dict:
+        return {
+            "format": FORMAT,
+            **self.flat(),
+            "outputs": [o.to_dict() for o in self.outputs],
+            "current": self.output.id,
         }
 
     def save(self, path: Path) -> None:
