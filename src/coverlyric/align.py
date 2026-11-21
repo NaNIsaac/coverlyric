@@ -21,6 +21,8 @@ from . import media
 
 LEAD = 0.04  # seconds before the aligned start: the letter lights as its syllable sounds
 EARLY = 0.5  # seconds a letter may come before its line's start
+LATE = 0.6  # seconds after its line's start a first letter is taken as wrongly placed
+BUNCHED = 0.05  # seconds a letter, at least, that a line's letters spread over
 AROUND = 5.0  # seconds of song kept on each side of the part, so the separation hears the context
 SEPARATOR = "htdemucs"
 MODULES = ("torch", "torchaudio", "demucs", "uroman", "librosa")
@@ -122,6 +124,73 @@ def entries(
         first = next(x for x in row if x is not None)
         out.append({"n": i + 1, "text": text, "times": [first if x is None else x for x in row]})
     return out
+
+
+def trouble(times: list[float], start: float, end: float) -> str | None:
+    """Why a line's aligned letter times are wrong, or None: its first letter LATE seconds or more
+    after the line starts, its last one at or after the next line (`end`), or all of them bunched
+    into less than BUNCHED seconds a letter (or half the line, if that is less)."""
+    if times[0] - start > LATE:
+        return "late"
+    if times[-1] >= end:
+        return "past"
+    if times[-1] - times[0] < min(BUNCHED * len(times), 0.5 * (end - start)):
+        return "bunched"
+    return None
+
+
+def refill(text: str, start: float, end: float, heard: list[tuple[float, str]]) -> list[float]:
+    """New letter times for a line from start to end, one per letter but spaces: each word from the
+    start of a word heard in the line's window when as many were heard as the line has words, else
+    the words spread over the heard stretch by their length, or over 0.22 s a letter from the start
+    when nothing was heard there. A word's letters follow each other at most 0.18 s apart."""
+    given = text.split()
+    count = sum(len(w) for w in given)
+    near = [(at, word) for at, word in heard if start - 0.4 <= at < end - 0.05]
+    if near:
+        first = max(start, near[0][0]) if abs(near[0][0] - start) < 0.8 else start
+        last = near[-1][0] + 0.3
+    else:
+        first, last = start, min(end - 0.1, start + 0.22 * count)
+    last = min(max(last, first + 0.13 * count), end - 0.05)
+    if len(near) == len(given):
+        starts = [max(first, at) for at, _ in near]
+    else:
+        starts, done = [], 0
+        for word in given:
+            starts.append(first + (last - first) * done / count)
+            done += len(word)
+    starts.append(last)
+    out = []
+    for k, word in enumerate(given):
+        a, b = starts[k], max(starts[k + 1], starts[k] + 0.05)
+        step = min(0.18, (b - a) / len(word))
+        out += [round(a + i * step, 3) for i in range(len(word))]
+    return out
+
+
+def repaired(
+    found: list[dict],
+    lines: list[tuple[float | None, str]],
+    heard: list[tuple[float, str]] | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """`found` with the lines whose times are wrong (trouble) given new ones (refill), each marked
+    with why as "repaired"; and those lines."""
+    timed = sorted(t for t, _ in lines if t is not None)
+    out, fixed = [], []
+    for entry in found:
+        start = lines[entry["n"] - 1][0]
+        end = next((x for x in timed if x > start), start + 4.0)
+        why = trouble(entry["times"], start, end)
+        if why:
+            entry = {
+                **entry,
+                "times": refill(entry["text"], start, end, heard or []),
+                "repaired": why,
+            }
+            fixed.append(entry)
+        out.append(entry)
+    return out, fixed
 
 
 def merged(old: list[dict], new: list[dict]) -> list[dict]:
