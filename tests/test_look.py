@@ -20,8 +20,8 @@ DEMO = Path(render.__file__).parent / "demo" / "demo.json"
 
 
 def plain_style(**keys) -> render.Style:
-    """A style without the drifting light, which these comparisons predate."""
-    return render.Style(drift=False, **keys)
+    """A style without the drifting light and the case's haze, which these comparisons predate."""
+    return render.Style(drift=False, case_haze=0.0, **keys)
 
 
 TIMES = (0.0, 1.0, 2.5, 3.1, 7.0, 10.05, 14.0, 17.9)
