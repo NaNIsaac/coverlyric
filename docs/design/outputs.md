@@ -1,6 +1,6 @@
 # Design note: one song, many outputs
 
-Status: proposal for review, no code yet. This is phase 1 of the restructure. Phase 2 adds looks and
+Status: reviewed and accepted; code follows in the four pull requests below. This is phase 1 of the restructure. Phase 2 adds looks and
 presets, phase 3 effect layers, and phase 4 the page.
 
 ## Problem
@@ -116,8 +116,9 @@ start from `case-beat` (phase 2).
 Precomputing, caches and the number of render workers are chosen by coverlyric from the machine (cores,
 free memory) and the song. There is no setting, checkbox or command-line flag for them. Caches
 (onsets, loudness, from phase 3) live in the project folder under `.cache/`, keyed by the audio file's
-size and modification time, and are rebuilt when missing. The `COVERLYRIC_WORKERS` variable, documented
-today, becomes test-only and leaves the user docs (question for review).
+size and modification time. Everything in `.cache/` is derived from the project's own files and is
+rebuilt when missing, so the folder is safe to delete at any time; the user docs say so. The
+`COVERLYRIC_WORKERS` variable, documented today, becomes test-only and leaves the user docs.
 
 ## 일반 and 고급
 
@@ -127,13 +128,15 @@ keys. 일반 gains only the outputs list on 만들기 (above).
 ## Pull requests for phase 1
 
 1. Model and migration: `Project` with outputs, format 2 save with the mirror, load of format 1.
-   Tests: frames identical, round trip, older-reader mirror. No CLI or page change.
+   Tests: frames identical, round trip, older-reader mirror. No CLI or page change. `COVERLYRIC_WORKERS`
+   leaves the cli docs (ko, en).
 2. CLI: `output` commands and `--output`, `make --short`. Docs cli (ko, en).
 3. Page: outputs on 만들기, `/api/output`, 화면 비율 adds or switches. Captures at 1366x768 and 900.
 4. `output import` for existing Short copies, with the line check.
 
-## Questions for review
+## Decided in review
 
-- `anim` and `video` per output (proposed) or per song?
-- Keep the top-level mirror for one release (proposed) or none?
-- `COVERLYRIC_WORKERS` out of the user docs?
+- `anim` and `video` belong to each output.
+- The top-level mirror is written for one release, then dropped.
+- `COVERLYRIC_WORKERS` leaves the user docs.
+- `.cache/` is derived and rebuildable, safe to delete.
