@@ -86,8 +86,7 @@ def encoder() -> str:
     return "libx264"
 
 
-def duration(path: str) -> float:
-    """Length of an audio file in seconds, read from ffmpeg's banner (imageio-ffmpeg ships no ffprobe)."""
+def banner(path: str) -> str:
     run = subprocess.run(
         [ffmpeg(), "-hide_banner", "-i", path],
         capture_output=True,
@@ -97,7 +96,53 @@ def duration(path: str) -> float:
         errors="replace",
         **quiet(),
     )
-    if m := re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", run.stderr):
+    return run.stderr
+
+
+def recording(path: str) -> float | None:
+    """For a file with a moving picture and sound, such as a phone's screen recording, the seconds
+    its sound starts after its picture; None for a sound file (a cover picture in it does not
+    count)."""
+    text = banner(path)
+    moving = [row for row in text.splitlines() if " Video: " in row and "attached pic" not in row]
+    sound = next((row for row in text.splitlines() if " Audio: " in row), None)
+    if not moving or sound is None:
+        return None
+    m = re.search(r"start (-?\d+(?:\.\d+)?)", sound)
+    return float(m[1]) if m else 0.0
+
+
+def sound_only(source: str, target: str) -> None:
+    """The first sound stream of `source` alone, from its own first sample, as FLAC."""
+    run = subprocess.run(
+        [
+            ffmpeg(),
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            source,
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-c:a",
+            "flac",
+            target,
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        **quiet(),
+    )
+    if run.returncode:
+        raise ValueError(f"could not take the sound out of {source}: {run.stderr.strip()[-300:]}")
+
+
+def duration(path: str) -> float:
+    """Length of an audio file in seconds, read from ffmpeg's banner (imageio-ffmpeg ships no ffprobe)."""
+    if m := re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", banner(path)):
         return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
     raise ValueError(f"not an audio file ffmpeg can read: {path}")
 
