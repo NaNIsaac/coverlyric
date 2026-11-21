@@ -150,7 +150,7 @@ and plays it in place of the still.
     line, a progress bar that fills with the song with the time played and the time left, and a row of
     player buttons, which are only drawn. The blurred cover behind is darker and nearer grey. On the
     right the lyrics, left aligned: the line being sung white and bold, the others grey, blurring
-    towards the bottom. The **앨범** (album) field shown then gives "title - Single" when empty, and
+    towards the bottom. The **앨범** (album) field shown then follows the artist; left empty, the artist stands alone, and
     **표지 위 날짜** (date on the cover, such as 2026.06.23) puts a date badge on the cover's top left.
     Tilt, floor shadow, band colour, the title on top and the progress bar option do nothing in the
     player.

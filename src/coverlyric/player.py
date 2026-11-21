@@ -74,9 +74,8 @@ def column(style: Style) -> tuple[int, int, int, int]:
 
 
 def subtitle(song: Song) -> str:
-    """The line under the title: artist, then the album, or the title as a single."""
-    album = song.album or f"{song.title} - Single"
-    return f"{song.artist} — {album}" if song.artist else album
+    """The line under the title: the artist and the album, either alone when the other is empty."""
+    return " — ".join(part for part in (song.artist, song.album) if part)
 
 
 def times(t: float, song: Song) -> tuple[str, str]:
