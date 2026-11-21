@@ -24,7 +24,18 @@ NOTE_TEXT = {
 CHECK = ("unplaced", "doubtful")  # notes that make --strict exit 4; "differs" only reports
 TEXT_KEYS = ("title", "artist", "album", "released")
 STYLE_KEYS = tuple(f.name for f in fields(render.Style))
-COMMANDS = ("render", "still", "project", "auto", "words", "make", "chorus", "align", "sections")
+COMMANDS = (
+    "render",
+    "still",
+    "project",
+    "auto",
+    "words",
+    "make",
+    "chorus",
+    "align",
+    "sections",
+    "srt",
+)
 
 
 class Usage(Exception):
@@ -256,9 +267,58 @@ def edit_lines(project: Project, args: argparse.Namespace) -> list[str]:
         k = line_number(project, n)
         project.lines[k - 1] = (project.lines[k - 1][0], value.strip())
         done.append(f"line {k} text")
+    for item in args.letters or []:
+        done.append(set_letters(project, item))
     if not done:
-        raise Usage("nothing to change: give --shift, --set, --text, --import or --from-lyrics")
+        raise Usage(
+            "nothing to change: give --shift, --set, --text, --letters, --import or --from-lyrics"
+        )
     return done
+
+
+def set_letters(project: Project, item: str) -> str:
+    """Line N's letter times typed by hand, kept with the line's text as it reads now, so they stop
+    counting once the text changes (Project.letter_times)."""
+    n, sep, value = item.partition("=")
+    if not sep:
+        raise Usage(f"--letters takes N=TIME,TIME,...: {item!r}")
+    k = line_number(project, n)
+    text = project.lines[k - 1][1]
+    times = [seconds(x) for x in value.split(",") if x.strip()]
+    if timing.letter_times(text, times) is None:
+        marks = [ch for ch in text if not ch.isspace()]
+        sung = sum(ch.isalnum() for ch in marks)
+        counts = f"{len(marks)}" if sung == len(marks) else f"{len(marks)} or {sung}"
+        raise Usage(
+            f"line {k} takes {counts} times (letters and marks but spaces); got {len(times)}"
+        )
+    entry = {"n": k, "text": text, "times": times}
+    project.letters = sorted(
+        [e for e in project.letters if e.get("n") != k] + [entry], key=lambda e: e["n"]
+    )
+    return f"line {k} letters"
+
+
+def srt_files(project: Project, folder: Path) -> dict:
+    """The song's SRT on the 16:9 video's clock, and for an upright project the short's on its own,
+    each named after its video."""
+    from .server import video_file
+
+    if not any(t is not None for t, _ in project.lines):
+        raise ValueError("no line has a time yet")
+    song = project.song()
+    timed = tuple((t, text) for t, text in project.lines if t is not None)
+    moved, video = render.padded(timed, song, project.style)
+    folder.mkdir(parents=True, exist_ok=True)
+    whole = folder / Path(video_file(project.title, render.Style())).with_suffix(".srt")
+    whole.write_text(timing.to_srt(list(moved), video.duration), encoding="utf-8")
+    out = {"srt": str(whole)}
+    if render.is_upright(project.style):
+        rows, length = tall.cues(project.style, song, project.lines)
+        short = folder / Path(video_file(project.title, project.style)).with_suffix(".srt")
+        short.write_text(timing.srt(rows), encoding="utf-8")
+        out |= {"short_srt": str(short), "short_length": round(length, 3)}
+    return out
 
 
 def video_name(project: Project) -> str:
@@ -579,6 +639,20 @@ def add_commands(sub) -> None:
         "--import", dest="import_file", type=Path, help="lines and times from SRT/LRC/VTT"
     )
     lines.add_argument("--from-lyrics", type=Path, help="new lines from a text file, without times")
+    lines.add_argument(
+        "--letters",
+        action="append",
+        metavar="N=T,T,...",
+        help="line N's letter times: one per letter but spaces, or one per letter and digit",
+    )
+
+    sr = sub.add_parser(
+        "srt",
+        parents=[common],
+        help="the song's SRT, and the short's on its own clock for an upright project",
+    )
+    sr.add_argument("project", type=Path)
+    sr.add_argument("--out", type=Path, help="the folder (default: the project folder)")
 
     strict = argparse.ArgumentParser(add_help=False)
     strict.add_argument(
@@ -655,6 +729,9 @@ def run(args: argparse.Namespace) -> dict:
     if args.command == "sections":
         project, file = load(args.project)
         return loop_sections(project, file, args.length, args.apply)
+    if args.command == "srt":
+        project, _ = load(args.project)
+        return srt_files(project, args.out or project.folder)
     if args.command == "still":
         project, _ = load(args.project)
         out = args.out or project.folder / "still.png"

@@ -810,15 +810,22 @@ def light_at(t: float) -> tuple[int, int]:
     return round(x), round(y)
 
 
-@lru_cache(maxsize=2)
-def light(centre: tuple[int, int]) -> Image.Image:
-    """A soft warm light around centre, to add to a frame: RGB levels, no alpha."""
-    gx = np.exp(-(((np.arange(W) - centre[0]) / LIGHT_SIGMA) ** 2) / 2)
-    gy = np.exp(-(((np.arange(H) - centre[1]) / LIGHT_SIGMA) ** 2) / 2)
+@lru_cache(maxsize=1)
+def whole_light() -> Image.Image:
+    """The light centred on a frame twice the video's size, built once: every frame's light is a
+    window of it (light)."""
+    gx = np.exp(-(((np.arange(2 * W) - W) / LIGHT_SIGMA) ** 2) / 2)
+    gy = np.exp(-(((np.arange(2 * H) - H) / LIGHT_SIGMA) ** 2) / 2)
     glow = np.outer(gy, gx)[..., None] * (np.array([1.0, 0.93, 0.85]) * LIGHT_PEAK)
-    rgba = np.zeros((H, W, 4), np.uint8)
+    rgba = np.zeros((2 * H, 2 * W, 4), np.uint8)
     rgba[..., :3] = np.rint(glow).astype(np.uint8)
     return Image.fromarray(rgba, "RGBA")
+
+
+def light(centre: tuple[int, int]) -> Image.Image:
+    """A soft warm light around centre, to add to a frame: RGB levels, no alpha."""
+    x, y = W - centre[0], H - centre[1]
+    return whole_light().crop((x, y, x + W, y + H))
 
 
 def panel_layer(g: Geometry, style: Style) -> Image.Image:

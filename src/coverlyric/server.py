@@ -250,7 +250,15 @@ class App:
         name, text = self.export(fmt)
         path = self.output / name
         path.write_text(text, encoding="utf-8")
-        return {"path": str(path), "name": name, "folder": str(self.output)}
+        saved = {"path": str(path), "name": name, "folder": str(self.output)}
+        p = self.project
+        if fmt == "srt" and render.is_upright(p.style):
+            # The short's own SRT beside the song's, on the short's clock with its loop lead.
+            rows, _ = tall.cues(p.style, p.song(), p.lines)
+            short = self.output / f"{Path(video_file(p.title, p.style)).stem}.srt"
+            short.write_text(timing.srt(rows), encoding="utf-8")
+            saved |= {"path": f"{path}, {short.name}", "short": str(short)}
+        return saved
 
     def state(self) -> dict:
         data = self.project.to_dict()

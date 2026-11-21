@@ -14,7 +14,7 @@ from functools import lru_cache
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-from . import fonts, render
+from . import fonts, render, timing
 
 SHAPES = render.UPRIGHT
 SUFFIX = {
@@ -22,6 +22,7 @@ SUFFIX = {
     "square": "_1x1",
     "portrait": "_4x5",
 }  # after the title in the file name
+MIN_PIECE = 0.5  # seconds: a line cut this short at the clip's edge stays out of its subtitles
 SAFE_BOTTOM = 0.2  # share of a Short's height covered by the caption and the music line
 SAFE_RIGHT = 120  # px of a Short covered by the like, comment and share buttons
 MARGIN = 60
@@ -111,6 +112,29 @@ def span(style: render.Style, song: render.Song) -> tuple[float, float]:
     last = style.clip_to if style.clip_to > 0 else end
     last = min(max(first, last), end)
     return (first, last) if last > first else (0.0, end)
+
+
+def cues(
+    style: render.Style, song: render.Song, lines: list[timing.Line]
+) -> tuple[list[timing.Cue], float]:
+    """The upright video's subtitles on its own clock, and its length: the clip's lines, then with a
+    loop lead the lead's lines from the LOOP blend on, as the picture shows them. A line cut to
+    MIN_PIECE seconds or less at either edge is left out."""
+    timed = sorted((t, text) for t, text in lines if t is not None)
+    first, last = span(style, song)
+    before = lead(style, song, tuple(timed))
+    parts = [(first, last, 0.0)]
+    if before:
+        end = last - first - LOOP
+        parts = [(first, last - LOOP, 0.0), (first - before, first, end)]
+    out = []
+    for start, stop, at in parts:
+        for a, b, text in timing.cues(timed, song.duration):
+            a1, b1 = max(a, start), min(b, stop)
+            if b1 - a1 > MIN_PIECE + 1e-6:
+                out.append((round(a1 - start + at, 3), round(b1 - start + at, 3), text))
+    start, stop, at = parts[-1]
+    return sorted(out), at + stop - start
 
 
 def loop_length(style: render.Style, song: render.Song) -> float:
