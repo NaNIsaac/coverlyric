@@ -120,18 +120,29 @@ def srt_time(seconds: float) -> str:
     return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
 
 
-def to_srt(lines: list[Line], duration: float | None = None) -> str:
+Cue = tuple[float, float, str]  # one subtitle: start, end, text
+
+
+def cues(lines: list[Line], duration: float | None = None) -> list[Cue]:
     """Each line lasts until the next one starts (at most 8 s); gaps are not written."""
     timed = [(t, text) for t, text in lines if t is not None]
-    out, n = [], 0
+    out = []
     for i, (t, text) in enumerate(timed):
         if not text:
             continue
         nxt = timed[i + 1][0] if i + 1 < len(timed) else (duration or t + 5)
-        end = min(nxt, t + 8)
-        n += 1
-        out.append(f"{n}\n{srt_time(t)} --> {srt_time(end)}\n{text}\n")
-    return "\n".join(out)
+        out.append((t, min(nxt, t + 8), text))
+    return out
+
+
+def srt(rows: list[Cue]) -> str:
+    return "\n".join(
+        f"{n}\n{srt_time(a)} --> {srt_time(b)}\n{text}\n" for n, (a, b, text) in enumerate(rows, 1)
+    )
+
+
+def to_srt(lines: list[Line], duration: float | None = None) -> str:
+    return srt(cues(lines, duration))
 
 
 def ready(lines: list[Line]) -> list[tuple[float, str]]:

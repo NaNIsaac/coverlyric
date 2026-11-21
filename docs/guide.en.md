@@ -112,6 +112,10 @@ The times go into the timing list, where they can be edited.
   few seconds.
 - **LRC로 저장** and **SRT로 저장** save the timing as a file in the save folder and show the path. The
   same files are saved next to each video.
+- For an upright video **SRT로 저장** also saves that video's own subtitles, `<title>_shorts.srt`. Its times
+  count from the start of the part, and with a lead-in at the end (끝에 붙일 앞부분) its line comes last,
+  from the last 0.5 s of the part as in the video. A line that reaches 0.5 s or less into the part at
+  either edge is left out.
 
 ## 4 Decorate (꾸미기)
 
