@@ -77,6 +77,26 @@ def copy_in(source: Path, folder: Path, stem: str) -> str:
     return target.name
 
 
+def song_in(source: Path, folder: Path) -> str:
+    """The song into the project folder. From a video, such as a phone's screen recording, only its
+    sound is kept, from its own start: its sound often starts a little after its picture, and the
+    lyric times must match the song file the user gets, not the video."""
+    if not source.is_file():
+        raise FileNotFoundError(f"no file at {source}")
+    late = media.recording(str(source))
+    if late is None:
+        return copy_in(source, folder, "song")
+    target = folder / "song.flac"
+    if target.exists():
+        raise Usage(f"{target} already exists; use an empty folder for a new project")
+    media.sound_only(str(source), str(target))
+    say(
+        f"{source.name} is a video: kept its sound alone as {target.name}"
+        + (f", which starts {late:.2f} s after the picture" if late > 0.005 else "")
+    )
+    return target.name
+
+
 def lines_from(path: Path, clean: bool) -> list[timing.Line]:
     found = timing.parse(path.name, path.read_text(encoding="utf-8-sig"), clean)
     if not found:
@@ -99,7 +119,7 @@ def new_project(
             f"{folder} already holds a project; change it with 'project set/lines'"
         )
     project = Project(folder, title=title or audio.stem, artist=artist, clean_tags=clean)
-    project.audio = copy_in(audio, folder, "song")
+    project.audio = song_in(audio, folder)
     project.art = copy_in(cover, folder, "cover")
     project.duration = media.duration(project.path(project.audio))
     if lyrics:
