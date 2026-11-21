@@ -79,6 +79,8 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `project lines <project> --shift -0.3` | Moves every timed line. |
 | `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
 | `project lines <project> --import <subtitles>` / `--from-lyrics <file>` | Lines and times again from a subtitle file, or lines without times from a lyrics file. |
+| `project lines <project> --letters 5=72.4,72.7,73.1` | Sets when each letter of line 5 is sung, saved in `letters` (used by `highlight=letter`). One time per letter or mark but spaces, or one per letter and digit (a mark takes the time of the letter before it). Once the line's text changes, the times are no longer used. |
+| `srt <project> [--out <folder>]` | Saves the whole song's `<title>.srt` on the 16:9 video's clock and, for an upright project, that video's `<title>_shorts.srt`. The upright video's times count from the start of its part; with a lead-in at the end (`loop_lead`) its line comes last. The default folder is the project folder. |
 | `auto <project> [--model ..] [--apply] [--strict]` | Listens to the song and times each line. Shows the result and the lines to check; `--apply` saves it into the project. |
 | `words <song or project> --from 1:10 --to 1:20 [--model ..]` | The words heard in that stretch with their start and end times, for timing a line that was not found. |
 | `render <project> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | Makes the video. A whole video also gets `.srt`, `.lrc` and `.png` beside it. The default name is `<title>.mp4` in the project folder. |
