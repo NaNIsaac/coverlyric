@@ -66,7 +66,7 @@ def test_out_of_memory(error, memory):
 def fake_encode(monkeypatch, fails: int, error=None):
     calls, notes = [], []
 
-    def encode(out, lines, song, style, workers, span, report, codec, quick, shared):
+    def encode(out, lines, song, style, workers, span, report, codec, quick, shared, lead=0.0):
         calls.append((workers, shared, bool(song.anim)) + ((720,) if style.height == 720 else ()))
         if len(calls) <= fails:
             raise error or paging_error()

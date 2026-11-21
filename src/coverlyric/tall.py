@@ -38,6 +38,7 @@ BAND_PAD = (30, 16)
 BARS_MOST = 0.25  # a band takes at most this share of the height
 CHANGE = 0.3  # seconds a new line takes to move up into the middle
 LOOP = 0.5  # seconds of the end that blend into the moments before the start
+LEAD_OUT, LEAD_IN = 0.9, 0.45  # loop_lead: the clip's fade out and the lead's fade in, seconds
 MAX_BLOCK = 8  # the longest block of lines 후렴 찾기 compares
 AUDIO_FADE = 0.3
 # highlight=letter: only the letter being sung is lit, in HIGHLIGHT and LETTER_POP times its size,
@@ -120,6 +121,35 @@ def loop_length(style: render.Style, song: render.Song) -> float:
     first, _ = span(style, song)
     length = min(LOOP, first)
     return length if length >= 0.05 else 0.0
+
+
+def lead(style: render.Style, song: render.Song, lines: tuple[tuple[float, str], ...]) -> float:
+    """How much of the song before the clip a looping Short ends with (loop_lead): loop_lead
+    seconds, or with loop_lead_line the line sung just before the clip (from its start to the
+    clip's), kept inside the song. 0 without a loop, over the user's video, or when it would be no
+    longer than the LOOP blend, which then joins the end to the start as before."""
+    if not style.loop or song.video:
+        return 0.0
+    first, _ = span(style, song)
+    length = style.loop_lead
+    if style.loop_lead_line:
+        before = [start for start, text in lines if start < first - 1e-3 and text]
+        length = first - before[-1] if before else 0.0
+    length = min(max(0.0, length), first)
+    return length if length > LOOP + 1e-3 else 0.0
+
+
+def lead_graph(length: float, lead: float) -> str:
+    """ffmpeg's audio filter for a loop lead-in: input 1 is the clip, `length` seconds, input 2
+    the `lead` seconds before it. The clip fades out over its last LEAD_OUT seconds; the lead comes
+    in LOOP seconds before the clip's end, fading in over LEAD_IN, and plays to its end, which is the
+    sample before the clip's first. Neither the file's start nor its end fades."""
+    start = length - LOOP
+    return (
+        f"[1:a]afade=t=out:st={max(0.0, length - LEAD_OUT):.3f}:d={LEAD_OUT}[end];"
+        f"[2:a]afade=t=in:st=0:d={LEAD_IN},adelay={round(start * 1000)}:all=1[before];"
+        "[end][before]amix=inputs=2:duration=longest:normalize=0[sound]"
+    )
 
 
 def loop_graph(length: float, overlap: float) -> str:
@@ -474,8 +504,33 @@ class Painter:
         if self.disc:
             self.make_disc()
         self.overlap = loop_length(style, song)
+        # With a lead the clip goes on past its end into the song before its start, `lead` seconds
+        # less the LOOP blend; lines after the clip never show, not even as the next line.
+        self.lead = lead(style, song, lines)
+        if self.lead:
+            self.overlap = LOOP
+            self.lines = tuple(
+                (start, text) if start < self.span[1] else (start, "") for start, text in self.lines
+            )
+        self.lead = self.lead or self.overlap
         self.last: tuple = (None, b"")
         self.fps = render.rate(style)
+        if self.disc:
+            # Whole turns over the whole video, so a loop meets itself.
+            first, last = self.span
+            whole = last - first + self.lead - self.overlap
+            self.turns = max(1, round(whole / style.spin)) if style.spin > 0 else 0
+
+    def length(self) -> float:
+        """The video's length: the clip, and the lead less the blend."""
+        first, last = self.span
+        return last - first + self.lead - self.overlap
+
+    def before(self, t: float) -> float:
+        """The song time shown after t in the blend at the clip's end: from `lead` seconds before the
+        clip, reaching the clip's start at the video's end."""
+        first, last = self.span
+        return first - self.lead + (t - (last - self.overlap))
 
     def make_disc(self) -> None:
         """The disc, its shadow and veil, and the bands drawn over it, made once."""
@@ -497,13 +552,11 @@ class Painter:
         if fr.bar:
             self.bars = Image.new("RGBA", (fr.w, fr.h), (0, 0, 0, 0))
             draw_bars(self.bars, style, fr)
-        # Whole turns over the clip, nearest one per style.spin seconds, so a loop meets itself.
-        first, last = self.span
-        self.turns = max(1, round((last - first) / style.spin)) if style.spin > 0 else 0
 
     def turn(self, t: float) -> float:
-        first, last = self.span
-        return 360 * self.turns * (t - first) / (last - first) if self.turns else 0.0
+        """The disc's turn at the video's own time t (song time while the clip plays)."""
+        first, _ = self.span
+        return 360 * self.turns * (t - first) / self.length() if self.turns else 0.0
 
     def disc_layer(self) -> Image.Image:
         """The disc look's background: the blurred cover, and the title and the artist in the room
@@ -528,13 +581,13 @@ class Painter:
                 render.lettered(d, (fr.w / 2, mid + 40), song.artist, artist, 175, self.ink, 0.18)
         return img
 
-    def background(self, t: float) -> Image.Image:
+    def background(self, t: float, clock: float | None = None) -> Image.Image:
         img = self.base.copy()
         if not self.disc:
             return img
         x, y = self.disc_at
         img.alpha_composite(self.shade, (x - 80, y - 80))
-        turn = self.turn(t)
+        turn = self.turn(t if clock is None else clock)
         cd = self.cd.at(turn)
         cd.alpha_composite(self.veil)
         # The wear catches the light over the darkened disc, so it stays visible.
@@ -588,17 +641,19 @@ class Painter:
     def state(self, t: float) -> tuple:
         state = self.lyric_state(t)
         if self.overlap:
-            first, last = self.span
-            if t > last - self.overlap:
+            _, last = self.span
+            if t >= last:
+                state = ((), self.lyric_state(self.before(t)), self.fps)
+            elif t > last - self.overlap:
                 u = round((t - (last - self.overlap)) / self.overlap * self.fps)
-                state = (state, self.lyric_state(first - (last - t)), u)
+                state = (state, self.lyric_state(self.before(t)), u)
         if self.disc and self.turns:
             return (state, round(t * self.fps))
         return state
 
-    def plain(self, t: float) -> Image.Image:
+    def plain(self, t: float, clock: float | None = None) -> Image.Image:
         fr = self.frame
-        img = self.background(t)
+        img = self.background(t, clock)
         spots = layout(t, self.lines, self.song, self.style)
         layer = Image.new("RGBA", (fr.w, fr.h), (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
@@ -628,13 +683,16 @@ class Painter:
         return img
 
     def image(self, t: float, state: tuple | None = None) -> Image.Image:
-        img = self.plain(t)
+        """The frame at the video's own time t: the song's moment t while the clip plays, then in
+        the blend and the lead the moment before the clip that leads into its start."""
         if self.overlap:
-            first, last = self.span
+            _, last = self.span
+            if t >= last:
+                return self.plain(self.before(t), t)
             if t > last - self.overlap:
                 u = min(1.0, (t - (last - self.overlap)) / self.overlap)
-                img = Image.blend(img, self.plain(first - (last - t)), u)
-        return img
+                return Image.blend(self.plain(t), self.plain(self.before(t), t), u)
+        return self.plain(t)
 
     def raw(self, t: float) -> bytes:
         state = self.state(t)
