@@ -415,6 +415,34 @@ def pop(t: float, times: tuple[float, ...], j: int) -> float:
     return round(1 + (LETTER_POP - 1) * ease(u), 2)
 
 
+def marked_by(row: str, first: int) -> list[int | None]:
+    """For each character of `row`, the number (counted from `first`, spaces left out) of the letter
+    whose time and size it takes: a letter or digit its own; a mark the letter before it in the same
+    word, or for an opening mark the one after it; a mark standing alone between spaces None."""
+    numbers, j = [], first
+    for ch in row:
+        numbers.append(None if ch == " " else j)
+        j += ch != " "
+    out: list[int | None] = []
+    for k, ch in enumerate(row):
+        if ch == " " or ch.isalnum():
+            out.append(numbers[k])
+            continue
+        left = k - 1
+        while left >= 0 and row[left] != " " and not row[left].isalnum():
+            left -= 1
+        right = k + 1
+        while right < len(row) and row[right] != " " and not row[right].isalnum():
+            right += 1
+        if left >= 0 and row[left] != " ":
+            out.append(numbers[left])
+        elif right < len(row) and row[right] != " ":
+            out.append(numbers[right])
+        else:
+            out.append(None)
+    return out
+
+
 def letters(
     d: ImageDraw.ImageDraw,
     part: dict,
@@ -426,7 +454,8 @@ def letters(
     lit: render.Style,
 ) -> None:
     """A line letter by letter, centred on cx: the letter being sung in `lit` and grown, the rest in
-    `ink`. Rows are centred on their width at that moment, so a grown letter pushes the others aside."""
+    `ink`. A mark touching a letter goes with it (marked_by). Rows are centred on their width at that
+    moment, so a grown letter pushes the others aside."""
     face = fonts.resolve(ink.font)
     f = render.font(face, part["size"], part["weight"])
     track = f.size * render.TRACKING
@@ -434,15 +463,17 @@ def letters(
     j = 0
     for r, row in enumerate(part["rows"]):
         y = part["centre"] + (r - (len(part["rows"]) - 1) / 2) * pitch
+        owner = marked_by(row, j)
         cells = []
-        for ch in row:
+        for k, ch in enumerate(row):
             if ch == " ":
                 cells.append((ch, f, f.getlength(ch), False))
                 continue
-            sung = j < len(times) and ch.isalnum()
-            s = pop(t, times, j) if sung else 1.0
+            n = owner[k]
+            sung = n is not None and n < len(times)
+            s = pop(t, times, n) if sung else 1.0
             cf = render.font(face, part["size"] * s, part["weight"]) if s > 1 else f
-            cells.append((ch, cf, cf.getlength(ch), sung and times[j] <= t < later(times, j)))
+            cells.append((ch, cf, cf.getlength(ch), sung and times[n] <= t < later(times, n)))
             j += 1
         x = cx - (sum(c[2] for c in cells) + track * (len(cells) - 1)) / 2
         for ch, cf, width, on in cells:

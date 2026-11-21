@@ -300,6 +300,9 @@ line.
   a shadow and no band; only the letter being sung is yellow (#ffd23f) and 1.3 times its size, and goes
   back to white at its size when the next letter starts. The letter times come from `letters` in the
   project file ([command line](cli.en.md)). A line without letter times is drawn all white.
+  A punctuation mark touching a letter (`냥,` `있어?` `'반`) lights and grows with it: with the letter
+  before it, or for an opening mark the one after it. A mark standing alone between spaces stays as
+  it is. Lyrics over a video do the same.
 
 **위아래 띠** (bands): off at first; switching them on shows their fields.
 

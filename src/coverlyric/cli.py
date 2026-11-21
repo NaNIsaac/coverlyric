@@ -141,6 +141,7 @@ def new_project(
 
 def show(project: Project, file: Path) -> dict:
     notes = {note["n"]: note for note in project.notes}
+    repaired = {e["n"]: e["repaired"] for e in project.letters if e.get("repaired")}
     default = render.Style().to_dict()
     rows = []
     for n, (t, text) in enumerate(project.lines, 1):
@@ -149,6 +150,8 @@ def show(project: Project, file: Path) -> dict:
             row["note"] = notes[n]["kind"]
             if notes[n].get("heard"):
                 row["heard"] = notes[n]["heard"]
+        if n in repaired:
+            row["letters"] = f"repaired ({repaired[n]})"
         rows.append(row)
     return {
         "project": str(file),
@@ -183,6 +186,8 @@ def show_text(data: dict) -> str:
         if "note" in row:
             note = f"   [{NOTE_TEXT.get(row['note'], row['note'])}"
             note += f": {row['heard']}]" if row.get("heard") else "]"
+        if "letters" in row:
+            note += f"   [letter times {row['letters']}]"
         out.append(f"{row['n']:3d}  {clock(row['time']):>9}  {row['text']}{note}")
     return "\n".join(out)
 
@@ -267,6 +272,14 @@ def edit_lines(project: Project, args: argparse.Namespace) -> list[str]:
         project.lines = lines_from(args.import_file, project.clean_tags)
         project.notes = []
         done.append(f"times from {args.import_file.name}")
+    if args.import_file or args.from_lyrics:
+        # Letter times hang on a line's number and text; after new lines, keep only those that fit.
+        project.letters = [
+            e
+            for e in project.letters
+            if 1 <= e.get("n", 0) <= len(project.lines)
+            and project.lines[e["n"] - 1][1] == e.get("text")
+        ]
     if args.shift:
         by = seconds(args.shift)
         project.lines = [(None if t is None else max(0.0, t + by), x) for t, x in project.lines]
@@ -565,9 +578,25 @@ def align_letters(project: Project, file: Path, start: str | None, end: str | No
     first = seconds(start) if start else first
     last = seconds(end) if end else (last or song.duration)
     found = align.align(song.audio, project.lines, first, last, note=say)
+    heard: list[tuple[float, str]] = []
+    _, wrong = align.repaired(found, project.lines)
+    if wrong and importlib.util.find_spec("faster_whisper"):
+        # The heard words place the letters of a line the aligner got wrong better than an even spread.
+        say(f"{len(wrong)} lines look wrong; listening for their words")
+        words, _ = hear(song.audio, "small", (first, last))
+        heard = [(w["start"], w["word"].strip()) for w in words]
+    found, fixed = align.repaired(found, project.lines, heard)
+    if fixed:
+        say(f"repaired the letter times of {len(fixed)} lines: " + ", ".join(
+            f"{e['n']} ({e['repaired']})" for e in fixed))  # fmt: skip
     project.letters = align.merged(project.letters, found)
     project.save(file)
-    return {"aligned": [e["n"] for e in found], "from": first, "to": last}
+    return {
+        "aligned": [e["n"] for e in found],
+        "repaired": [e["n"] for e in fixed],
+        "from": first,
+        "to": last,
+    }
 
 
 def loop_sections(project: Project, file: Path, length: float, apply: int | None) -> dict:
