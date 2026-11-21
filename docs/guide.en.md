@@ -186,6 +186,9 @@ and plays it in place of the still.
     title and the artist fade in large where the lyric panel is, around the middle of the intro, and
     fade out before the lyrics come in. When they come and go stretches with the length of the intro.
     On by default.
+  - **제목 글씨 그림** (title lettering): a picture of the title lettered by hand (dark lettering on
+    white or on clear; png, jpg, webp) takes the place of the typed title in a long intro, in the
+    title's light grey, with the artist under it. **빼기** goes back to the typed title.
   - **시작 제목 화면** (opening title card; none, 2-5 s): the title and the artist fill the middle of
     the frame at the start, then fade into the usual frame over 0.8 s; the first lyric ends it sooner.
     It uses the lyric colour and edge.

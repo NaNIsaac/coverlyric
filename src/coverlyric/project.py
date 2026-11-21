@@ -25,6 +25,7 @@ class Project:
     style: Style = field(default_factory=Style)
     anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
     video: str = ""  # the user's own video under the lyrics, in place of the cover
+    title_image: str = ""  # lettering of the title, drawn in its place in the opening panel
     clean_tags: bool = True  # lyrics put in lose [..] notes and # lines (timing.sung)
     # What automatic timing said about a line: {"n": line number from 1, "kind": unplaced | doubtful
     # | differs, "heard": the words heard, for differs}. Kept so a later look can list them.
@@ -54,6 +55,7 @@ class Project:
             style=Style.from_dict(data.get("style", {})),
             anim=[str(name) for name in data.get("anim", [])],
             video=str(data.get("video", "")),
+            title_image=str(data.get("title_image", "")),
             clean_tags=bool(data.get("clean_tags", True)),
             notes=[dict(note) for note in data.get("notes", [])],
             letters=[dict(entry) for entry in data.get("letters", [])],
@@ -72,6 +74,7 @@ class Project:
             "style": self.style.to_dict(),
             "anim": list(self.anim),
             "video": self.video,
+            "title_image": self.title_image,
             "clean_tags": self.clean_tags,
             "notes": list(self.notes),
             "letters": list(self.letters),
@@ -95,6 +98,7 @@ class Project:
             duration=duration,
             anim=tuple(self.path(name) for name in self.anim),
             video=self.path(self.video),
+            title_image=self.path(self.title_image),
             letters=self.letter_times(),
             album=self.album,
             released=self.released,
