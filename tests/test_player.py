@@ -67,9 +67,10 @@ def test_the_silences_do_not_count():
 
 def test_the_line_under_the_title():
     song = render.Song("a.wav", "c.png", "아리랑", artist="민요")
-    assert player.subtitle(song) == "민요 — 아리랑 - Single"
+    assert player.subtitle(song) == "민요", "no album: the artist only"
     assert player.subtitle(replace(song, album="옛 노래")) == "민요 — 옛 노래"
-    assert player.subtitle(replace(song, artist="")) == "아리랑 - Single"
+    assert player.subtitle(replace(song, artist="", album="옛 노래")) == "옛 노래"
+    assert player.subtitle(replace(song, artist="")) == ""
 
 
 def test_an_empty_date_has_no_badge(demo):

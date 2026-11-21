@@ -135,6 +135,10 @@ class Style:
     tail: float = 0.0  # seconds of silence after the song ends
     shape: str = "wide"  # wide (16:9) or one of UPRIGHT: tall (9:16), square (1:1), portrait (4:5)
     loop: bool = False  # upright: the end blends into the start, so it repeats without a seam
+    # upright loop: the video ends with this many seconds of the song before clip_from, so its last
+    # moment runs into its first (tall.lead); with loop_lead_line, the line sung just before the clip.
+    loop_lead: float = 0.0
+    loop_lead_line: bool = False
     clip_from: float = 0.0  # upright: the part of the song the video holds, in song seconds
     clip_to: float = 0.0  # 0 is the end of the song
     bars: bool = False  # upright: solid bands across the top and the bottom
@@ -1486,8 +1490,11 @@ def render(
 
         # A Short is the clip at 1080x1920 without the moving picture; there is no smaller size.
         song = replace(song, anim=())
+        # Only the whole clip ends with the lead, not a part of it to look at.
+        lead = tall.lead(style, song, lines) if span is None else 0.0
         span = span or tall.span(style, song)
     else:
+        lead = 0.0
         lines, song = padded(lines, song, style)
     smaller = not quick and not upright and not HEIGHTS.get(style.height)
     tries = steps(workers, bool(song.anim), smaller)
@@ -1496,13 +1503,13 @@ def render(
         look = replace(style, height=720) if small else style
         try:
             try:
-                encode(out, lines, part, look, count, span, report, codec, quick, shared)
+                encode(out, lines, part, look, count, span, report, codec, quick, shared, lead)
             except RuntimeError:
                 if codec == "libx264":
                     raise
                 # A graphics driver can pass the short test and still fail on a whole song.
                 codec = "libx264"
-                encode(out, lines, part, look, count, span, report, codec, quick, shared)
+                encode(out, lines, part, look, count, span, report, codec, quick, shared, lead)
             told = [ANIM_DROPPED] if song.anim and not moving else []
             return " ".join([*told, SMALLER] if small else told)
         except Exception as e:
@@ -1645,10 +1652,17 @@ def encode(
     codec: str,
     quick: bool = False,
     shared: bool = True,
+    lead: float = 0.0,
 ) -> None:
     first, last = (0.0, song.duration) if span is None else span
     fps = rate(style)
-    begin, total = round(first * fps), math.ceil(last * fps)
+    end = last
+    if lead:
+        from . import tall
+
+        end = last + lead - tall.LOOP  # past the clip's end by the lead less the blend (tall.lead)
+    length = end - first
+    begin, total = round(first * fps), math.ceil(end * fps)
     step = QUICK_STEP if quick else 1
     vf, af = fades(style, song.duration, first, last)
     # The audio's own clock is behind the video's by song.lead; the silence before it is a delay and
@@ -1676,6 +1690,14 @@ def encode(
         overlap = tall.loop_length(style, song)
     if song.video and style.video_sound:
         overlap = 0.0  # the video's own sound has no moments before the clip to mix in
+    if lead:
+        from . import tall
+
+        # The song before the clip comes in under the clip's end and plays to the sample before the
+        # clip's first; no fade at the file's start or end (tall.lead_graph).
+        before = ["-ss", f"{max(0.0, heard - lead):.3f}", "-t", f"{lead:.3f}", "-i", song.audio]
+        graph = tall.lead_graph(last - first, lead)
+        sound, audio, overlap = ["-map", "[sound]"], ["-filter_complex", graph], 0.0
     if overlap:
         # The moments before the clip, mixed into its end (tall.loop_graph); the fade in stays on
         # the start, which the end now leads into.
@@ -1743,7 +1765,7 @@ def encode(
         "-b:a",
         "192k",
         "-t",
-        f"{last - first:.3f}",
+        f"{length:.3f}",
         "-movflags",
         "+faststart",
         str(out),
