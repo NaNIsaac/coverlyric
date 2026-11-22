@@ -1,6 +1,6 @@
 # Design note: one song, many outputs
 
-Status: reviewed and accepted; code follows in the four pull requests below. This is phase 1 of the restructure. Phase 2 adds looks and
+Status: reviewed and accepted; built in the four pull requests below. This is phase 1 of the restructure. Phase 2 adds looks and
 presets, phase 3 effect layers, and phase 4 the page.
 
 ## Problem

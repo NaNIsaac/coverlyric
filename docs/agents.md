@@ -81,6 +81,16 @@ uv run coverlyric project set songs/demo lead=1 tail=2 height=720 fps=30 fade=on
 `lead` and `tail` are seconds of silence before and after the song in the video; the lyric times in
 the project stay song times. An unknown key fails with exit 2 and lists the keys.
 
+## Join a Short kept as its own project
+
+```sh
+uv run coverlyric output import songs/demo songs/demo-short --json
+```
+
+The other project's current output is added and becomes current; `imported` is its id here. Lines and
+letter times must be the same: otherwise exit 2, with one row in `error` for each line that differs,
+and nothing changed. `not_imported` names the song fields that differ; this project's are kept.
+
 ## Check one frame, then render
 
 ```sh

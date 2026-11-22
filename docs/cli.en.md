@@ -89,6 +89,7 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `output list <project>` | The videos made from the song (outputs): id, shape, part, file name, and which one is current. |
 | `output show <project> [ID]` | One output's look settings and the lines, like `project show`. |
 | `output add <project> ID [--from ID] [--shape tall]` | A new output copied from another one (default: the current one), its shape changed (`wide`, `tall`, `square`, `portrait`). It becomes the current one. An id is lowercase letters, digits and `-`. A second output of one shape gets `-2` in its file name (`<title>_shorts-2.mp4`). |
+| `output import <project> <other project>` | Adds the current output of another project of the same song (a Short made as a copy of the folder, say) and makes it the current one. The lines and letter times must be the same; otherwise it lists the lines that differ and changes nothing (exit 2). The moving picture, the video and a font kept in that folder are copied in, and no file here is replaced. Title, artist, album, date, song, cover and title picture stay this project's; `not_imported` names the ones that differ. The other project is left as it is. |
 | `output use <project> ID` / `output remove <project> ID` | Makes an output the current one, or removes it (not the last one). Its files stay. |
 
 Lines and letter times belong to the song and every output uses them; the look settings, the

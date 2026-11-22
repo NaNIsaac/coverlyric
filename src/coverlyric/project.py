@@ -75,6 +75,16 @@ class Project:
         want = self.chosen or self.current
         return next((o for o in self.outputs if o.id == want), self.outputs[0])
 
+    def free_id(self, shape: str) -> str:
+        """An id no output has, for a new one of `shape`: its first id, else that with -2, -3, ..."""
+        taken = {o.id for o in self.outputs}
+        base = new = FIRST_ID.get(shape, "wide")
+        n = 1
+        while new in taken:
+            n += 1
+            new = f"{base}-{n}"
+        return new
+
     def nth(self) -> int:
         """Which output of its shape the current one is, from 1, for its file name."""
         shape = self.style.shape
