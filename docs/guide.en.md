@@ -186,6 +186,9 @@ and plays it in place of the still.
     title and the artist fade in large where the lyric panel is, around the middle of the intro, and
     fade out before the lyrics come in. When they come and go stretches with the length of the intro.
     On by default.
+  - **제목 글씨 그림** (title lettering): a picture of the title lettered by hand (dark lettering on
+    white or on clear; png, jpg, webp) takes the place of the typed title in a long intro, in the
+    title's light grey, with the artist under it. **빼기** goes back to the typed title.
   - **시작 제목 화면** (opening title card; none, 2-5 s): the title and the artist fill the middle of
     the frame at the start, then fade into the usual frame over 0.8 s; the first lyric ends it sooner.
     It uses the lyric colour and edge.
@@ -300,6 +303,9 @@ line.
   a shadow and no band; only the letter being sung is yellow (#ffd23f) and 1.3 times its size, and goes
   back to white at its size when the next letter starts. The letter times come from `letters` in the
   project file ([command line](cli.en.md)). A line without letter times is drawn all white.
+  A punctuation mark touching a letter (`냥,` `있어?` `'반`) lights and grows with it: with the letter
+  before it, or for an opening mark the one after it. A mark standing alone between spaces stays as
+  it is. Lyrics over a video do the same.
 
 **위아래 띠** (bands): off at first; switching them on shows their fields.
 

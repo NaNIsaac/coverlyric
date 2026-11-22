@@ -675,6 +675,7 @@ function fillLook() {
   $("bar").checked = s.bar;
   $("fade").checked = s.fade;
   for (const key of ["opening", "drift"]) $(key).checked = s[key];
+  $("title-image-clear").hidden = !state.has_title_image;
   $("height").value = String(s.height);
   $("fps").value = String(s.fps);
   $("lead").value = String(s.lead);
@@ -1876,6 +1877,16 @@ function bind() {
   $("video-file").addEventListener("change", async (e) => {
     await upload("video", e.target.files[0]);
     e.target.value = "";
+  });
+  $("title-image-file").addEventListener("change", async (e) => {
+    await upload("title", e.target.files[0]);
+    e.target.value = "";
+  });
+  $("title-image-clear").addEventListener("click", async () => {
+    try {
+      state = await (await api("/api/state", { method: "POST", body: JSON.stringify({ ...payload(), title_image: "" }) })).json();
+      fillAll();
+    } catch (e) { toast(e.message); }
   });
   $("video-clear").addEventListener("click", async () => {
     try {

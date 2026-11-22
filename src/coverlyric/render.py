@@ -101,6 +101,7 @@ class Style:
     dim: float = 0.5
     spin: float = 7.0  # seconds per turn of the case's CD; 0 keeps it still
     show_cd: bool = True  # the case layout's CD half out of the case
+    case_haze: float = 0.15  # 0 to 1: the case's plastic greys and softens what shows through it
     album_x: int = 0
     album_y: int = 0
     album_scale: float = 1.0
@@ -192,7 +193,8 @@ class Song:
     tail: float = 0.0  # seconds of silence after the audio; in duration
     # When each letter is sung, per line: (line start, line text, one time per letter but spaces).
     letters: tuple[tuple[float, str, tuple[float, ...]], ...] = ()
-    album: str = ""  # the player look's line under the title; empty: the title as a single
+    album: str = ""  # the player look's line under the title, after the artist
+    title_image: str = ""  # the title as lettered by hand (dark ink), for the opening panel
     released: str = ""  # the player look's badge on the cover, as typed (2026.06.23); empty: none
 
 
@@ -423,6 +425,24 @@ def boxes(
 
 def overlaps(a: tuple[int, ...], b: tuple[int, ...]) -> bool:
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+MILK = (196, 200, 206, 255)  # the colour the case's plastic greys things towards
+
+
+def haze(img: Image.Image, box: tuple[int, ...], amount: float) -> None:
+    """What lies under the case in box, softened by 1.2 px and greyed by `amount` towards MILK, as
+    clear plastic does; the cover is laid on after, so this shows only around it."""
+    x0, y0 = max(0, box[0]), max(0, box[1])
+    x1, y1 = min(img.width, box[2]), min(img.height, box[3])
+    if amount <= 0 or x1 <= x0 or y1 <= y0:
+        return
+    under = img.crop((x0, y0, x1, y1)).filter(ImageFilter.GaussianBlur(1.2))
+    under = Image.blend(under, Image.new("RGBA", under.size, MILK), min(amount, 1.0))
+    mask = Image.new("L", (box[2] - box[0], box[3] - box[1]), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, mask.width - 1, mask.height - 1), 6, fill=255)
+    mask = mask.crop((x0 - box[0], y0 - box[1], x1 - box[0], y1 - box[1]))
+    img.paste(under, (x0, y0), mask)
 
 
 def place(dst: Image.Image, src: Image.Image, x: int, y: int) -> None:
@@ -770,10 +790,47 @@ def opening_panel(song: Song, style: Style) -> Image.Image:
         rows.append((song.artist, font(face, 32 * k * SS, 400), 180, 0.14, 86 * k * SS))
     top = ph / 2 - rows[-1][4] / 2
     ink = hex_rgb(style.lyric_colour)
+    if song.title_image and (
+        lettering := title_lettering(song.title_image, 0.42 * ph, room, shade(ink, 210))
+    ):
+        # The lettering in the title's place, the artist under it as under the title.
+        gap = 70 * k * SS if song.artist else 0
+        top = (ph - lettering.height - gap) / 2
+        layer.alpha_composite(lettering, (round((pw - lettering.width) / 2), round(top)))
+        rows = [(*row[:4], 0.0) for row in rows[1:]]
+        top += lettering.height + 0.6 * gap
     for text, f, level, tracking, dy in rows:
-        grey = "#{:02x}{:02x}{:02x}".format(*(round(c * level / 255) for c in ink))
+        grey = "#{:02x}{:02x}{:02x}".format(*shade(ink, level))
         lettered(d, (pw / 2, top + dy), text, f, 255, replace(style, lyric_colour=grey), tracking)
     return layer.reduce(SS)
+
+
+def shade(ink: tuple[int, int, int], level: int) -> tuple[int, int, int]:
+    return tuple(round(c * level / 255) for c in ink)
+
+
+def title_lettering(
+    path: str, height: float, width: float, colour: tuple[int, int, int]
+) -> Image.Image | None:
+    """Dark lettering on white or on clear, as `colour` on clear: its darkness is the ink, cut to the
+    ink and scaled to fit height and width. None when the file cannot be read or holds no ink."""
+    try:
+        with Image.open(path) as picture:
+            src = picture.convert("RGBA")
+    except (OSError, SyntaxError, Image.DecompressionBombError):
+        return None
+    ink = ImageChops.multiply(ImageOps.invert(src.convert("L")), src.getchannel("A"))
+    box = ink.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box:
+        return None
+    ink = ink.crop(box)
+    scale = min(height / ink.height, width / ink.width)
+    ink = ink.resize(
+        (max(1, round(ink.width * scale)), max(1, round(ink.height * scale))), Image.LANCZOS
+    )
+    out = Image.new("RGBA", ink.size, (*colour, 255))
+    out.putalpha(ink)
+    return out
 
 
 def faded(layer: Image.Image, share: float) -> Image.Image:
@@ -1256,6 +1313,7 @@ class Painter:
         stamped = stamp(song.art)
         bg, face, case = scene(song, style, stamped)
         self.disc = self.case = self.turns = self.over = None
+        self.hazed = 0.0  # case_haze where it applies: a tilted case keeps its plastic clear
         self.timing = self.pictures = None
         if moving:
             self.timing, self.pictures = moving[1], anim.Shared(*moving)
@@ -1277,12 +1335,14 @@ class Painter:
                 case_only = (self.tilt.apply(self.case_flat), *self.tilt.box[:2])
             else:
                 case_only = (self.case, *self.case_at)
+                self.hazed = style.case_haze
             if style.show_cd:
                 self.disc = Disc(face, g.disc_r)
             elif tucked:
                 self.over = case_only
             else:
                 bg = bg.copy()
+                haze(bg, g.case, self.hazed)
                 place(bg, *case_only)
         elif tucked:
             bg, disc, at = round_album(song, style, stamped)
@@ -1296,6 +1356,7 @@ class Painter:
             self.turns = Turns(shared, *turning)
             # Outside the CD's box a turning frame is the background and the case, always.
             self.still = bg.copy()
+            haze(self.still, g.case, self.hazed)
             place(self.still, *case_only)
         self.last: tuple = (None, b"")
 
@@ -1381,6 +1442,7 @@ class Painter:
                 place(img, self.tilt.apply(flat, part), part[0] - origin[0], part[1] - origin[1])
             return
         place(img, self.disc.at(turn), x - g.disc_r - origin[0], cy - g.disc_r - origin[1])
+        haze(img, offset_box(g.case, -origin[0], -origin[1]), self.hazed)
         place(img, self.case, self.case_at[0] - origin[0], self.case_at[1] - origin[1])
 
     def cd_box(self, x: int, turn: float, box: tuple[int, ...]) -> Image.Image:
