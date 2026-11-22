@@ -159,10 +159,10 @@ def safe_name(name: str) -> str:
     return name or "가사영상"
 
 
-def video_file(title: str, style: render.Style) -> str:
+def video_file(title: str, style: render.Style, nth: int = 1) -> str:
     """The video's file name: the title, with _shorts, _1x1 or _4x5 for an upright shape so it
-    does not replace the wide video."""
-    return f"{safe_name(title)}{tall.SUFFIX.get(style.shape, '')}.mp4"
+    does not replace the wide video, and -2, -3 for the second and third output of one shape."""
+    return f"{safe_name(title)}{tall.SUFFIX.get(style.shape, '')}{f'-{nth}' if nth > 1 else ''}.mp4"
 
 
 class App:
@@ -255,7 +255,7 @@ class App:
         if fmt == "srt" and render.is_upright(p.style):
             # The short's own SRT beside the song's, on the short's clock with its loop lead.
             rows, _ = tall.cues(p.style, p.song(), p.lines)
-            short = self.output / f"{Path(video_file(p.title, p.style)).stem}.srt"
+            short = self.output / f"{Path(video_file(p.title, p.style, p.nth())).stem}.srt"
             short.write_text(timing.srt(rows), encoding="utf-8")
             saved |= {"path": f"{path}, {short.name}", "short": str(short)}
         return saved
@@ -562,7 +562,7 @@ class App:
         if not p.lines:
             raise ValueError("가사가 없습니다. 가사 단계에서 가사를 넣습니다.")
         timing.ready(p.lines)
-        out = self.output / video_file(p.title, p.style)
+        out = self.output / video_file(p.title, p.style, p.nth())
         total = p.duration + p.style.lead + p.style.tail
         if render.is_upright(p.style):
             first, last = tall.span(p.style, p.song())

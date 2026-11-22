@@ -50,6 +50,7 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 | `--lead 1` / `--tail 2` | 영상 앞과 뒤의 공백(초) |
 | `--height 720` / `--fps 30` | 화질(1080, 720)과 1초에 장면 수(24, 30) |
 | `--style <JSON 또는 파일>` | 모양 설정, 예 `'{"fade": false}'` |
+| `--short 1:00,1:30` | 그 구간의 9:16 쇼츠도 두 번째 영상(`short`)으로 더해, 16:9 영상 다음에 만듦 |
 | `--model small` | 듣기 모델 (`small`, `base`, `tiny`). 메모리가 모자라면 더 작은 모델로 바꿉니다. |
 | `--keep-tags` | 대괄호 표시와 `#` 줄을 남김 |
 | `--strict` | 찾지 못한 줄이나 확인할 줄이 있으면 종료 코드 4 |
@@ -84,6 +85,15 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 | `words <노래 또는 프로젝트> --from 1:10 --to 1:20 [--model ..]` | 그 구간에서 들린 낱말과 시작, 끝 시간. 찾지 못한 줄의 시간을 직접 정할 때 씁니다. |
 | `render <프로젝트> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | 영상을 만듭니다. 영상 전체를 만들면 옆에 `.srt`, `.lrc`, `.png` 도 저장합니다. 기본 파일 이름은 프로젝트 폴더의 `<제목>.mp4`. |
 | `still <프로젝트> [--at 1:05] [--out <png>]` | 한 장면을 그림으로 저장합니다. |
+| `output list <프로젝트>` | 노래 하나로 만드는 영상들(출력): id, 비율, 구간, 파일 이름, 지금 고치는 영상. |
+| `output show <프로젝트> [ID]` | 한 영상의 모양 설정과 줄을 `project show` 처럼 보여 줍니다. |
+| `output add <프로젝트> ID [--from ID] [--shape tall]` | 다른 영상(처음 값은 지금 영상)을 복사해 비율(`wide`, `tall`, `square`, `portrait`)을 바꾼 새 영상을 더하고, 지금 영상으로 삼습니다. id 는 영어 소문자, 숫자, `-`. 같은 비율의 두 번째 영상은 파일 이름에 `-2` 가 붙습니다(`<제목>_shorts-2.mp4`). |
+| `output use <프로젝트> ID` / `output remove <프로젝트> ID` | 그 영상을 지금 영상으로 삼거나 뺍니다(마지막 하나는 뺄 수 없음). 파일은 그대로 둡니다. |
+
+줄과 글자 시간은 노래에 하나만 있어 모든 영상이 같이 쓰고, 모양 설정, 움직이는 그림, `video=` 는
+영상마다 따로 있습니다. 명령은 지금 영상에 적용됩니다. `render`, `still`, `srt`, `chorus`,
+`sections`, `align`, `project show`, `project set` 은 `--output ID` 로 지금 영상을 바꾸지 않고
+다른 영상에 적용합니다.
 
 모든 명령에 `--json` 을 붙이면 결과를 JSON 하나로 출력합니다. 진행 상황은 표준 오류로 나옵니다.
 출력은 콘솔 설정과 상관없이 UTF-8 입니다.

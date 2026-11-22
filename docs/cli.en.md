@@ -49,6 +49,7 @@ times, use `--timing <subtitles>` in place of `--lyrics`; then nothing is listen
 | `--lead 1` / `--tail 2` | seconds of silence before and after the song in the video |
 | `--height 720` / `--fps 30` | picture height (1080, 720) and frames per second (24, 30) |
 | `--style <JSON or file>` | look settings, e.g. `'{"fade": false}'` |
+| `--short 1:00,1:30` | also a 9:16 Short of that part, as a second output (`short`), rendered after the 16:9 video |
 | `--model small` | the listening model (`small`, `base`, `tiny`); a smaller one is used when memory is short |
 | `--keep-tags` | keep square-bracket marks and `#` lines |
 | `--strict` | exit code 4 when a line was not found or needs a check |
@@ -85,6 +86,15 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `words <song or project> --from 1:10 --to 1:20 [--model ..]` | The words heard in that stretch with their start and end times, for timing a line that was not found. |
 | `render <project> [--out <mp4>] [--clip 1:00,1:10] [--quick]` | Makes the video. A whole video also gets `.srt`, `.lrc` and `.png` beside it. The default name is `<title>.mp4` in the project folder. |
 | `still <project> [--at 1:05] [--out <png>]` | Saves one frame as an image. |
+| `output list <project>` | The videos made from the song (outputs): id, shape, part, file name, and which one is current. |
+| `output show <project> [ID]` | One output's look settings and the lines, like `project show`. |
+| `output add <project> ID [--from ID] [--shape tall]` | A new output copied from another one (default: the current one), its shape changed (`wide`, `tall`, `square`, `portrait`). It becomes the current one. An id is lowercase letters, digits and `-`. A second output of one shape gets `-2` in its file name (`<title>_shorts-2.mp4`). |
+| `output use <project> ID` / `output remove <project> ID` | Makes an output the current one, or removes it (not the last one). Its files stay. |
+
+Lines and letter times belong to the song and every output uses them; the look settings, the
+moving picture and `video=` belong to one output. Commands work on the current output.
+`render`, `still`, `srt`, `chorus`, `sections`, `align`, `project show` and `project set` take
+`--output ID` to work on another one without changing which one is current.
 
 Every command takes `--json` and then prints one JSON object. Progress goes to standard error.
 Output is UTF-8 whatever the console is set to.

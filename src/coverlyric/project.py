@@ -67,10 +67,19 @@ class Project:
     letters: list[dict] = field(default_factory=list)
     outputs: list[Output] = field(default_factory=lambda: [Output()])
     current: str = "wide"  # the output the page and the commands work on when none is named
+    # The output one command works on (--output), in place of the current one; never saved.
+    chosen: str | None = field(default=None, compare=False, repr=False)
 
     @property
     def output(self) -> Output:
-        return next((o for o in self.outputs if o.id == self.current), self.outputs[0])
+        want = self.chosen or self.current
+        return next((o for o in self.outputs if o.id == want), self.outputs[0])
+
+    def nth(self) -> int:
+        """Which output of its shape the current one is, from 1, for its file name."""
+        shape = self.style.shape
+        before = self.outputs[: self.outputs.index(self.output)]
+        return 1 + sum(o.style.shape == shape for o in before)
 
     @property
     def style(self) -> Style:
@@ -157,11 +166,12 @@ class Project:
         }
 
     def to_dict(self) -> dict:
+        ids = {o.id for o in self.outputs}
         return {
             "format": FORMAT,
             **self.flat(),
             "outputs": [o.to_dict() for o in self.outputs],
-            "current": self.output.id,
+            "current": self.current if self.current in ids else self.outputs[0].id,
         }
 
     def save(self, path: Path) -> None:
