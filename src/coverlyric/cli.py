@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -14,7 +15,7 @@ from dataclasses import fields, replace
 from pathlib import Path
 
 from . import auto, jobs, media, render, tall, timing
-from .project import Project
+from .project import Output, Project
 
 NOTE_TEXT = {
     "unplaced": "not found: placed between the lines around it",
@@ -35,6 +36,7 @@ COMMANDS = (
     "align",
     "sections",
     "srt",
+    "output",
 )
 
 
@@ -67,11 +69,14 @@ def project_file(path: Path) -> Path:
     return path / "project.json" if path.is_dir() else path
 
 
-def load(path: Path) -> tuple[Project, Path]:
+def load(path: Path, output: str | None = None) -> tuple[Project, Path]:
+    """The project, working on `output` (--output) or else its current output, and its file."""
     file = project_file(path)
     if not file.is_file():
         raise FileNotFoundError(f"no project at {path} (a folder with project.json, or the file)")
-    return Project.load(file), file
+    project = Project.load(file)
+    use(project, output)
+    return project, file
 
 
 def copy_in(source: Path, folder: Path, stem: str) -> str:
@@ -169,6 +174,8 @@ def show(project: Project, file: Path) -> dict:
         "lines": rows,
         "timed": sum(t is not None for t, _ in project.lines),
         "notes": len(project.notes),
+        "output": project.output.id,
+        "outputs": outputs(project),
     }
 
 
@@ -235,8 +242,9 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
 
 
 def put_video(project: Project, value: str) -> str:
-    """The project's video after `video=value`: the file copied in as video + its suffix in place
-    of the one before, or none for an empty value."""
+    """The output's video after `video=value`: the file copied in as video + its suffix (the first
+    output) or video-<id> + its suffix (another one) in place of the one before, or none for an empty
+    value. The one before is deleted unless another output uses it."""
     from . import overlay
 
     source = Path(value) if value else None
@@ -247,10 +255,17 @@ def put_video(project: Project, value: str) -> str:
             overlay.length(str(source))
         except ValueError:
             raise Usage(f"not a video ffmpeg can read: {source}") from None
-    for old in project.folder.glob("video.*"):
-        if source is None or old.resolve() != source.resolve():
+    mine = project.output
+    stem = "video" if mine is project.outputs[0] else f"video-{mine.id}"
+    shared = {o.video for o in project.outputs if o is not mine}
+    olds = {*project.folder.glob(f"{stem}.*")}
+    if mine.video:
+        olds.add(project.folder / mine.video)
+    keep = source.resolve() if source is not None else None
+    for old in olds:
+        if old.is_file() and old.name not in shared and old.resolve() != keep:
             old.unlink()
-    return copy_in(source, project.folder, "video") if source is not None else ""
+    return copy_in(source, project.folder, stem) if source is not None else ""
 
 
 def put_title_image(project: Project, value: str) -> str:
@@ -367,7 +382,9 @@ def srt_files(project: Project, folder: Path) -> dict:
     out = {"srt": str(whole)}
     if render.is_upright(project.style):
         rows, length = tall.cues(project.style, song, project.lines)
-        short = folder / Path(video_file(project.title, project.style)).with_suffix(".srt")
+        short = folder / Path(video_file(project.title, project.style, project.nth())).with_suffix(
+            ".srt"
+        )
         short.write_text(timing.srt(rows), encoding="utf-8")
         out |= {"short_srt": str(short), "short_length": round(length, 3)}
     return out
@@ -376,7 +393,7 @@ def srt_files(project: Project, folder: Path) -> dict:
 def video_name(project: Project) -> str:
     from .server import video_file
 
-    return video_file(project.title, project.style)
+    return video_file(project.title, project.style, project.nth())
 
 
 def say(text: str) -> None:
@@ -506,6 +523,12 @@ def make(args: argparse.Namespace) -> dict:
     from .server import safe_name
 
     style = style_from(args.style) if args.style else {}
+    short = None
+    if args.short:
+        a, sep, b = args.short.partition(",")
+        if not sep:
+            raise Usage(f"--short takes FROM,TO: {args.short!r}")
+        short = (seconds(a), seconds(b))
     pairs = [
         f"{key}={value}"
         for key in ("lead", "tail", "height", "fps")
@@ -535,6 +558,15 @@ def make(args: argparse.Namespace) -> dict:
         took["auto"] = heard["seconds"]
     made = make_video(project, None)
     took["render"] = made.pop("seconds")
+    if short:
+        add_output(project, "short", None, "tall")
+        project.style = replace(project.style, clip_from=short[0], clip_to=short[1])
+        project.save(file)
+        shorts = make_video(project, None)
+        took["short"] = shorts.pop("seconds")
+        summary["short"] = shorts
+        project.current = project.outputs[0].id
+        project.save(file)
     check = to_check(project)
     sung = sum(1 for _, text in project.lines if text)
     return {
@@ -641,37 +673,115 @@ def loop_sections(project: Project, file: Path, length: float, apply: int | None
     return {"sections": found, "applied": apply}
 
 
+OUTPUT_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
+
+
+def use(project: Project, output: str | None) -> None:
+    """Work on `output` for this command, the current one when None; the saved current one stays."""
+    if output is not None and output not in {o.id for o in project.outputs}:
+        ids = ", ".join(o.id for o in project.outputs)
+        raise Usage(f"no output {output!r}; the project has {ids}")
+    project.chosen = output
+
+
+def outputs(project: Project) -> list[dict]:
+    """Each output: id, shape, the clip of an upright one, its video's file name, and which is current."""
+    keep = project.chosen
+    rows = []
+    for o in project.outputs:
+        project.chosen = o.id
+        row = {"id": o.id, "shape": o.style.shape, "file": video_name(project)}
+        if render.is_upright(o.style):
+            row["clip"] = [o.style.clip_from, o.style.clip_to]
+        row["current"] = o.id == project.current
+        rows.append(row)
+    project.chosen = keep
+    return rows
+
+
+def add_output(project: Project, new: str, source: str | None, shape: str | None) -> Output:
+    """A new output copied from `source` (the current one by default) with its shape changed; an
+    upright shape from a 16:9 one starts from the Shorts defaults, as chorus --apply does."""
+    if not OUTPUT_ID.fullmatch(new):
+        raise Usage(f"an output id is lowercase letters, digits and -: {new!r}")
+    if new in {o.id for o in project.outputs}:
+        raise Usage(f"the project already has an output {new!r}")
+    use(project, source)
+    base = project.output
+    style = base.style
+    if shape and shape != style.shape:
+        if shape == "wide":
+            style = replace(style, shape="wide")
+        elif render.is_upright(style):
+            style = replace(style, shape=shape)
+        else:
+            style = tall.shorts(style, shape)
+    made = Output(new, style, list(base.anim), base.video)
+    project.outputs.append(made)
+    project.current, project.chosen = new, None
+    return made
+
+
+def output_command(project: Project, file: Path, args: argparse.Namespace) -> dict:
+    if args.do == "list":
+        return {"outputs": outputs(project)}
+    if args.do == "show":
+        use(project, args.id)
+        return show(project, file)
+    if args.do == "add":
+        add_output(project, args.id, args.source, args.shape)
+    elif args.do == "use":
+        use(project, args.id)
+        project.current, project.chosen = args.id, None
+    elif args.do == "remove":
+        use(project, args.id)
+        if len(project.outputs) == 1:
+            raise Usage("the last output cannot be removed")
+        project.outputs.remove(project.output)
+        project.chosen = None
+        if project.current == args.id:
+            project.current = project.outputs[0].id
+    project.save(file)
+    return {"outputs": outputs(project)}
+
+
 def add_commands(sub) -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="answer with one JSON object")
+    which = argparse.ArgumentParser(add_help=False)
+    which.add_argument(
+        "--output", metavar="ID", help="the output to work on (default: the current one)"
+    )
 
-    r = sub.add_parser("render", parents=[common], help="render a project to an mp4")
+    r = sub.add_parser("render", parents=[common, which], help="render a project to an mp4")
     r.add_argument("project", type=Path, help="project folder or its project.json")
     r.add_argument("--out", type=Path, help="the mp4 (default: <title>.mp4 in the project folder)")
     r.add_argument("--clip", help="only from START to END, e.g. 1:00,1:10")
     r.add_argument("--quick", action="store_true", help="small and at half the frame rate")
 
-    s = sub.add_parser("still", parents=[common], help="one frame of a project as a PNG")
+    s = sub.add_parser("still", parents=[common, which], help="one frame of a project as a PNG")
     s.add_argument("project", type=Path)
     s.add_argument("--at", default="0", help="time, e.g. 72.4 or 1:12.4")
     s.add_argument("--out", type=Path, help="the PNG (default: still.png in the project folder)")
 
     c = sub.add_parser(
-        "chorus", parents=[common], help="the most repeated block of lines, as a Short's part"
+        "chorus",
+        parents=[common, which],
+        help="the most repeated block of lines, as a Short's part",
     )
     c.add_argument("project", type=Path)
     c.add_argument("--length", type=float, default=30, help="seconds (15, 30, 60, ...)")
     c.add_argument("--apply", action="store_true", help="make the project a Short of that part")
 
     al = sub.add_parser(
-        "align", parents=[common], help="when each letter is sung, for highlight=letter"
+        "align", parents=[common, which], help="when each letter is sung, for highlight=letter"
     )
     al.add_argument("project", type=Path)
     al.add_argument("--from", dest="start", help="first line start, e.g. 1:35 (default: the part)")
     al.add_argument("--to", dest="end", help="last line start (default: the part's end)")
 
     se = sub.add_parser(
-        "sections", parents=[common], help="loop sections a whole number of bars long"
+        "sections", parents=[common, which], help="loop sections a whole number of bars long"
     )
     se.add_argument("project", type=Path)
     se.add_argument("--length", type=float, default=30, help="seconds (15, 30, 60, ...)")
@@ -689,11 +799,13 @@ def add_commands(sub) -> None:
     new.add_argument("--title", default="")
     new.add_argument("--artist", default="")
     new.add_argument("--keep-tags", action="store_true", help="keep [..] marks and # lines")
-    look = ps.add_parser("show", parents=[common], help="title, style and every line with its time")
+    look = ps.add_parser(
+        "show", parents=[common, which], help="title, style and every line with its time"
+    )
     look.add_argument("project", type=Path)
     keys = ps.add_parser(
         "set",
-        parents=[common],
+        parents=[common, which],
         help="change title, artist, album, released, the video or style keys",
     )
     keys.add_argument("project", type=Path)
@@ -716,11 +828,28 @@ def add_commands(sub) -> None:
 
     sr = sub.add_parser(
         "srt",
-        parents=[common],
+        parents=[common, which],
         help="the song's SRT, and the short's on its own clock for an upright project",
     )
     sr.add_argument("project", type=Path)
     sr.add_argument("--out", type=Path, help="the folder (default: the project folder)")
+
+    o = sub.add_parser("output", help="the videos made from the song: list, show, add, use, remove")
+    does = o.add_subparsers(dest="do", required=True)
+    for do, what in (("list", "every output"), ("show", "one output's style and lines")):
+        cmd = does.add_parser(do, parents=[common], help=what)
+        cmd.add_argument("project", type=Path)
+        if do == "show":
+            cmd.add_argument("id", nargs="?", help="default: the current output")
+    add = does.add_parser("add", parents=[common], help="a new output, copied from another one")
+    add.add_argument("project", type=Path)
+    add.add_argument("id", help="lowercase letters, digits and -, e.g. short-2")
+    add.add_argument("--from", dest="source", metavar="ID", help="default: the current output")
+    add.add_argument("--shape", choices=("wide", *render.UPRIGHT))
+    for do, what in (("use", "make an output the current one"), ("remove", "remove an output")):
+        cmd = does.add_parser(do, parents=[common], help=what)
+        cmd.add_argument("project", type=Path)
+        cmd.add_argument("id")
 
     strict = argparse.ArgumentParser(add_help=False)
     strict.add_argument(
@@ -755,6 +884,9 @@ def add_commands(sub) -> None:
     m.add_argument("--height", help="1080 or 720")
     m.add_argument("--fps", help="24 or 30")
     m.add_argument("--style", help="style keys as JSON, or a JSON file")
+    m.add_argument(
+        "--short", metavar="FROM,TO", help="also a 9:16 Short of that part, e.g. 1:00,1:30"
+    )
     m.add_argument("--keep-tags", action="store_true", help="keep [..] marks and # lines")
     m.add_argument("--out", type=Path, required=True, help="the song's folder is made in here")
 
@@ -762,16 +894,19 @@ def add_commands(sub) -> None:
 def run(args: argparse.Namespace) -> dict:
     if args.command == "make":
         return make(args)
+    if args.command == "output":
+        project, file = load(args.project)
+        return output_command(project, file, args)
     if args.command == "words":
         return words_in(args.audio, seconds(args.start), seconds(args.end), args.model)
     if args.command == "auto":
-        project, file = load(args.project)
+        project, file = load(args.project, getattr(args, "output", None))
         heard = auto_time(project, args.model)
         if args.apply:
             project.save(file)
         return {**show(project, file), **heard, **to_check(project), "applied": args.apply}
     if args.command == "render":
-        project, _ = load(args.project)
+        project, _ = load(args.project, getattr(args, "output", None))
         clip = None
         if args.clip:
             a, sep, b = args.clip.partition(",")
@@ -780,7 +915,7 @@ def run(args: argparse.Namespace) -> dict:
             clip = (seconds(a), seconds(b))
         return make_video(project, args.out, clip, args.quick)
     if args.command == "chorus":
-        project, file = load(args.project)
+        project, file = load(args.project, getattr(args, "output", None))
         found = tall.chorus(tuple(project.lines), project.duration, args.length)
         if found is None:
             raise ValueError("no line comes back, so there is no chorus to find")
@@ -792,16 +927,16 @@ def run(args: argparse.Namespace) -> dict:
             project.save(file)
         return {"from": found[0], "to": found[1], "applied": args.apply}
     if args.command == "align":
-        project, file = load(args.project)
+        project, file = load(args.project, getattr(args, "output", None))
         return align_letters(project, file, args.start, args.end)
     if args.command == "sections":
-        project, file = load(args.project)
+        project, file = load(args.project, getattr(args, "output", None))
         return loop_sections(project, file, args.length, args.apply)
     if args.command == "srt":
-        project, _ = load(args.project)
+        project, _ = load(args.project, getattr(args, "output", None))
         return srt_files(project, args.out or project.folder)
     if args.command == "still":
-        project, _ = load(args.project)
+        project, _ = load(args.project, getattr(args, "output", None))
         out = args.out or project.folder / "still.png"
         at = seconds(args.at)
         frame = render.frame(at, project.preview_lines(), project.song(), project.style)
@@ -818,7 +953,7 @@ def run(args: argparse.Namespace) -> dict:
             not args.keep_tags,
         )
         return show(project, args.folder / "project.json")
-    project, file = load(args.project)
+    project, file = load(args.project, getattr(args, "output", None))
     if args.action == "set":
         changed = set_keys(project, args.pairs)
         project.save(file)
