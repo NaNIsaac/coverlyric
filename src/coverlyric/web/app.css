@@ -55,6 +55,7 @@ header {
 }
 h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 700; }
 .mark { width: 20px; height: 20px; color: var(--accent); }
+.version { color: var(--muted); font-size: 11px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .top-buttons { display: flex; gap: 4px; }
 #quit { margin-left: 12px; }
 
