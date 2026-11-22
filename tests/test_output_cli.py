@@ -119,3 +119,20 @@ def test_make_with_a_short_renders_both(capsys, tmp_path, monkeypatch):
     assert p.current == "wide" and [o.id for o in p.outputs] == ["wide", "short"]
     code, data = run(capsys, *argv[:-2], "--out", str(tmp_path / "o2"), "--short", "3")
     assert code == 2
+
+
+def test_a_failed_short_render_leaves_the_wide_one_current(capsys, tmp_path, monkeypatch):
+    def fake(project, out, clip=None, quick=False):
+        if project.output.id == "short":
+            raise RuntimeError("encoder stopped")
+        return {"video": str(project.folder / cli.video_name(project)), "seconds": 0.0}
+
+    monkeypatch.setattr(cli, "make_video", fake)
+    srt = tmp_path / "t.srt"
+    srt.write_text(SRT, encoding="utf-8")
+    argv = ["make", "--audio", str(DEMO / "tone.wav"), "--cover", str(DEMO / "cover.png")]
+    argv += ["--timing", str(srt), "--title", "노래", "--out", str(tmp_path / "out")]
+    code, data = run(capsys, *argv, "--short", "0:03,0:09")
+    assert code == 1 and "encoder stopped" in data["error"]
+    p = Project.load(tmp_path / "out" / "노래" / "project.json")
+    assert p.current == "wide" and [o.id for o in p.outputs] == ["wide", "short"]

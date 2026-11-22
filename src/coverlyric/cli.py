@@ -561,12 +561,14 @@ def make(args: argparse.Namespace) -> dict:
     if short:
         add_output(project, "short", None, "tall")
         project.style = replace(project.style, clip_from=short[0], clip_to=short[1])
-        project.save(file)
-        shorts = make_video(project, None)
+        try:
+            shorts = make_video(project, None)
+        finally:
+            # The Short is kept, failed or not; the 16:9 video stays the current output.
+            project.current = project.outputs[0].id
+            project.save(file)
         took["short"] = shorts.pop("seconds")
         summary["short"] = shorts
-        project.current = project.outputs[0].id
-        project.save(file)
     check = to_check(project)
     sung = sum(1 for _, text in project.lines if text)
     return {
