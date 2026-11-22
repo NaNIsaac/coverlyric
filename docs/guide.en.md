@@ -205,6 +205,12 @@ and plays it in place of the still.
 
 - **화면 비율** (ratio): 16:9 (the default), **9:16 쇼츠**, **1:1** or **4:5**. The ratios other than
   16:9 are in [Shorts and upright videos](#shorts-and-upright-videos).
+- A song can have a video of each ratio. A ratio it has no video of adds one, copied from the video
+  shown; a ratio it has goes to that video. With two or more, a list under the ratio shows each
+  video's ratio, part and file name, and a press on a row goes to that video. The lyrics and their
+  times are shared. The look, the part, the moving picture and a video put in belong to each one.
+  **영상 만들기** makes the one chosen. To take one off the list, use the
+  [`output remove`](cli.en.md) command.
 - **화질** (1080p or 720p) and **1초에 장면** (24 or 30 frames a second): size and frame rate of the
   video. A 720p file is smaller and a little faster to make.
 - **앞 공백 (초)** and **뒤 공백 (초)** (silence before and after, 0 to 10 s in 0.5 s steps): silent
@@ -257,8 +263,9 @@ Files in the save folder:
 - The picture starts at once, without rising from black; only the sound fades in and out over 0.3 s.
 - The file is `title_shorts.mp4`, `title_1x1.mp4` or `title_4x5.mp4`, saved apart from the 16:9
   video, with a thumbnail in the same ratio and the subtitle files beside it.
-- The first change away from 16:9 sets 30 frames a second and the lyric outline; changes between the
-  other ratios keep them. Choosing **16:9** again goes back to 24 frames a second.
+- An upright video made from a 16:9 one starts at 30 frames a second with the lyric outline; one
+  made from another upright video keeps that video's settings. A 16:9 video made from an upright one
+  starts at 24 frames a second.
 
 **구간** (part): which part of the song the video holds; at first, 30 seconds from the first lyric
 line.

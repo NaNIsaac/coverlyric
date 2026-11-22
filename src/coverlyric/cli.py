@@ -241,10 +241,23 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
     return changed
 
 
+def video_stem(project: Project) -> str:
+    """The name, without suffix, for a new video of the current output: video for the first output,
+    video-<id> for another, numbered when another output still uses that name."""
+    mine = project.output
+    used = {Path(o.video).stem for o in project.outputs if o is not mine and o.video}
+    stem = base = "video" if mine is project.outputs[0] else f"video-{mine.id}"
+    n = 1
+    while stem in used:
+        n += 1
+        stem = f"{base}-{n}"
+    return stem
+
+
 def put_video(project: Project, value: str) -> str:
-    """The output's video after `video=value`: the file copied in as video + its suffix (the first
-    output) or video-<id> + its suffix (another one) in place of the one before, or none for an empty
-    value. The one before is deleted unless another output uses it."""
+    """The output's video after `video=value`: the file copied in as video_stem() + its suffix in
+    place of the one before, or none for an empty value. The one before is deleted unless another
+    output uses it."""
     from . import overlay
 
     source = Path(value) if value else None
@@ -256,7 +269,7 @@ def put_video(project: Project, value: str) -> str:
         except ValueError:
             raise Usage(f"not a video ffmpeg can read: {source}") from None
     mine = project.output
-    stem = "video" if mine is project.outputs[0] else f"video-{mine.id}"
+    stem = video_stem(project)
     shared = {o.video for o in project.outputs if o is not mine}
     olds = {*project.folder.glob(f"{stem}.*")}
     if mine.video:
@@ -713,7 +726,7 @@ def add_output(project: Project, new: str, source: str | None, shape: str | None
     style = base.style
     if shape and shape != style.shape:
         if shape == "wide":
-            style = replace(style, shape="wide")
+            style = replace(style, shape="wide", fps=render.Style().fps)
         elif render.is_upright(style):
             style = replace(style, shape=shape)
         else:

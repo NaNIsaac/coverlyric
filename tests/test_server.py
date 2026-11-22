@@ -205,3 +205,13 @@ def test_starting_over_forgets_the_last_video_and_timing(tmp_path):
     app.auto = {"state": "done", "lines": [[1.0, "줄"]]}
     app.reset()
     assert app.job == {"state": "idle"} and app.auto == {"state": "idle"}
+
+
+def test_switching_outputs_and_the_save_folder_have_their_own_routes(base, tmp_path):
+    call(f"{base}/api/demo", b"")
+    state = json.loads(call(f"{base}/api/choose-output", {"shape": "tall"})[0])
+    assert state["current"] == "short"
+    folder = tmp_path / "videos"
+    folder.mkdir()
+    state = json.loads(call(f"{base}/api/output", {"folder": str(folder)})[0])
+    assert state["output"] == str(folder) and state["current"] == "short"
