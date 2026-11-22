@@ -31,5 +31,5 @@ def test_the_page_keeps_the_shared_video(app):
 def test_the_command_keeps_the_shared_video(app, tmp_path):
     source = tmp_path / "b.mp4"
     source.write_bytes(b"b")
-    app.project.video = cli.put_video(app.project, str(source))
+    cli.set_keys(app.project, [f"video={source}"])
     check(app, b"b")

@@ -95,6 +95,10 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 `sections`, `align`, `project show`, `project set` 은 `--output ID` 로 지금 영상을 바꾸지 않고
 다른 영상에 적용합니다.
 
+`project set` 의 `video=` 와 `title_image=` 는 프로젝트에 적혀 있던 그 파일만, 다른 영상이 쓰지 않을 때
+바꾸거나 지웁니다. 폴더의 다른 파일은 이름이 비슷해도 그대로 두고, 이름이 겹치면 번호를 붙여 복사합니다
+(`video-2.mp4`).
+
 모든 명령에 `--json` 을 붙이면 결과를 JSON 하나로 출력합니다. 진행 상황은 표준 오류로 나옵니다.
 출력은 콘솔 설정과 상관없이 UTF-8 입니다.
 
