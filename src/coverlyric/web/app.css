@@ -376,6 +376,10 @@ body:not(.upright) .upright-only { display: none; }
 .swatches button[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
 .swatches input[type="color"] { width: 32px; height: 26px; }
 .shape-field { margin-bottom: 12px; }
+.outputs { margin: 8px 0 0; padding: 0; list-style: none; }
+.outputs button { display: flex; align-items: center; width: 100%; gap: 8px; margin: 2px 0; font-size: 12px; text-align: left; }
+.outputs button .note { margin: 0 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outputs button[aria-current="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
 #stage-empty {
   position: absolute;
   inset: 0;

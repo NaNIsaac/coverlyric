@@ -30,8 +30,8 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from PIL import Image
 
-from . import __version__, anim, auto, fonts, looks, media, overlay, render, tall, timing
-from .project import Project
+from . import __version__, anim, auto, cli, fonts, looks, media, overlay, render, tall, timing
+from .project import FIRST_ID, Project
 from .render import Style
 
 WEB = Path(__file__).parent / "web"
@@ -268,12 +268,44 @@ class App:
         data["has_title_image"] = bool(self.project.title_image)
         data["output"] = str(self.output)
         data["output_default"] = self.output == self.default_output
-        data["shorts"] = tall.SHORTS
         data["version"] = __version__
+        data["outputs"] = cli.outputs(self.project)
         return data
+
+    def choose_output(self, data: dict) -> dict:
+        """Saves what the page holds, then changes its output: {"use": id} makes one current;
+        {"shape": s} makes the first output of that shape current, adding one copied from the
+        current output when the song has none. One request, so no save falls between the two."""
+        self.update(data)
+        p = self.project
+        if "use" in data:
+            if str(data["use"]) not in {o.id for o in p.outputs}:
+                raise ValueError("그 영상이 프로젝트에 없습니다. 페이지를 다시 엽니다.")
+            p.current = str(data["use"])
+        else:
+            shape = str(data.get("shape", ""))
+            if shape != "wide" and shape not in render.UPRIGHT:
+                raise ValueError(f"unknown shape {shape}")
+            same = next((o for o in p.outputs if o.style.shape == shape), None)
+            if same is not None:
+                p.current = same.id
+            else:
+                base = FIRST_ID[shape]
+                taken = {o.id for o in p.outputs}
+                new = next(
+                    f"{base}-{n}" if n > 1 else base
+                    for n in range(1, 99)
+                    if (f"{base}-{n}" if n > 1 else base) not in taken
+                )
+                cli.add_output(p, new, None, shape)
+        self.save()
+        return self.state()
 
     def update(self, data: dict) -> None:
         p = self.project
+        if data.get("current", p.current) != p.current:
+            # Sent before a switch or from a second window: its look is another output's.
+            data = {k: v for k, v in data.items() if k not in ("style", "anim", "video")}
         p.title = str(data.get("title", p.title))
         p.artist = str(data.get("artist", p.artist))
         p.album = str(data.get("album", p.album))
@@ -304,7 +336,8 @@ class App:
 
     def drop_anim(self, names: set[str]) -> None:
         folder = (self.work / "anim").resolve()
-        for name in names:
+        others = {n for o in self.project.outputs if o is not self.project.output for n in o.anim}
+        for name in names - others:
             path = (self.work / name).resolve()
             if path.parent == folder:  # never a file outside the project's anim folder
                 path.unlink(missing_ok=True)
@@ -315,9 +348,12 @@ class App:
         self.project.title_image = ""
 
     def drop_video(self) -> None:
-        for old in self.work.glob("video.*"):
-            old.unlink()
-        self.project.video = ""
+        """Take the current output's video out; its file goes unless another output uses it."""
+        p = self.project
+        others = {o.video for o in p.outputs if o is not p.output}
+        if p.video and p.video not in others:
+            (self.work / p.video).unlink(missing_ok=True)
+        p.video = ""
 
     def upload(self, kind: str, name: str, body: bytes) -> dict:
         suffix = Path(name).suffix.lower()
@@ -412,7 +448,7 @@ class App:
                 trial.unlink()
                 raise ValueError("영상 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.")
             self.drop_video()
-            target = self.work / f"video{suffix}"
+            target = self.work / f"{cli.video_stem(self.project)}{suffix}"
             trial.replace(target)
             self.project.video = target.name
         else:
@@ -1077,6 +1113,8 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                 if url.path == "/api/state":
                     app.update(json.loads(self.body() or b"{}"))
                     self.json(app.state())
+                elif url.path == "/api/choose-output":
+                    self.json(app.choose_output(json.loads(self.body() or b"{}")))
                 elif url.path == "/api/upload":
                     name = unquote(self.headers.get("X-Name", "file"))
                     self.json(app.upload(query.get("kind", [""])[0], name, self.body()))

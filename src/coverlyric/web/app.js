@@ -57,7 +57,7 @@ async function api(path, options = {}) {
 }
 
 function payload() {
-  return { title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
+  return { current: state.current, title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
 }
 
 function scheduleSync(delay = 150) {
@@ -436,6 +436,7 @@ function fillClip() {
     $("time-label").textContent = plain(Number(time.min));
   }
   drawClip();
+  fillOutputs();
 }
 
 function lineStarts() {
@@ -638,6 +639,7 @@ function fillKaraoke() {
 }
 
 const RATIOS = { wide: "16 / 9", tall: "9 / 16", square: "1 / 1", portrait: "4 / 5" };
+const SHAPE_NAMES = { wide: "16:9", tall: "9:16 쇼츠", square: "1:1", portrait: "4:5" };
 
 function fillLook() {
   const s = state.style;
@@ -689,6 +691,62 @@ function fillLook() {
   }
   select.value = s.font;
   sumDeco();
+}
+
+// The videos made from the song, one row each, when there is more than one: picking a row makes it
+// the one the whole page works on. The current row follows the part as it is dragged.
+function fillOutputs() {
+  const list = $("outputs");
+  const rows = state.outputs || [];
+  const focused = list.contains(document.activeElement);
+  const plain = (t) => clock(t).replace(/\.\d+$/, "");
+  list.hidden = rows.length < 2;
+  list.replaceChildren();
+  for (const o of rows) {
+    const current = o.id === state.current;
+    const [from, to] = current ? [state.style.clip_from, state.style.clip_to] : (o.clip || [0, 0]);
+    const part = o.shape === "wide" ? "" : ` ${plain(from)}-${plain(to || songLength())}`;
+    const b = document.createElement("button");
+    b.className = "quiet";
+    b.setAttribute("aria-current", String(current));
+    b.append(`${SHAPE_NAMES[o.shape] || o.shape}${part}`);
+    const file = document.createElement("span");
+    file.className = "note";
+    file.textContent = file.title = o.file;
+    b.append(file);
+    b.addEventListener("click", () => switchOutput({ use: o.id }));
+    const li = document.createElement("li");
+    li.append(b);
+    list.append(li);
+    if (focused && current) b.focus();
+  }
+}
+
+// The file names follow the title, which the server puts into them.
+async function refreshOutputs() {
+  if (!state || (state.outputs || []).length < 2) return;
+  try {
+    const saved = await (await api("/api/state", { method: "POST", body: JSON.stringify(payload()) })).json();
+    state.outputs = saved.outputs;
+    fillOutputs();
+  } catch (e) { toast(e.message); }
+}
+
+async function switchOutput(choice) {
+  clearTimeout(syncTimer);
+  try {
+    const body = JSON.stringify({ ...payload(), ...choice });
+    state = await (await api("/api/choose-output", { method: "POST", body })).json();
+  } catch (e) {
+    toast(e.message, 6000);
+    fillLook();
+    return;
+  }
+  fillLook();
+  // A new upright video starts on the hook: with no part chosen yet, 30 s from the first sung line.
+  const s = state.style;
+  if (s.shape !== "wide" && !s.clip_from && !s.clip_to) setClip(firstLine(), firstLine() + 30);
+  scheduleSync(0);
 }
 
 // The folder's last two parts fit the footer; the whole path is in the tooltip.
@@ -1437,6 +1495,7 @@ function openGroup(name) {
   document.querySelector(".steps").scrollTop = 0;
   document.body.classList.toggle("timing-open", name === "lyrics" || name === "timing");
   if (name === "deco") loadLooks();
+  if (name === "make") refreshOutputs();
 }
 
 function bindRail() {
@@ -1801,19 +1860,10 @@ function bind() {
     state.style.highlight = e.target.checked ? "letter" : "line";
     scheduleSync(0);
   });
-  // Leaving 16:9 sets what a phone video needs (the server's tall.SHORTS); 16:9 goes back to 24 fps.
+  // A shape is a video of its own: choosing one goes to the song's video of that shape, or adds it,
+  // copied from this one with what a phone video needs (the server's tall.SHORTS).
   for (const r of document.querySelectorAll('input[name="shape"]')) {
-    r.addEventListener("change", () => {
-      const s = state.style;
-      const upright = r.value !== "wide";
-      if (upright && s.shape === "wide") Object.assign(s, state.shorts);
-      if (!upright) s.fps = 24;
-      s.shape = r.value;
-      fillLook();
-      // It starts on the hook: with no part chosen yet, 30 s from the first sung line.
-      if (upright && !s.clip_from && !s.clip_to) setClip(firstLine(), firstLine() + 30);
-      scheduleSync(0);
-    });
+    r.addEventListener("change", () => switchOutput({ shape: r.value }));
   }
   $("spin").addEventListener("change", (e) => { state.style.spin = e.target.checked ? 7 : 0; scheduleSync(0); });
   $("tilt").addEventListener("input", (e) => {

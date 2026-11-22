@@ -79,8 +79,9 @@ now.
 ## Page and jobs
 
 - The server state gains `outputs` (id, shape, clip, file) and `current`. `update` writes style changes
-  into the current output. `POST /api/output` takes `{"use": ID}`, `{"add": {"from": ID, "shape": ...}}`
-  or `{"remove": ID}`.
+  into the current output, and takes only the song's fields from a save that names another one.
+  `POST /api/choose-output` takes the page's fields with `{"use": ID}` or `{"shape": ...}`, saves
+  them, then switches. (`/api/output` is the save folder.)
 - A render job carries the song and one output resolved to a style. `render-job` and the workers do not
   change. Rendering several outputs runs them one after another, in the same queue.
 - Where outputs appear in 일반: the 만들기 step lists the outputs, one row each (shape, clip, file name),
@@ -131,7 +132,7 @@ keys. 일반 gains only the outputs list on 만들기 (above).
    Tests: frames identical, round trip, older-reader mirror. No CLI or page change. `COVERLYRIC_WORKERS`
    leaves the cli docs (ko, en).
 2. CLI: `output` commands and `--output`, `make --short`. Docs cli (ko, en).
-3. Page: outputs on 만들기, `/api/output`, 화면 비율 adds or switches. Captures at 1366x768 and 900.
+3. Page: outputs on 만들기, `/api/choose-output`, 화면 비율 adds or switches. Captures at 1366x768 and 900.
 4. `output import` for existing Short copies, with the line check.
 
 ## Decided in review
