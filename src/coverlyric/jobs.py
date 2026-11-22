@@ -24,7 +24,8 @@ def workers() -> int:
     """Render processes: one core is left for the encoder and the page, and the memory available
     when the render starts must hold the encoder plus every worker. That is free physical memory,
     or on Windows the commit still available when it is less (#12). Under LOW_MB there are at most
-    two, and with less than the encoder needs, one."""
+    two, and with less than the encoder needs, one. COVERLYRIC_WORKERS fixes the count for tests; it
+    is not a user setting."""
     try:
         given = int(os.environ.get("COVERLYRIC_WORKERS") or 0)
     except ValueError:

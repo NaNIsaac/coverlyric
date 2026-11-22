@@ -126,6 +126,10 @@ uv run --isolated --python 3.13 --extra align coverlyric align <프로젝트>
 모양 설정(`style`), 자동 맞추기가 남긴 확인할 줄(`notes`)이 들어 있습니다. 만든 영상은 저장 위치
 폴더(처음에는 `만든 영상/`)에 저장됩니다. 명령줄 명령은 이 폴더에도 그대로 쓸 수 있습니다.
 
+노래 하나로 만드는 영상들은 `outputs` 에 하나씩 들어 있습니다. 항목마다 `id`, 모양 설정 `style`, 움직이는 그림
+`anim`, 영상 `video` 가 있고, `current` 가 지금 고친 영상입니다. 줄과 글자 시간은 노래에 하나만 있어 모든
+영상이 같이 씁니다. `outputs` 가 없는 예전 파일은 영상 하나로 열립니다.
+
 `letters` 는 줄마다 글자를 부르는 시간으로, `highlight=letter` 가 씁니다. 항목 하나가
 `{"n": 3, "text": "아리랑 아리랑", "times": [12.0, 12.3, ...]}` 처럼 줄 번호(1부터), 시간을 정할 때의
 그 줄 글자, 초 단위 시간을 갖습니다. 시간은 띄어쓰기를 뺀 글자마다 하나이거나, 글자와 숫자마다 하나입니다.
@@ -139,7 +143,6 @@ uv run --isolated --python 3.13 --extra align coverlyric align <프로젝트>
 | `COVERLYRIC_HOME` | 작업과 영상 폴더 (`--home` 과 같음) |
 | `COVERLYRIC_NO_BROWSER` | 값이 있으면 브라우저를 열지 않음 |
 | `COVERLYRIC_ENCODER` | H.264 인코더 (`libx264`, `h264_nvenc`, `h264_qsv`, `h264_amf`). 기본은 이 PC에서 동작하는 첫 번째 |
-| `COVERLYRIC_WORKERS` | 영상을 그리는 작업 프로세스 수 (1~8). 기본은 여유 메모리로 정함 |
 
 ## 글꼴
 
