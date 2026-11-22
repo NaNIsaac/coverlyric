@@ -208,6 +208,10 @@
         <summary>시작과 끝<small id="sum-ends"></small></summary>
         <label class="check"><input type="checkbox" id="fade"> 시작·끝 페이드</label>
         <label class="check" title="첫 줄이 8초 넘게 지나 나오면, 전주 동안 가사 칸 자리에 제목과 가수가 나왔다가 사라집니다"><input type="checkbox" id="opening"> 긴 전주에 제목 보이기</label>
+        <div class="band-row">
+          <label class="file-button small" title="흰 바탕이나 투명한 바탕에 어두운 글씨. 긴 전주의 제목 자리에 나옵니다">제목 글씨 그림<input type="file" id="title-image-file" accept=".png,.jpg,.jpeg,.webp"></label>
+          <button id="title-image-clear" class="quiet small" hidden>빼기</button>
+        </div>
         <label class="field">시작 제목 화면
           <select id="intro">
             <option value="0">없음</option>

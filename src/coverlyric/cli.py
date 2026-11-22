@@ -162,6 +162,7 @@ def show(project: Project, file: Path) -> dict:
         "audio": project.path(project.audio),
         "cover": project.path(project.art),
         "video": project.path(project.video),
+        "title_image": project.path(project.title_image),
         "duration": project.duration,
         "clean_tags": project.clean_tags,
         "style": {k: v for k, v in project.style.to_dict().items() if v != default[k]},
@@ -202,7 +203,8 @@ def truth(text: str) -> bool:
 
 
 def set_keys(project: Project, pairs: list[str]) -> list[str]:
-    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags, video and the style's own keys."""
+    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags, video, title_image and the
+    style's own keys."""
     style = project.style.to_dict()
     changed = []
     for pair in pairs:
@@ -216,6 +218,8 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             project.clean_tags = truth(value)
         elif key == "video":
             project.video = put_video(project, value.strip())
+        elif key == "title_image":
+            project.title_image = put_title_image(project, value.strip())
         elif key in STYLE_KEYS:
             default = getattr(render.Style, key)
             try:
@@ -223,7 +227,7 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             except ValueError:
                 raise Usage(f"{key} takes a {type(default).__name__}: {value!r}") from None
         else:
-            keys = ", ".join((*TEXT_KEYS, "clean_tags", "video", *STYLE_KEYS))
+            keys = ", ".join((*TEXT_KEYS, "clean_tags", "video", "title_image", *STYLE_KEYS))
             raise Usage(f"unknown key {key!r}; keys: {keys}")
         changed.append(key)
     project.style = render.Style.from_dict(style)
@@ -247,6 +251,21 @@ def put_video(project: Project, value: str) -> str:
         if source is None or old.resolve() != source.resolve():
             old.unlink()
     return copy_in(source, project.folder, "video") if source is not None else ""
+
+
+def put_title_image(project: Project, value: str) -> str:
+    """The project's title lettering after `title_image=value`: the picture copied in as title +
+    its suffix in place of the one before, or none for an empty value."""
+    source = Path(value) if value else None
+    if source is not None:
+        if not source.is_file():
+            raise FileNotFoundError(f"no file at {source}")
+        if render.title_lettering(str(source), 10, 10, (0, 0, 0)) is None:
+            raise Usage(f"not a picture with dark lettering: {source}")
+    for old in project.folder.glob("title.*"):
+        if source is None or old.resolve() != source.resolve():
+            old.unlink()
+    return copy_in(source, project.folder, "title") if source is not None else ""
 
 
 def line_number(project: Project, text: str) -> int:
