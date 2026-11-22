@@ -265,6 +265,7 @@ class App:
         data["has_audio"] = bool(self.project.audio)
         data["has_art"] = bool(self.project.art)
         data["has_video"] = bool(self.project.video)
+        data["has_title_image"] = bool(self.project.title_image)
         data["output"] = str(self.output)
         data["output_default"] = self.output == self.default_output
         data["shorts"] = tall.SHORTS
@@ -291,6 +292,8 @@ class App:
             p.style = style
         if "video" in data and not data["video"]:
             self.drop_video()
+        if "title_image" in data and not data["title_image"]:
+            self.drop_title_image()
         if "anim" in data:
             # Reorder or remove the moving picture's files; new ones come through upload.
             kept = [str(name) for name in data["anim"] if str(name) in p.anim]
@@ -304,6 +307,11 @@ class App:
             path = (self.work / name).resolve()
             if path.parent == folder:  # never a file outside the project's anim folder
                 path.unlink(missing_ok=True)
+
+    def drop_title_image(self) -> None:
+        for old in self.work.glob("title.*"):
+            old.unlink()
+        self.project.title_image = ""
 
     def drop_video(self) -> None:
         for old in self.work.glob("video.*"):
@@ -349,6 +357,20 @@ class App:
             target = self.work / f"cover{suffix}"
             target.write_bytes(body)
             self.project.art = target.name
+        elif kind == "title":
+            if suffix not in IMAGES:
+                raise ValueError("지원하지 않는 그림 형식입니다. png, jpg, webp 파일을 고릅니다.")
+            trial = self.work / f"upload{suffix}"
+            trial.write_bytes(body)
+            if render.title_lettering(str(trial), 10, 10, (0, 0, 0)) is None:
+                trial.unlink()
+                raise ValueError(
+                    "글씨를 찾을 수 없습니다. 흰 바탕이나 투명한 바탕에 어두운 글씨 그림을 고릅니다."
+                )
+            self.drop_title_image()
+            target = self.work / f"title{suffix}"
+            trial.replace(target)
+            self.project.title_image = target.name
         elif kind == "font":
             if suffix not in fonts.SUFFIXES:
                 raise ValueError("지원하지 않는 글꼴 형식입니다. ttf, otf, ttc 파일을 고릅니다.")

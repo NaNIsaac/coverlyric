@@ -193,7 +193,8 @@ class Song:
     tail: float = 0.0  # seconds of silence after the audio; in duration
     # When each letter is sung, per line: (line start, line text, one time per letter but spaces).
     letters: tuple[tuple[float, str, tuple[float, ...]], ...] = ()
-    album: str = ""  # the player look's line under the title; empty: the title as a single
+    album: str = ""  # the player look's line under the title, after the artist
+    title_image: str = ""  # the title as lettered by hand (dark ink), for the opening panel
     released: str = ""  # the player look's badge on the cover, as typed (2026.06.23); empty: none
 
 
@@ -789,10 +790,47 @@ def opening_panel(song: Song, style: Style) -> Image.Image:
         rows.append((song.artist, font(face, 32 * k * SS, 400), 180, 0.14, 86 * k * SS))
     top = ph / 2 - rows[-1][4] / 2
     ink = hex_rgb(style.lyric_colour)
+    if song.title_image and (
+        lettering := title_lettering(song.title_image, 0.42 * ph, room, shade(ink, 210))
+    ):
+        # The lettering in the title's place, the artist under it as under the title.
+        gap = 70 * k * SS if song.artist else 0
+        top = (ph - lettering.height - gap) / 2
+        layer.alpha_composite(lettering, (round((pw - lettering.width) / 2), round(top)))
+        rows = [(*row[:4], 0.0) for row in rows[1:]]
+        top += lettering.height + 0.6 * gap
     for text, f, level, tracking, dy in rows:
-        grey = "#{:02x}{:02x}{:02x}".format(*(round(c * level / 255) for c in ink))
+        grey = "#{:02x}{:02x}{:02x}".format(*shade(ink, level))
         lettered(d, (pw / 2, top + dy), text, f, 255, replace(style, lyric_colour=grey), tracking)
     return layer.reduce(SS)
+
+
+def shade(ink: tuple[int, int, int], level: int) -> tuple[int, int, int]:
+    return tuple(round(c * level / 255) for c in ink)
+
+
+def title_lettering(
+    path: str, height: float, width: float, colour: tuple[int, int, int]
+) -> Image.Image | None:
+    """Dark lettering on white or on clear, as `colour` on clear: its darkness is the ink, cut to the
+    ink and scaled to fit height and width. None when the file cannot be read or holds no ink."""
+    try:
+        with Image.open(path) as picture:
+            src = picture.convert("RGBA")
+    except (OSError, SyntaxError, Image.DecompressionBombError):
+        return None
+    ink = ImageChops.multiply(ImageOps.invert(src.convert("L")), src.getchannel("A"))
+    box = ink.point(lambda v: 255 if v > 24 else 0).getbbox()
+    if not box:
+        return None
+    ink = ink.crop(box)
+    scale = min(height / ink.height, width / ink.width)
+    ink = ink.resize(
+        (max(1, round(ink.width * scale)), max(1, round(ink.height * scale))), Image.LANCZOS
+    )
+    out = Image.new("RGBA", ink.size, (*colour, 255))
+    out.putalpha(ink)
+    return out
 
 
 def faded(layer: Image.Image, share: float) -> Image.Image:

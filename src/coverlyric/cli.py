@@ -141,6 +141,7 @@ def new_project(
 
 def show(project: Project, file: Path) -> dict:
     notes = {note["n"]: note for note in project.notes}
+    repaired = {e["n"]: e["repaired"] for e in project.letters if e.get("repaired")}
     default = render.Style().to_dict()
     rows = []
     for n, (t, text) in enumerate(project.lines, 1):
@@ -149,6 +150,8 @@ def show(project: Project, file: Path) -> dict:
             row["note"] = notes[n]["kind"]
             if notes[n].get("heard"):
                 row["heard"] = notes[n]["heard"]
+        if n in repaired:
+            row["letters"] = f"repaired ({repaired[n]})"
         rows.append(row)
     return {
         "project": str(file),
@@ -159,6 +162,7 @@ def show(project: Project, file: Path) -> dict:
         "audio": project.path(project.audio),
         "cover": project.path(project.art),
         "video": project.path(project.video),
+        "title_image": project.path(project.title_image),
         "duration": project.duration,
         "clean_tags": project.clean_tags,
         "style": {k: v for k, v in project.style.to_dict().items() if v != default[k]},
@@ -183,6 +187,8 @@ def show_text(data: dict) -> str:
         if "note" in row:
             note = f"   [{NOTE_TEXT.get(row['note'], row['note'])}"
             note += f": {row['heard']}]" if row.get("heard") else "]"
+        if "letters" in row:
+            note += f"   [letter times {row['letters']}]"
         out.append(f"{row['n']:3d}  {clock(row['time']):>9}  {row['text']}{note}")
     return "\n".join(out)
 
@@ -197,7 +203,8 @@ def truth(text: str) -> bool:
 
 
 def set_keys(project: Project, pairs: list[str]) -> list[str]:
-    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags, video and the style's own keys."""
+    """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags, video, title_image and the
+    style's own keys."""
     style = project.style.to_dict()
     changed = []
     for pair in pairs:
@@ -211,6 +218,8 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             project.clean_tags = truth(value)
         elif key == "video":
             project.video = put_video(project, value.strip())
+        elif key == "title_image":
+            project.title_image = put_title_image(project, value.strip())
         elif key in STYLE_KEYS:
             default = getattr(render.Style, key)
             try:
@@ -218,7 +227,7 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             except ValueError:
                 raise Usage(f"{key} takes a {type(default).__name__}: {value!r}") from None
         else:
-            keys = ", ".join((*TEXT_KEYS, "clean_tags", "video", *STYLE_KEYS))
+            keys = ", ".join((*TEXT_KEYS, "clean_tags", "video", "title_image", *STYLE_KEYS))
             raise Usage(f"unknown key {key!r}; keys: {keys}")
         changed.append(key)
     project.style = render.Style.from_dict(style)
@@ -244,6 +253,21 @@ def put_video(project: Project, value: str) -> str:
     return copy_in(source, project.folder, "video") if source is not None else ""
 
 
+def put_title_image(project: Project, value: str) -> str:
+    """The project's title lettering after `title_image=value`: the picture copied in as title +
+    its suffix in place of the one before, or none for an empty value."""
+    source = Path(value) if value else None
+    if source is not None:
+        if not source.is_file():
+            raise FileNotFoundError(f"no file at {source}")
+        if render.title_lettering(str(source), 10, 10, (0, 0, 0)) is None:
+            raise Usage(f"not a picture with dark lettering: {source}")
+    for old in project.folder.glob("title.*"):
+        if source is None or old.resolve() != source.resolve():
+            old.unlink()
+    return copy_in(source, project.folder, "title") if source is not None else ""
+
+
 def line_number(project: Project, text: str) -> int:
     try:
         n = int(text)
@@ -267,6 +291,14 @@ def edit_lines(project: Project, args: argparse.Namespace) -> list[str]:
         project.lines = lines_from(args.import_file, project.clean_tags)
         project.notes = []
         done.append(f"times from {args.import_file.name}")
+    if args.import_file or args.from_lyrics:
+        # Letter times hang on a line's number and text; after new lines, keep only those that fit.
+        project.letters = [
+            e
+            for e in project.letters
+            if 1 <= e.get("n", 0) <= len(project.lines)
+            and project.lines[e["n"] - 1][1] == e.get("text")
+        ]
     if args.shift:
         by = seconds(args.shift)
         project.lines = [(None if t is None else max(0.0, t + by), x) for t, x in project.lines]
@@ -565,9 +597,25 @@ def align_letters(project: Project, file: Path, start: str | None, end: str | No
     first = seconds(start) if start else first
     last = seconds(end) if end else (last or song.duration)
     found = align.align(song.audio, project.lines, first, last, note=say)
+    heard: list[tuple[float, str]] = []
+    _, wrong = align.repaired(found, project.lines)
+    if wrong and importlib.util.find_spec("faster_whisper"):
+        # The heard words place the letters of a line the aligner got wrong better than an even spread.
+        say(f"{len(wrong)} lines look wrong; listening for their words")
+        words, _ = hear(song.audio, "small", (first, last))
+        heard = [(w["start"], w["word"].strip()) for w in words]
+    found, fixed = align.repaired(found, project.lines, heard)
+    if fixed:
+        say(f"repaired the letter times of {len(fixed)} lines: " + ", ".join(
+            f"{e['n']} ({e['repaired']})" for e in fixed))  # fmt: skip
     project.letters = align.merged(project.letters, found)
     project.save(file)
-    return {"aligned": [e["n"] for e in found], "from": first, "to": last}
+    return {
+        "aligned": [e["n"] for e in found],
+        "repaired": [e["n"] for e in fixed],
+        "from": first,
+        "to": last,
+    }
 
 
 def loop_sections(project: Project, file: Path, length: float, apply: int | None) -> dict:

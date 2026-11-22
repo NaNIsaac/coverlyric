@@ -57,6 +57,7 @@ class Project:
     released: str = ""  # the player look's date badge, as typed
     duration: float = 0.0
     lines: list[timing.Line] = field(default_factory=list)
+    title_image: str = ""  # lettering of the title, drawn in its place in the opening panel
     clean_tags: bool = True  # lyrics put in lose [..] notes and # lines (timing.sung)
     # What automatic timing said about a line: {"n": line number from 1, "kind": unplaced | doubtful
     # | differs, "heard": the words heard, for differs}. Kept so a later look can list them.
@@ -127,6 +128,7 @@ class Project:
             released=data.get("released", ""),
             duration=float(data.get("duration", 0.0)),
             lines=lines,
+            title_image=str(data.get("title_image", "")),
             clean_tags=bool(data.get("clean_tags", True)),
             notes=[dict(note) for note in data.get("notes", [])],
             letters=[dict(entry) for entry in data.get("letters", [])],
@@ -148,6 +150,7 @@ class Project:
             "style": self.style.to_dict(),
             "anim": list(self.anim),
             "video": self.video,
+            "title_image": self.title_image,
             "clean_tags": self.clean_tags,
             "notes": list(self.notes),
             "letters": list(self.letters),
@@ -179,6 +182,7 @@ class Project:
             duration=duration,
             anim=tuple(self.path(name) for name in self.anim),
             video=self.path(self.video),
+            title_image=self.path(self.title_image),
             letters=self.letter_times(),
             album=self.album,
             released=self.released,
