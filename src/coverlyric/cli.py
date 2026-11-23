@@ -14,7 +14,7 @@ import time
 from dataclasses import fields, replace
 from pathlib import Path
 
-from . import auto, jobs, media, render, tall, timing
+from . import auto, jobs, join, media, render, tall, timing
 from .project import Output, Project
 
 NOTE_TEXT = {
@@ -737,12 +737,30 @@ def add_output(project: Project, new: str, source: str | None, shape: str | None
     return made
 
 
+def import_output(project: Project, file: Path, other: Path) -> dict:
+    """Another project's current output as a new one here, when both have the same lines."""
+    given, given_file = load(other)
+    if given_file.resolve() == file.resolve():
+        raise Usage("a project cannot be imported into itself")
+    if differ := join.differences(project, given):
+        raise Usage(
+            "the lines differ, so nothing was imported; make them the same first\n"
+            + "\n".join(differ)
+        )
+    kept = join.not_imported(project, given)
+    made = join.take(project, given)
+    project.save(file)
+    return {"outputs": outputs(project), "imported": made.id, "not_imported": kept}
+
+
 def output_command(project: Project, file: Path, args: argparse.Namespace) -> dict:
     if args.do == "list":
         return {"outputs": outputs(project)}
     if args.do == "show":
         use(project, args.id)
         return show(project, file)
+    if args.do == "import":
+        return import_output(project, file, args.other)
     if args.do == "add":
         add_output(project, args.id, args.source, args.shape)
     elif args.do == "use":
@@ -849,7 +867,9 @@ def add_commands(sub) -> None:
     sr.add_argument("project", type=Path)
     sr.add_argument("--out", type=Path, help="the folder (default: the project folder)")
 
-    o = sub.add_parser("output", help="the videos made from the song: list, show, add, use, remove")
+    o = sub.add_parser(
+        "output", help="the videos made from the song: list, show, add, import, use, remove"
+    )
     does = o.add_subparsers(dest="do", required=True)
     for do, what in (("list", "every output"), ("show", "one output's style and lines")):
         cmd = does.add_parser(do, parents=[common], help=what)
@@ -861,6 +881,11 @@ def add_commands(sub) -> None:
     add.add_argument("id", help="lowercase letters, digits and -, e.g. short-2")
     add.add_argument("--from", dest="source", metavar="ID", help="default: the current output")
     add.add_argument("--shape", choices=("wide", *render.UPRIGHT))
+    bring = does.add_parser(
+        "import", parents=[common], help="add another project's video of the same song as an output"
+    )
+    bring.add_argument("project", type=Path)
+    bring.add_argument("other", type=Path, help="the other project's folder or its project.json")
     for do, what in (("use", "make an output the current one"), ("remove", "remove an output")):
         cmd = does.add_parser(do, parents=[common], help=what)
         cmd.add_argument("project", type=Path)

@@ -31,7 +31,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from PIL import Image
 
 from . import __version__, anim, auto, cli, fonts, looks, media, overlay, render, tall, timing
-from .project import FIRST_ID, Project
+from .project import Project
 from .render import Style
 
 WEB = Path(__file__).parent / "web"
@@ -290,14 +290,7 @@ class App:
             if same is not None:
                 p.current = same.id
             else:
-                base = FIRST_ID[shape]
-                taken = {o.id for o in p.outputs}
-                new = next(
-                    f"{base}-{n}" if n > 1 else base
-                    for n in range(1, 99)
-                    if (f"{base}-{n}" if n > 1 else base) not in taken
-                )
-                cli.add_output(p, new, None, shape)
+                cli.add_output(p, p.free_id(shape), None, shape)
         self.save()
         return self.state()
 
