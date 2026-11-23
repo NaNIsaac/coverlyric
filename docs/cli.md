@@ -32,7 +32,14 @@ uv run coverlyric still demo-song --at 7
 uv run coverlyric                         # 페이지 열기 (기본)
 uv run coverlyric app --home <폴더>       # 작업과 영상을 <폴더>에 저장
 uv run coverlyric app --port 8765 --no-browser
+uv run coverlyric app <프로젝트>             # 그 프로젝트 폴더에서 페이지 열기
 ```
+
+`app <프로젝트>` 는 페이지를 그 폴더의 `project.json` 위에서 엽니다. 페이지의 작업 파일은 `.cache/page/` 에,
+영상은 프로젝트 폴더에 둡니다. 그 폴더에서는 새로 시작과 데모를 쓸 수 없습니다. 명령이나 다른 창이
+`project.json` 을 바꾸면, 페이지는 창을 다시 누르거나 저장할 때 바뀐 내용을 읽고 이 창에서 바꾼 것을 그
+위에 다시 얹습니다. 양쪽이 같은 항목을 바꿨으면 어느 쪽을 쓸지 묻습니다. 그동안 서버에 묻는 일은 없습니다
+(1분에 0번).
 
 ## 한 번에 만들기
 
@@ -76,7 +83,7 @@ uv run --extra auto coverlyric make --audio 노래.mp3 --cover 표지.png --lyri
 | `chorus <프로젝트> [--length 30] [--apply]` | 가장 많이 되풀이되는 줄 묶음을 찾아 쇼츠 구간(`from`, `to`)으로 보여 줍니다. `--apply` 는 프로젝트를 그 구간의 세로 영상으로 바꿉니다(16:9 였으면 9:16). 되풀이되는 줄이 없으면 실패합니다. |
 | `sections <프로젝트> [--length 30] [--apply N]` | 마디 수가 정수인 반복 구간을 길이에 가깝게, 시작이 강한 순서로 8개까지 보여 줍니다. 구간은 줄이 시작하는 박(또는 그 앞 박)에서 시작하고, 다음 줄이 들어오기 직전에 끝나도록 한 마디 더하거나 뺍니다. `--apply N` 은 프로젝트를 N번 구간의 반복 세로 영상으로 바꿉니다(`loop=true`). `align` 추가 설치가 필요합니다. |
 | `align <프로젝트> [--from 1:35] [--to 2:42]` | 그 사이에 시작하는 줄의 글자마다 부르는 시간을 정해 프로젝트의 `letters` 에 저장합니다(`highlight=letter` 가 씁니다). 처음 값은 세로 영상이면 그 구간, 아니면 노래 전체. 노래에서 목소리만 떼어(demucs) 글자 하나를 한 음절로 맞춥니다(torchaudio MMS_FA). 첫 글자가 줄 시작보다 0.6초 넘게 늦거나, 마지막 글자가 다음 줄에 닿거나, 글자들이 한 글자에 0.05초도 안 되게 몰린 줄은 다시 놓습니다: `auto` 추가 설치가 있으면 그 줄에서 들린 낱말의 시작에서, 없으면 고르게. 다시 놓은 줄 수를 알려 주고 `project show` 에 표시합니다. 처음 한 번 모델 약 1.2 GB를 내려받습니다. `align` 추가 설치가 필요합니다. |
-| `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. |
+| `project lines <프로젝트> --shift -0.3` | 시간이 있는 줄을 모두 옮깁니다. `--range 5` 나 `--range 5-9` 는 그 줄만 옮깁니다. |
 | `project lines <프로젝트> --set 5=1:12.4 --text 5="고친 글자"` | 한 줄의 시간이나 글자를 바꿉니다. 시간은 `72.4`, `1:12.4` 모두 됩니다. |
 | `project lines <프로젝트> --import <자막>` / `--from-lyrics <가사>` | 줄과 시간을 자막 파일에서, 또는 시간 없이 가사 파일에서 다시 넣습니다. 번호나 글자가 더는 맞지 않는 줄의 글자 시간(`letters`)은 지웁니다. |
 | `project lines <프로젝트> --letters 5=72.4,72.7,73.1` | 5번 줄의 글자마다 부르는 시간을 직접 정해 `letters` 에 저장합니다(`highlight=letter` 가 씁니다). 시간은 띄어쓰기를 뺀 글자와 부호마다 하나, 또는 글자와 숫자마다 하나(부호는 앞 글자의 시간). 줄의 글자를 나중에 바꾸면 그 시간은 쓰이지 않습니다. |
@@ -119,6 +126,29 @@ uv run coverlyric project lines demo-song --import timing.srt
 uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
+
+## AI 클라이언트에서 (MCP)
+
+`coverlyric mcp` 는 위의 명령을 AI 클라이언트가 부르는 도구로 내놓습니다. 이 컴퓨터 안에서 stdio로만
+이어지고, 따로 설치하는 `mcp` 추가 기능이 필요합니다.
+
+```sh
+uv sync --extra mcp
+uv run coverlyric mcp
+```
+
+| 도구 | 하는 일 |
+|---|---|
+| `project_show`, `project_set` | `project show`, `project set` (`output` 으로 영상을 고름) |
+| `lines_get`, `lines_set_text`, `lines_set_time`, `lines_shift` | 줄 보기, 글자, 시작 시간, 한 줄이나 여러 줄 옮기기 |
+| `output_list`, `output_add`, `output_use` | `output list`, `add`, `use` |
+| `still` | 그 시간의 한 장면을 PNG 그림으로 |
+| `clip_render` | 그 구간의 작은 미리보기 영상, 경로를 돌려줌 |
+| `render` | 영상 전체와 썸네일, SRT, LRC. 진행을 알림 |
+| `open_page` | 사용자가 원할 때만 그 프로젝트의 페이지를 엶. 이미 열린 페이지가 있으면 그 페이지 |
+
+프로젝트는 폴더 경로로 주고, 상태는 `project.json` 하나입니다. 도구 사이에 기억하는 것이 없고, 바꾼 것은 바로
+저장됩니다. `still` 과 `clip_render` 가 만든 파일은 `.cache/mcp/` 에 있고 지워도 됩니다.
 
 ## 설치된 프로그램
 

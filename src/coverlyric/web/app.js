@@ -48,6 +48,20 @@ async function api(path, options = {}) {
     options = { ...options, headers: { ...options.headers, "Content-Type": "application/json" } };
   }
   const res = await fetch(path, options);
+  if (res.status === 409) {
+    // project.json changed elsewhere: take it, put this page's own changes back, then say so.
+    const body = await res.json();
+    adopt(body.state);
+    throw new Error(body.error);
+  }
+  if (res.ok && options.method === "POST") {
+    // What the server now holds: the page's sent fields, then its answer when that is the state.
+    if (typeof options.body === "string" && options.body.includes('"rev"')) remember(JSON.parse(options.body));
+    if ((res.headers.get("Content-Type") || "").startsWith("application/json")) {
+      const data = await res.clone().json();
+      if (data && "rev" in data && Array.isArray(data.lines)) remember(data);
+    }
+  }
   if (!res.ok) {
     let message = `오류 (${res.status})`;
     try { message = (await res.json()).error || message; } catch (e) { /* not JSON */ }
@@ -56,8 +70,40 @@ async function api(path, options = {}) {
   return res;
 }
 
+// What the server last held (merge.js). The page's own changes are what differs from it, so a change
+// another program made to project.json is taken without losing them. The file is checked when the
+// window gets the focus back and with every save: no timer.
+let base = null;
+
+function remember(s) {
+  base = mergeBase(s);
+}
+
+function adopt(fresh) {
+  const { out, both } = mergeState(base, state, fresh);
+  if (both.length && confirm(`이 창과 다른 곳(명령이나 다른 창)에서 같은 항목을 바꿨습니다: ${both.map((b) => b.name).join(", ")}\n\n확인: 이 창의 값을 씁니다.\n취소: 다른 곳의 값을 씁니다.`)) {
+    for (const b of both) b.keep();
+  }
+  const mine = !sameValue(mergeBase(out), mergeBase(fresh));
+  state = out;
+  remember(fresh);
+  $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
+  fillAll();
+  if (mine) scheduleSync(0);
+}
+
+async function refresh() {
+  if (!state || document.hidden) return;
+  try {
+    const fresh = await (await api("/api/state")).json();
+    if (fresh.rev !== state.rev) adopt(fresh);
+  } catch (e) {
+    /* the program has ended; the next action says so */
+  }
+}
+
 function payload() {
-  return { current: state.current, title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
+  return { rev: state.rev, current: state.current, title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
 }
 
 function scheduleSync(delay = 150) {
@@ -780,6 +826,8 @@ function fillAll() {
   $("album").value = state.album || "";
   $("released").value = state.released || "";
   $("clean_tags").checked = state.clean_tags !== false;
+  // In a project folder of the user's, starting over or the demo would replace that project.
+  $("new").hidden = $("demo").hidden = Boolean(state.own_folder);
   $("audio-name").textContent = state.has_audio ? `길이 ${clock(state.duration).replace(/\.\d+$/, "")}` : "없음";
   $("art-name").textContent = state.has_art ? "표지 있음" : "없음";
   updateStatus();
@@ -2058,6 +2106,9 @@ async function boot() {
   bind();
   await loadFonts();
   state = await (await api("/api/state")).json();
+  remember(state);
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", refresh);
   $("lyrics-text").value = state.lines.map(([, x]) => x).join("\n");
   fillAll();
   pollRender();
