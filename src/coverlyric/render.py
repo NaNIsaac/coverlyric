@@ -151,6 +151,13 @@ class Style:
     highlight: str = "line"  # upright: line, or letter to light only the letter being sung
     upright_look: str = "cover"  # upright: cover, or disc for the turning CD behind the lyrics
     disc_wear: str = "none"  # upright disc: none, or worn for peeled paint and faint scratches
+    loop_blend: float = 0.5  # upright loop: seconds of the end that blend into the start's lead-in
+    # Upright with bands: a big caption of one or two lines ("line one|line two") in a top band
+    # taller by tall.HOOK_SHIFT, in place of bars_top; hook_hi lists its words drawn yellow
+    # ("word,other words"). crop_top cuts that many px off the top of the picture under the band.
+    hook: str = ""
+    hook_hi: str = ""
+    crop_top: int = 0
     # Over the user's own video (Song.video), any shape: its first frame goes with the start of
     # the song (of a Short's part) moved by video_offset seconds; a shorter video starts again
     # (loop) or holds its last frame (hold); video_sound takes its sound instead of the song's.

@@ -130,6 +130,7 @@ def test_the_loop_sound_graph_crossfades_the_end_into_the_start():
     graph = tall.loop_graph(4.0, 0.5)
     assert "afade=t=out:st=3.500:d=0.500" in graph and "afade=t=in:st=0:d=0.500" in graph
     assert "adelay=3500:all=1" in graph and "amix=inputs=2:duration=first:normalize=0" in graph
+    assert graph.count("curve=qsin") == 2, "equal power both ways"
 
 
 def probe(path: Path) -> str:
