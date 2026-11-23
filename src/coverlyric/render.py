@@ -151,6 +151,13 @@ class Style:
     highlight: str = "line"  # upright: line, or letter to light only the letter being sung
     upright_look: str = "cover"  # upright: cover, or disc for the turning CD behind the lyrics
     disc_wear: str = "none"  # upright disc: none, or worn for peeled paint and faint scratches
+    loop_blend: float = 0.5  # upright loop: seconds of the end that blend into the start's lead-in
+    # Upright with bands: a big caption of one or two lines ("line one|line two") in a top band
+    # taller by tall.HOOK_SHIFT, in place of bars_top; hook_hi lists its words drawn yellow
+    # ("word,other words"). crop_top cuts that many px off the top of the picture under the band.
+    hook: str = ""
+    hook_hi: str = ""
+    crop_top: int = 0
     # Over the user's own video (Song.video), any shape: its first frame goes with the start of
     # the song (of a Short's part) moved by video_offset seconds; a shorter video starts again
     # (loop) or holds its last frame (hold); video_sound takes its sound instead of the song's.
@@ -1688,11 +1695,13 @@ def fades(style: Style, duration: float, first: float, last: float) -> tuple[lis
     af: list[str] = []
     if is_upright(style):
         # A Short starts on the line it is about: no fade from black, a short one in the sound so the
-        # cut does not click. A loop's end blends into its start instead of fading out.
+        # cut does not click. A loop's end blends into its start instead of fading out, and its
+        # start fades in only for START_RAMP: a longer fade dipped at every repeat (#72).
         from . import tall
 
         length = last - first
-        af.append(f"afade=t=in:st=0:d={tall.AUDIO_FADE}")
+        looped = style.loop and first >= tall.MIN_BLEND
+        af.append(f"afade=t=in:st=0:d={tall.START_RAMP if looped else tall.AUDIO_FADE}")
         if not style.loop:
             af.append(
                 f"afade=t=out:st={max(0.0, length - tall.AUDIO_FADE):.3f}:d={tall.AUDIO_FADE}"
@@ -1729,7 +1738,7 @@ def encode(
     if lead:
         from . import tall
 
-        end = last + lead - tall.LOOP  # past the clip's end by the lead less the blend (tall.lead)
+        end = last + lead - tall.blend(style)  # past the clip's end by the lead less the blend
     length = end - first
     begin, total = round(first * fps), math.ceil(end * fps)
     step = QUICK_STEP if quick else 1
@@ -1765,7 +1774,7 @@ def encode(
         # The song before the clip comes in under the clip's end and plays to the sample before the
         # clip's first; no fade at the file's start or end (tall.lead_graph).
         before = ["-ss", f"{max(0.0, heard - lead):.3f}", "-t", f"{lead:.3f}", "-i", song.audio]
-        graph = tall.lead_graph(last - first, lead)
+        graph = tall.lead_graph(last - first, lead, tall.blend(style))
         sound, audio, overlap = ["-map", "[sound]"], ["-filter_complex", graph], 0.0
     if overlap:
         # The moments before the clip, mixed into its end (tall.loop_graph); the fade in stays on

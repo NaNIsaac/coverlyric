@@ -26,7 +26,7 @@ def test_the_short_is_the_clip_on_its_own_clock():
 def test_a_loop_lead_s_line_closes_the_short():
     rows, length = tall.cues(replace(SHORT, loop_lead_line=True), SONG, LINES)
     # The lead is 5.0 to 8.0; the clip's last 0.5 s blends into it, so it starts at 5.5.
-    assert length == pytest.approx(6.0 + 3.0 - tall.LOOP)
+    assert length == pytest.approx(6.0 + 3.0 - 0.5)
     assert rows == [(0.0, 4.0, "셋 줄"), (4.0, 5.5, "넷 줄"), (5.5, 8.5, "둘 줄")]
     rows, _ = tall.cues(replace(SHORT, loop_lead=2.0), SONG, LINES)
     assert rows[-1] == (5.5, 7.5, "둘 줄"), "two seconds of the line before"

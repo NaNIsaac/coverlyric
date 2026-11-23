@@ -130,6 +130,7 @@ def test_the_loop_sound_graph_crossfades_the_end_into_the_start():
     graph = tall.loop_graph(4.0, 0.5)
     assert "afade=t=out:st=3.500:d=0.500" in graph and "afade=t=in:st=0:d=0.500" in graph
     assert "adelay=3500:all=1" in graph and "amix=inputs=2:duration=first:normalize=0" in graph
+    assert graph.count("curve=qsin") == 2, "equal power both ways"
 
 
 def probe(path: Path) -> str:
@@ -177,3 +178,9 @@ def test_the_files_beside_a_shorts_video_are_on_the_clip_clock(tmp_path):
 
 def lines_in(srt: str) -> list[str]:
     return [b.split("\n")[2] for b in srt.strip().split("\n\n")]
+
+
+def test_a_loop_fades_in_only_enough_not_to_click():
+    style = replace(tall.shorts(render.Style()), loop=True)
+    assert render.fades(style, 18.0, 6.0, 10.0) == ([], ["afade=t=in:st=0:d=0.01"])
+    assert render.fades(style, 18.0, 0.0, 10.0)[1] == ["afade=t=in:st=0:d=0.3"], "no blend at 0"

@@ -121,7 +121,7 @@ class Painter:
         given = {(begin, text): times for begin, text, times in song.letters}
         end = song.duration
         self.times = [
-            (given.get(line) or spread(lines, k, end)) if self.letter else None
+            tall.by_word(line[1], given.get(line) or spread(lines, k, end)) if self.letter else None
             for k, line in enumerate(lines)
         ]
         self.lines = tuple(

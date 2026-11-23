@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 from functools import lru_cache
 
@@ -38,10 +39,10 @@ PITCH = 1.18  # row distance in em
 BAND_PAD = (30, 16)
 BARS_MOST = 0.25  # a band takes at most this share of the height
 CHANGE = 0.3  # seconds a new line takes to move up into the middle
-LOOP = 0.5  # seconds of the end that blend into the moments before the start
 LEAD_OUT, LEAD_IN = 0.9, 0.45  # loop_lead: the clip's fade out and the lead's fade in, seconds
 MAX_BLOCK = 8  # the longest block of lines 후렴 찾기 compares
 AUDIO_FADE = 0.3
+START_RAMP = 0.01  # a looping Short's fade in: enough that the first play does not click
 # highlight=letter: only the letter being sung is lit, in HIGHLIGHT and LETTER_POP times its size,
 # growing over POP_IN seconds and going back as the next letter starts. The line is drawn at
 # LETTER_PX with a shadow and no band; an outline and a band were too heavy around the lit letter.
@@ -53,6 +54,11 @@ LETTER_POP, POP_IN = 1.3, 0.1
 DISC_SIDE = 860
 DISC_DIM = 0.4
 WEAR_SEED = 11
+MIN_BLEND = 0.05  # a loop blend shorter than this is none
+# hook: the caption's px, weight and row pitch in em, and how much taller the top band gets; the
+# picture moves down by that much and the bottom band gives the room.
+HOOK_PX, HOOK_WEIGHT, HOOK_PITCH = 84, 800, 1.28
+HOOK_SHIFT = 150
 
 # What an upright shape sets; the colours, font and background stay as the user made them.
 SHORTS = {"shape": "tall", "fps": 30, "lyric_edge": "outline", "intro": 0.0}
@@ -118,15 +124,15 @@ def cues(
     style: render.Style, song: render.Song, lines: list[timing.Line]
 ) -> tuple[list[timing.Cue], float]:
     """The upright video's subtitles on its own clock, and its length: the clip's lines, then with a
-    loop lead the lead's lines from the LOOP blend on, as the picture shows them. A line cut to
+    loop lead the lead's lines from the blend on, as the picture shows them. A line cut to
     MIN_PIECE seconds or less at either edge is left out."""
     timed = sorted((t, text) for t, text in lines if t is not None)
     first, last = span(style, song)
     before = lead(style, song, tuple(timed))
     parts = [(first, last, 0.0)]
     if before:
-        end = last - first - LOOP
-        parts = [(first, last - LOOP, 0.0), (first - before, first, end)]
+        end = last - first - blend(style)
+        parts = [(first, last - blend(style), 0.0), (first - before, first, end)]
     out = []
     for start, stop, at in parts:
         for a, b, text in timing.cues(timed, song.duration):
@@ -137,21 +143,28 @@ def cues(
     return sorted(out), at + stop - start
 
 
+def blend(style: render.Style) -> float:
+    """Seconds of a looping Short's end that blend into what comes before its start (loop_blend),
+    for the picture, the sound and the subtitles alike; at least MIN_BLEND, so a loop lead always
+    has a blend to come in under."""
+    return max(MIN_BLEND, style.loop_blend)
+
+
 def loop_length(style: render.Style, song: render.Song) -> float:
-    """How much of the end blends into what comes before the start: LOOP, less when the clip starts
-    sooner than that, 0 without a loop."""
+    """How much of the end blends into what comes before the start: loop_blend, less when the clip
+    starts sooner than that, 0 without a loop."""
     if not style.loop:
         return 0.0
     first, _ = span(style, song)
-    length = min(LOOP, first)
-    return length if length >= 0.05 else 0.0
+    length = min(blend(style), first)
+    return length if length >= MIN_BLEND else 0.0
 
 
 def lead(style: render.Style, song: render.Song, lines: tuple[tuple[float, str], ...]) -> float:
     """How much of the song before the clip a looping Short ends with (loop_lead): loop_lead
     seconds, or with loop_lead_line the line sung just before the clip (from its start to the
     clip's), kept inside the song. 0 without a loop, over the user's video, or when it would be no
-    longer than the LOOP blend, which then joins the end to the start as before."""
+    longer than the blend, which then joins the end to the start as before."""
     if not style.loop or song.video:
         return 0.0
     first, _ = span(style, song)
@@ -160,15 +173,15 @@ def lead(style: render.Style, song: render.Song, lines: tuple[tuple[float, str],
         before = [start for start, text in lines if start < first - 1e-3 and text]
         length = first - before[-1] if before else 0.0
     length = min(max(0.0, length), first)
-    return length if length > LOOP + 1e-3 else 0.0
+    return length if length > blend(style) + 1e-3 else 0.0
 
 
-def lead_graph(length: float, lead: float) -> str:
+def lead_graph(length: float, lead: float, blend: float) -> str:
     """ffmpeg's audio filter for a loop lead-in: input 1 is the clip, `length` seconds, input 2
     the `lead` seconds before it. The clip fades out over its last LEAD_OUT seconds; the lead comes
-    in LOOP seconds before the clip's end, fading in over LEAD_IN, and plays to its end, which is the
+    in `blend` seconds before the clip's end, fading in over LEAD_IN, and plays to its end, which is the
     sample before the clip's first. Neither the file's start nor its end fades."""
-    start = length - LOOP
+    start = length - blend
     return (
         f"[1:a]afade=t=out:st={max(0.0, length - LEAD_OUT):.3f}:d={LEAD_OUT}[end];"
         f"[2:a]afade=t=in:st=0:d={LEAD_IN},adelay={round(start * 1000)}:all=1[before];"
@@ -179,11 +192,12 @@ def lead_graph(length: float, lead: float) -> str:
 def loop_graph(length: float, overlap: float) -> str:
     """ffmpeg's audio filter for a loop: input 1 is the clip, input 2 the `overlap` seconds before
     it. The clip's end fades out while the moments before its start fade in, so the last sample
-    leads into the first."""
+    leads into the first. The fades are equal power (a quarter sine each way): two different moments
+    of the song add in power, and straight fades left the seam quieter."""
     start = length - overlap
     return (
-        f"[1:a]afade=t=out:st={start:.3f}:d={overlap:.3f}[end];"
-        f"[2:a]afade=t=in:st=0:d={overlap:.3f},adelay={round(start * 1000)}:all=1[before];"
+        f"[1:a]afade=t=out:st={start:.3f}:d={overlap:.3f}:curve=qsin[end];"
+        f"[2:a]afade=t=in:st=0:d={overlap:.3f}:curve=qsin,adelay={round(start * 1000)}:all=1[before];"
         "[end][before]amix=inputs=2:duration=first:normalize=0[sound]"
     )
 
@@ -387,17 +401,50 @@ def draw_bars(img: Image.Image, style: render.Style, fr: Frame) -> None:
     fill = (*render.hex_rgb(style.bars_colour), 255)
     d.rectangle((0, 0, fr.w, fr.bar - 1), fill=fill)
     d.rectangle((0, fr.h - fr.bar, fr.w, fr.h), fill=fill)
-    face = fonts.resolve(style.font)
-    ink = (*bar_ink(style.bars_colour), 255)
     for text, y in ((style.bars_top, fr.bar / 2), (style.bars_bottom, fr.h - fr.bar / 2)):
-        text = " ".join(text.split())
-        if not text:
-            continue
-        size = min(style.bars_size, fr.bar * 0.6)
-        f = render.font(face, size, 650)
-        while render.text_width(text, f) > fr.w - 2 * fr.margin and f.size > 12:
-            f = render.font(face, f.size * 0.92, 650)
-        render.tracked(d, (fr.w / 2, y), text, f, ink)
+        band_text(d, style, fr, text, y, fr.bar)
+
+
+def band_text(
+    d: ImageDraw.ImageDraw, style: render.Style, fr: Frame, text: str, y: float, height: float
+) -> None:
+    """One band's text on one line, centred at y, made smaller when wider than the frame or taller
+    than the band."""
+    text = " ".join(text.split())
+    if not text or height <= 0:
+        return
+    face = fonts.resolve(style.font)
+    f = render.font(face, min(style.bars_size, height * 0.6), 650)
+    while render.text_width(text, f) > fr.w - 2 * fr.margin and f.size > 12:
+        f = render.font(face, f.size * 0.92, 650)
+    render.tracked(d, (fr.w / 2, y), text, f, (*bar_ink(style.bars_colour), 255))
+
+
+def script(ch: str) -> str:
+    """'latin', 'hangul' or '' for a character, by its Unicode name."""
+    name = unicodedata.name(ch, "")
+    return "latin" if name.startswith("LATIN") else "hangul" if name.startswith("HANGUL") else ""
+
+
+def by_word(text: str, times: tuple[float, ...] | None) -> tuple[float, ...] | None:
+    """Letter times with each Latin-script word lit whole: every character of a space-delimited
+    word with Latin letters and no Hangul takes its first letter's time, so the word is lit and grown
+    from then until the next word starts (later). Sung English is heard a word at a time, not a
+    letter at a time; a Hangul letter is one sung syllable and keeps its own time."""
+    if not times:
+        return times
+    out, j = list(times), 0
+    for word in text.split():
+        span = range(j, j + len(word))
+        j += len(word)
+        kinds = {script(ch) for ch in word}
+        if "latin" in kinds and "hangul" not in kinds and span.stop <= len(out):
+            first = next(
+                (i for i, ch in zip(span, word, strict=True) if ch.isalpha()), j - len(word)
+            )
+            for i in span:
+                out[i] = times[first]
+    return tuple(out)
 
 
 def later(times: tuple[float, ...], j: int) -> float:
@@ -533,6 +580,36 @@ def worn(face: Image.Image, radius: int) -> tuple[Image.Image, Image.Image]:
     return face, wear
 
 
+def hook_rows(style: render.Style) -> list[str]:
+    """The hook's rows when the frame has bands to hold it, else none."""
+    rows = [" ".join(r.split()) for r in style.hook.split("|")] if style.bars else []
+    return [r for r in rows if r][:2]
+
+
+def hook_band(style: render.Style, fr: Frame) -> Image.Image:
+    """The top band made taller by HOOK_SHIFT, its one or two rows centred in it, the words of
+    hook_hi in the highlight colour; a row too wide for the frame is drawn smaller."""
+    rows = hook_rows(style)
+    band = Image.new("RGBA", (fr.w, fr.bar + HOOK_SHIFT), (*render.hex_rgb(style.bars_colour), 255))
+    d = ImageDraw.Draw(band)
+    face = fonts.resolve(style.font)
+    lit = [w.strip() for w in style.hook_hi.split(",") if w.strip()]
+    ink, yellow = (*bar_ink(style.bars_colour), 255), (*render.hex_rgb(HIGHLIGHT), 255)
+    f = render.font(face, HOOK_PX, HOOK_WEIGHT)
+    while max(f.getlength(r) for r in rows) > fr.w - 2 * fr.margin and f.size > 24:
+        f = render.font(face, f.size * 0.92, HOOK_WEIGHT)
+    pitch = f.size * HOOK_PITCH
+    top = (band.height - pitch * (len(rows) - 1)) / 2
+    for r, row in enumerate(rows):
+        parts = re.split("(" + "|".join(map(re.escape, lit)) + ")", row) if lit else [row]
+        parts = [p for p in parts if p]
+        x = (fr.w - sum(f.getlength(p) for p in parts)) / 2
+        for p in parts:
+            d.text((x, top + r * pitch), p, font=f, fill=yellow if p in lit else ink, anchor="lm")
+            x += f.getlength(p)
+    return band
+
+
 class Painter:
     """The upright frames of one song and style. The background, title, cover and bands are drawn
     once; a frame adds the lines, and a frame whose lines stand where they stood is the last one
@@ -543,7 +620,7 @@ class Painter:
     ):
         self.song, self.style = song, style
         self.letter = style.highlight == "letter"
-        given = {(start, text): times for start, text, times in song.letters}
+        given = {(start, text): by_word(text, times) for start, text, times in song.letters}
         # Per line, its letter times; a line comes in no later than its first letter.
         self.times = [given.get(line) if self.letter else None for line in lines]
         self.lines = tuple(
@@ -560,16 +637,18 @@ class Painter:
             self.make_disc()
         self.overlap = loop_length(style, song)
         # With a lead the clip goes on past its end into the song before its start, `lead` seconds
-        # less the LOOP blend; lines after the clip never show, not even as the next line.
+        # less the blend; lines after the clip never show, not even as the next line.
         self.lead = lead(style, song, lines)
         if self.lead:
-            self.overlap = LOOP
+            self.overlap = blend(style)
             self.lines = tuple(
                 (start, text) if start < self.span[1] else (start, "") for start, text in self.lines
             )
         self.lead = self.lead or self.overlap
         self.last: tuple = (None, b"")
         self.fps = render.rate(style)
+        self.hook = hook_band(style, self.frame) if hook_rows(style) else None
+        self.crop = max(0, style.crop_top) if style.bars else 0
         if self.disc:
             # Whole turns over the whole video, so a loop meets itself.
             first, last = self.span
@@ -743,11 +822,42 @@ class Painter:
         if self.overlap:
             _, last = self.span
             if t >= last:
-                return self.plain(self.before(t), t)
+                return self.finish(self.plain(self.before(t), t))
             if t > last - self.overlap:
                 u = min(1.0, (t - (last - self.overlap)) / self.overlap)
-                return Image.blend(self.plain(t), self.plain(self.before(t), t), u)
-        return self.plain(t)
+                return self.finish(Image.blend(self.plain(t), self.plain(self.before(t), t), u))
+        return self.finish(self.plain(t))
+
+    def finish(self, img: Image.Image) -> Image.Image:
+        """The picture between the bands without its top crop_top px, moved down under the hook's
+        taller band. The bottom band takes what is left: crop_top - HOOK_SHIFT px more or less than
+        bars_height gave it, with bars_bottom drawn again in the middle of it."""
+        if self.hook is None and not self.crop:
+            return img
+        fr = self.frame
+        shift = HOOK_SHIFT if self.hook is not None else 0
+        out = Image.new("RGBA", (fr.w, fr.h), (*render.hex_rgb(self.style.bars_colour), 255))
+        # Pasted, not composited: faint lettering leaves the frame's alpha under 255, which the
+        # video ignores and a composite over the band colour would darken.
+        out.paste(img.crop((0, fr.bar + self.crop, fr.w, fr.h - fr.bar)), (0, fr.bar + shift))
+        if self.hook is not None:
+            out.alpha_composite(self.hook, (0, 0))
+        bottom = self.bottom_band()
+        if self.style.bars_bottom.strip() and bottom > 0:
+            band_text(
+                ImageDraw.Draw(out),
+                self.style,
+                fr,
+                self.style.bars_bottom,
+                fr.h - bottom / 2,
+                bottom,
+            )
+        return out
+
+    def bottom_band(self) -> int:
+        """The bottom band's height after the hook and crop_top."""
+        shift = HOOK_SHIFT if self.hook is not None else 0
+        return self.frame.bar - shift + self.crop
 
     def raw(self, t: float) -> bytes:
         state = self.state(t)

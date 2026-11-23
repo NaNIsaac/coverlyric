@@ -52,7 +52,7 @@ def test_the_video_ends_with_the_song_before_the_clip(song, tmp_path):
     style = replace(SHORT, loop_lead_line=True)
     out = tmp_path / "lead.mp4"
     render.render(out, LINES, song, style, 2, quick=True, report=lambda *a: None)
-    assert media.duration(str(out)) == pytest.approx(6.0 + 3.0 - tall.LOOP, abs=0.05)
+    assert media.duration(str(out)) == pytest.approx(6.0 + 3.0 - 0.5, abs=0.05)
     # The last moments are the song just before the clip's start, and the first the clip's own
     # start, both at full strength: neither end of the file fades.
     end = media.samples(str(out), 8000, start=8.2, length=0.25)
@@ -102,6 +102,44 @@ def test_the_lead_replaces_the_plain_loop_blend(song):
     """Both set: the lead's ending wins; the clip's last LOOP seconds blend into the lead, not into
     the moment just before the clip."""
     p = tall.Painter(LINES, song, replace(SHORT, loop_lead=3.0))
-    assert p.before(14.0 - tall.LOOP) == pytest.approx(5.0)
+    assert p.before(14.0 - 0.5) == pytest.approx(5.0)
     plain = tall.Painter(LINES, song, SHORT)
-    assert plain.before(14.0 - tall.LOOP) == pytest.approx(8.0 - tall.LOOP)
+    assert plain.before(14.0 - 0.5) == pytest.approx(8.0 - 0.5)
+
+
+@pytest.mark.parametrize("blend", [0.3, 0.9])
+def test_one_blend_for_the_picture_the_sound_and_the_subtitles(song, blend):
+    plain = replace(SHORT, loop_blend=blend)
+    p = tall.Painter(LINES, song, plain)
+    assert p.overlap == tall.loop_length(plain, song) == blend, "picture and sound (loop_graph)"
+    assert p.length() == pytest.approx(6.0)
+    led = replace(plain, loop_lead_line=True)
+    q = tall.Painter(LINES, song, led)
+    assert q.overlap == blend and q.length() == pytest.approx(6.0 + 3.0 - blend)
+    assert tall.cues(led, song, list(LINES))[1] == pytest.approx(q.length())
+    graph = tall.lead_graph(6.0, 3.0, tall.blend(led))
+    assert f"adelay={round((6.0 - blend) * 1000)}:all=1" in graph
+    assert tall.lead(replace(plain, loop_lead=blend), song, LINES) == 0.0, "within the blend"
+
+
+def test_a_zero_blend_still_lets_the_lead_in(song):
+    led = replace(SHORT, loop_lead_line=True, loop_blend=0.0)
+    assert tall.Painter(LINES, song, led).overlap == tall.MIN_BLEND
+    assert tall.loop_length(replace(SHORT, loop_blend=0.0), song) == tall.MIN_BLEND
+
+
+def test_a_lead_video_is_as_long_as_its_blend_says(song, tmp_path):
+    style = replace(SHORT, loop_lead_line=True, loop_blend=0.3)
+    out = tmp_path / "lead.mp4"
+    render.render(out, LINES, song, style, 2, quick=True, report=lambda *a: None)
+    assert media.duration(str(out)) == pytest.approx(6.0 + 3.0 - 0.3, abs=0.05)
+
+
+def test_a_loop_does_not_dip_at_its_repeat(song, tmp_path):
+    style = replace(SHORT, loop_blend=0.3)
+    out = tmp_path / "loop.mp4"
+    render.render(out, LINES, song, style, 2, quick=True, report=lambda *a: None)
+    start = media.samples(str(out), 8000, start=0.02, length=0.2)[:, 0]
+    same = media.samples(song.audio, 8000, start=8.02, length=0.2)[:, 0]
+    level = float(np.sqrt(np.mean(start**2)) / np.sqrt(np.mean(same**2)))
+    assert level > 0.8, f"the start is {20 * np.log10(level):.1f} dB under the song (#72)"
