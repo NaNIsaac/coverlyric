@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass, replace
 from functools import lru_cache
 
@@ -419,6 +420,33 @@ def band_text(
     render.tracked(d, (fr.w / 2, y), text, f, (*bar_ink(style.bars_colour), 255))
 
 
+def script(ch: str) -> str:
+    """'latin', 'hangul' or '' for a character, by its Unicode name."""
+    name = unicodedata.name(ch, "")
+    return "latin" if name.startswith("LATIN") else "hangul" if name.startswith("HANGUL") else ""
+
+
+def by_word(text: str, times: tuple[float, ...] | None) -> tuple[float, ...] | None:
+    """Letter times with each Latin-script word lit whole: every character of a space-delimited
+    word with Latin letters and no Hangul takes its first letter's time, so the word is lit and grown
+    from then until the next word starts (later). Sung English is heard a word at a time, not a
+    letter at a time; a Hangul letter is one sung syllable and keeps its own time."""
+    if not times:
+        return times
+    out, j = list(times), 0
+    for word in text.split():
+        span = range(j, j + len(word))
+        j += len(word)
+        kinds = {script(ch) for ch in word}
+        if "latin" in kinds and "hangul" not in kinds and span.stop <= len(out):
+            first = next(
+                (i for i, ch in zip(span, word, strict=True) if ch.isalpha()), j - len(word)
+            )
+            for i in span:
+                out[i] = times[first]
+    return tuple(out)
+
+
 def later(times: tuple[float, ...], j: int) -> float:
     """When letter j stops being sung: the next later time. A punctuation mark shares its letter's
     time, so it does not end it."""
@@ -592,7 +620,7 @@ class Painter:
     ):
         self.song, self.style = song, style
         self.letter = style.highlight == "letter"
-        given = {(start, text): times for start, text, times in song.letters}
+        given = {(start, text): by_word(text, times) for start, text, times in song.letters}
         # Per line, its letter times; a line comes in no later than its first letter.
         self.times = [given.get(line) if self.letter else None for line in lines]
         self.lines = tuple(

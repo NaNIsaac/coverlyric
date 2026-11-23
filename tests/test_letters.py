@@ -91,6 +91,50 @@ def test_a_punctuation_mark_does_not_end_its_letter():
     assert [on for _, on in p.lyric_state(3.0)[2]] == [True, True]
 
 
+def lit_at(text: str, times: tuple[float, ...], t: float) -> list[bool]:
+    _, song, style = demo(highlight="letter", clip_from=0.0, clip_to=9.0)
+    p = tall.Painter(((1.0, text),), replace(song, letters=((1.0, text, times),)), style)
+    return [on for _, on in p.lyric_state(t)[2]]
+
+
+def test_an_english_word_is_lit_whole_until_the_next_word():
+    text = "Hello, big world"  # 6 + 3 + 5 characters but spaces
+    times = timing.letter_times(
+        text, [2.0, 2.1, 2.2, 2.3, 2.4, 3.0, 3.1, 3.2, 4.0, 4.1, 4.2, 4.3, 4.4]
+    )
+    assert lit_at(text, times, 2.05) == [True] * 6 + [False] * 8, "the comma goes with its word"
+    assert lit_at(text, times, 2.95) == [True] * 6 + [False] * 8, "until the next word starts"
+    assert lit_at(text, times, 3.5) == [False] * 6 + [True] * 3 + [False] * 5
+    assert tall.by_word(text, times)[:6] == (2.0,) * 6
+
+
+def test_a_mixed_line_lights_english_by_word_and_hangul_by_letter():
+    text = "Go 가나 (Run)"  # G o 가 나 ( R u n
+    times = (1.0, 1.1, 2.0, 2.5, 3.0, 3.0, 3.1, 3.2, 3.2)
+    assert lit_at(text, times, 1.05) == [True, True] + [False] * 7
+    assert lit_at(text, times, 2.1) == [False, False, True] + [False] * 6
+    assert lit_at(text, times, 2.6) == [False, False, False, True] + [False] * 5
+    assert lit_at(text, times, 3.15) == [False] * 4 + [True] * 5, "the brackets go with the word"
+
+
+def test_hangul_and_a_word_mixing_scripts_keep_their_letter_times():
+    times = (1.0, 1.5, 2.0, 2.5, 3.0)
+    assert tall.by_word("가나 다라마", times) == times
+    assert tall.by_word("A가 B", (1.0, 1.5, 2.0)) == (1.0, 1.5, 2.0), "one token with Hangul"
+    assert tall.by_word("12 34", (1.0, 1.5, 2.0, 2.5)) == (1.0, 1.5, 2.0, 2.5), "no letters"
+    assert tall.by_word("ab", None) is None
+
+
+def test_the_page_preview_lights_english_by_word_too():
+    from coverlyric import overlay
+
+    text = "big world"
+    times = (2.0, 2.1, 2.2, 3.0, 3.1, 3.2, 3.3, 3.4)
+    _, song, style = demo(highlight="letter", clip_from=0.0, clip_to=9.0)
+    p = overlay.Painter(((1.0, text),), replace(song, letters=((1.0, text, times),)), style)
+    assert p.times[0] == (2.0,) * 3 + (3.0,) * 5
+
+
 def test_a_line_comes_in_no_later_than_its_first_letter():
     _, song, style = demo(highlight="letter", clip_from=0.0, clip_to=6.0)
     p = tall.Painter(((2.0, "가나"),), replace(song, letters=((2.0, "가나", (1.6, 2.2)),)), style)
