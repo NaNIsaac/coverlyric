@@ -150,6 +150,23 @@ uv run coverlyric mcp
 프로젝트는 폴더 경로로 주고, 상태는 `project.json` 하나입니다. 도구 사이에 기억하는 것이 없고, 바꾼 것은 바로
 저장됩니다. `still` 과 `clip_render` 가 만든 파일은 `.cache/mcp/` 에 있고 지워도 됩니다.
 
+### 클라이언트에 연결하기
+
+`coverlyric mcp --config` 는 이 coverlyric 의 서버를 띄우는 설정을 이 컴퓨터의 절대 경로로 찍습니다: 이
+폴더에서의 `uv run`(설치된 프로그램에서 부르면 그 프로그램의 uv), 아니면 PATH의 `coverlyric` 프로그램.
+클라이언트가 쓸 사본에서 실행합니다.
+
+```sh
+uv run coverlyric mcp --config
+```
+
+Claude 앱은 찍힌 `mcpServers` 항목을 설정 파일(설정, 개발자, 구성 편집)에 이미 있는 서버 옆에 넣고, 저장한
+뒤 앱을 다시 켭니다. Claude Code 는 안쪽의 `coverlyric` 객체를 받습니다: `claude mcp add-json coverlyric
+'<그 객체>'`.
+
+서버가 클라이언트에 도구 쓰는 법을 알려 줍니다: 시간은 초나 m:ss 이고 쇼츠도 노래 시간 기준, 줄은 1부터,
+바꾼 것은 전체 `render` 전에 `still` 과 `clip_render` 로 확인.
+
 ## 설치된 프로그램
 
 시작 메뉴의 바로 가기가 `가사영상 만들기.bat` 을, 그것이 `tools/start.ps1` 을
