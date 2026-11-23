@@ -133,3 +133,13 @@ def test_a_lead_video_is_as_long_as_its_blend_says(song, tmp_path):
     out = tmp_path / "lead.mp4"
     render.render(out, LINES, song, style, 2, quick=True, report=lambda *a: None)
     assert media.duration(str(out)) == pytest.approx(6.0 + 3.0 - 0.3, abs=0.05)
+
+
+def test_a_loop_does_not_dip_at_its_repeat(song, tmp_path):
+    style = replace(SHORT, loop_blend=0.3)
+    out = tmp_path / "loop.mp4"
+    render.render(out, LINES, song, style, 2, quick=True, report=lambda *a: None)
+    start = media.samples(str(out), 8000, start=0.02, length=0.2)[:, 0]
+    same = media.samples(song.audio, 8000, start=8.02, length=0.2)[:, 0]
+    level = float(np.sqrt(np.mean(start**2)) / np.sqrt(np.mean(same**2)))
+    assert level > 0.8, f"the start is {20 * np.log10(level):.1f} dB under the song (#72)"

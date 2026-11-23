@@ -41,6 +41,7 @@ CHANGE = 0.3  # seconds a new line takes to move up into the middle
 LEAD_OUT, LEAD_IN = 0.9, 0.45  # loop_lead: the clip's fade out and the lead's fade in, seconds
 MAX_BLOCK = 8  # the longest block of lines 후렴 찾기 compares
 AUDIO_FADE = 0.3
+START_RAMP = 0.01  # a looping Short's fade in: enough that the first play does not click
 # highlight=letter: only the letter being sung is lit, in HIGHLIGHT and LETTER_POP times its size,
 # growing over POP_IN seconds and going back as the next letter starts. The line is drawn at
 # LETTER_PX with a shadow and no band; an outline and a band were too heavy around the lit letter.

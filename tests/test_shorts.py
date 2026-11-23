@@ -178,3 +178,9 @@ def test_the_files_beside_a_shorts_video_are_on_the_clip_clock(tmp_path):
 
 def lines_in(srt: str) -> list[str]:
     return [b.split("\n")[2] for b in srt.strip().split("\n\n")]
+
+
+def test_a_loop_fades_in_only_enough_not_to_click():
+    style = replace(tall.shorts(render.Style()), loop=True)
+    assert render.fades(style, 18.0, 6.0, 10.0) == ([], ["afade=t=in:st=0:d=0.01"])
+    assert render.fades(style, 18.0, 0.0, 10.0)[1] == ["afade=t=in:st=0:d=0.3"], "no blend at 0"
