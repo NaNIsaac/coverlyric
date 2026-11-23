@@ -213,7 +213,7 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
     """Apply key=value pairs; the keys are TEXT_KEYS, clean_tags, video, title_image and the
     style's own keys."""
     style = project.style.to_dict()
-    changed = []
+    changed, given = [], []
     for pair in pairs:
         key, sep, value = pair.partition("=")
         key = key.strip()
@@ -224,9 +224,9 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
         elif key == "clean_tags":
             project.clean_tags = truth(value)
         elif key == "video":
-            project.video = put_video(project, value.strip())
+            given.append((key, video_file_given(value.strip())))
         elif key == "title_image":
-            project.title_image = put_title_image(project, value.strip())
+            given.append((key, title_file_given(value.strip())))
         elif key in STYLE_KEYS:
             default = getattr(render.Style, key)
             try:
@@ -238,6 +238,10 @@ def set_keys(project: Project, pairs: list[str]) -> list[str]:
             raise Usage(f"unknown key {key!r}; keys: {keys}")
         changed.append(key)
     project.style = render.Style.from_dict(style)
+    # Files last: a key refused above must not have cost a file.
+    for key, source in given:
+        stem = video_stem(project) if key == "video" else "title"
+        setattr(project, key, put_file(project, getattr(project, key), source, stem))
     return changed
 
 
@@ -254,46 +258,74 @@ def video_stem(project: Project) -> str:
     return stem
 
 
-def put_video(project: Project, value: str) -> str:
-    """The output's video after `video=value`: the file copied in as video_stem() + its suffix in
-    place of the one before, or none for an empty value. The one before is deleted unless another
-    output uses it."""
+def video_file_given(value: str) -> Path | None:
+    """The file of `video=value`, checked; None for an empty value."""
+    if not value:
+        return None
     from . import overlay
 
-    source = Path(value) if value else None
-    if source is not None:
-        if not source.is_file():
-            raise FileNotFoundError(f"no file at {source}")
-        try:
-            overlay.length(str(source))
-        except ValueError:
-            raise Usage(f"not a video ffmpeg can read: {source}") from None
-    mine = project.output
-    stem = video_stem(project)
-    shared = {o.video for o in project.outputs if o is not mine}
-    olds = {*project.folder.glob(f"{stem}.*")}
-    if mine.video:
-        olds.add(project.folder / mine.video)
-    keep = source.resolve() if source is not None else None
-    for old in olds:
-        if old.is_file() and old.name not in shared and old.resolve() != keep:
-            old.unlink()
-    return copy_in(source, project.folder, stem) if source is not None else ""
+    source = Path(value)
+    if not source.is_file():
+        raise FileNotFoundError(f"no file at {source}")
+    try:
+        overlay.length(str(source))
+    except ValueError:
+        raise Usage(f"not a video ffmpeg can read: {source}") from None
+    return source
 
 
-def put_title_image(project: Project, value: str) -> str:
-    """The project's title lettering after `title_image=value`: the picture copied in as title +
-    its suffix in place of the one before, or none for an empty value."""
-    source = Path(value) if value else None
-    if source is not None:
-        if not source.is_file():
-            raise FileNotFoundError(f"no file at {source}")
-        if render.title_lettering(str(source), 10, 10, (0, 0, 0)) is None:
-            raise Usage(f"not a picture with dark lettering: {source}")
-    for old in project.folder.glob("title.*"):
-        if source is None or old.resolve() != source.resolve():
-            old.unlink()
-    return copy_in(source, project.folder, "title") if source is not None else ""
+def title_file_given(value: str) -> Path | None:
+    """The picture of `title_image=value`, checked; None for an empty value."""
+    if not value:
+        return None
+    source = Path(value)
+    if not source.is_file():
+        raise FileNotFoundError(f"no file at {source}")
+    if render.title_lettering(str(source), 10, 10, (0, 0, 0)) is None:
+        raise Usage(f"not a picture with dark lettering: {source}")
+    return source
+
+
+def put_file(project: Project, listed: str, source: Path | None, stem: str) -> str:
+    """`source` copied into the project folder as stem + its suffix; "" for none. Of the files
+    already there only `listed`, the one it replaces, is written over, and only while nothing else
+    in the project uses it: another file of that name gets the copy numbered."""
+    if source is None:
+        return ""
+    old = project.folder / listed if listed else None
+    if old and source.resolve() == old.resolve():
+        return listed
+    alone = old is not None and listed_files(project).count(listed) == 1
+    suffix, n = source.suffix.lower(), 1
+    target = project.folder / f"{stem}{suffix}"
+    while target.exists():
+        if target.resolve() == source.resolve():
+            return target.name
+        if alone and target == old:
+            break
+        n += 1
+        target = project.folder / f"{stem}-{n}{suffix}"
+    shutil.copyfile(source, target)
+    return target.name
+
+
+def listed_files(project: Project) -> list[str]:
+    """The names of the project's files, once for each use."""
+    names = [project.audio, project.art, project.title_image]
+    for o in project.outputs:
+        names += [o.video, *o.anim]
+    return [name for name in names if name]
+
+
+def delete_replaced(project: Project, before: list[str]) -> None:
+    """After a save: the files listed before that nothing lists now, inside the project folder."""
+    folder = project.folder.resolve()
+    kept = {(folder / name).resolve() for name in listed_files(project)}
+    kept.add(folder / "project.json")
+    for name in before:
+        path = (folder / name).resolve()
+        if path.parent == folder and path not in kept and path.is_file():
+            path.unlink()
 
 
 def line_number(project: Project, text: str) -> int:
@@ -995,8 +1027,10 @@ def run(args: argparse.Namespace) -> dict:
         return show(project, args.folder / "project.json")
     project, file = load(args.project, getattr(args, "output", None))
     if args.action == "set":
+        before = listed_files(project)
         changed = set_keys(project, args.pairs)
         project.save(file)
+        delete_replaced(project, before)
         return {**show(project, file), "changed": changed}
     if args.action == "lines":
         changed = edit_lines(project, args)

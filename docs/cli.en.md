@@ -97,6 +97,10 @@ moving picture and `video=` belong to one output. Commands work on the current o
 `render`, `still`, `srt`, `chorus`, `sections`, `align`, `project show` and `project set` take
 `--output ID` to work on another one without changing which one is current.
 
+`video=` and `title_image=` of `project set` replace or delete only the file the project listed, and
+only when no other output uses it. Other files in the folder stay, whatever their names; a copy whose
+name is taken gets a number (`video-2.mp4`).
+
 Every command takes `--json` and then prints one JSON object. Progress goes to standard error.
 Output is UTF-8 whatever the console is set to.
 
