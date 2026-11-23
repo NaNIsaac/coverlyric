@@ -30,8 +30,14 @@ server = MCPServer(
     instructions=(
         "Lyric videos from a song, a cover and its lyrics. Every tool takes `project`, the project "
         "folder (or its project.json) on this computer. A song can have several outputs (a wide "
-        "video, Shorts); `output` picks one, default the current one. Changes are saved at once. "
-        "open_page shows the project in the browser only when the user asks for it."
+        "video, Shorts); `output` picks one, default the current one (output_list shows which). "
+        "Changes are saved at once. Times are seconds (72.4) or m:ss (1:12.4), always on the "
+        "song's clock, also for a Short whose part starts later (clip_from). Lines are numbered "
+        "from 1, as project_show lists them. To check a change, look at a still first, then a "
+        "clip_render of the few seconds around it; run render, which takes about as long as the "
+        "video, only when the user asks for the finished video. project_set refuses an unknown key "
+        "with the list of keys. open_page shows the project in the browser only when the user asks "
+        "for it."
     ),
 )
 

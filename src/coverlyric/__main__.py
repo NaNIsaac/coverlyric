@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import traceback
 from pathlib import Path
@@ -113,6 +114,23 @@ def pick_folder(start: Path) -> str:
         root.destroy()
 
 
+def client_config(root: Path | None = None) -> dict:
+    """The `mcpServers` setting an AI client needs to start this coverlyric's `mcp` server, with
+    absolute paths so it can be pasted as is. From a source folder or the installed program (a
+    folder with pyproject.toml above the package) it is `uv run` in that folder, with the uv
+    start.ps1 uses; else the `coverlyric` program on PATH."""
+    root = root or Path(__file__).resolve().parents[2]
+    if (root / "pyproject.toml").is_file():
+        shipped = root / "uv" / "uv.exe"
+        uv = os.environ.get("COVERLYRIC_UV") or (str(shipped) if shipped.is_file() else None)
+        uv = uv or shutil.which("uv") or "uv"
+        args = ["run", "--directory", str(root), "--frozen", "--no-dev", "--extra", "mcp"]
+        entry = {"command": uv, "args": [*args, "coverlyric", "mcp"]}
+    else:
+        entry = {"command": shutil.which("coverlyric") or "coverlyric", "args": ["mcp"]}
+    return {"mcpServers": {"coverlyric": entry}}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="coverlyric", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
@@ -124,7 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
     app.add_argument("--home", type=Path, help="folder for work and finished videos")
     app.add_argument("--port", type=int, default=0)
     app.add_argument("--no-browser", action="store_true")
-    sub.add_parser("mcp", help="tools for an AI client over stdio (needs coverlyric[mcp])")
+    mcp = sub.add_parser("mcp", help="tools for an AI client over stdio (needs coverlyric[mcp])")
+    mcp.add_argument(
+        "--config",
+        action="store_true",
+        help="print the client setting that starts this coverlyric's server, and stop",
+    )
     cli.add_commands(sub)
     job = sub.add_parser("render-job")
     job.add_argument("job", type=Path)
@@ -159,6 +182,8 @@ def main(argv: list[str] | None = None) -> None:
             serve(folder / ".cache" / "page", args.port, browser, folder)
         else:
             serve(home.resolve(), getattr(args, "port", 0), browser)
+    elif args.command == "mcp" and args.config:
+        print(json.dumps(client_config(), ensure_ascii=False, indent=2))
     elif args.command == "mcp":
         try:
             from .mcp_server import run_stdio

@@ -152,6 +152,24 @@ A project is given by its folder, and `project.json` is its only state: nothing 
 calls, and a change is saved at once. Files made by `still` and `clip_render` are in `.cache/mcp/`
 and can be deleted.
 
+### Connect a client
+
+`coverlyric mcp --config` prints the setting that starts this coverlyric's server, with this
+computer's absolute paths: `uv run` in this folder (the installed program's own uv when run from
+it), or the `coverlyric` program on PATH. Run it in the copy the client should use.
+
+```sh
+uv run coverlyric mcp --config
+```
+
+The Claude app takes the printed `mcpServers` entry in its settings file (Settings, Developer, Edit
+Config), added next to any servers already there; restart the app after saving. Claude Code takes
+the inner `coverlyric` object: `claude mcp add-json coverlyric '<that object>'`.
+
+The server tells the client how to use the tools: times are seconds or m:ss on the song's clock (also
+for a Short), lines count from 1, and a change is checked with `still` and `clip_render` before a
+full `render`.
+
 ## The installed program
 
 The Start menu shortcut runs `가사영상 만들기.bat`, which runs `tools/start.ps1`. It runs
