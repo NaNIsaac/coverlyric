@@ -7,7 +7,13 @@ as format 1 had them, so the release before format 2 can still open the file."""
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
+import os
+import sys
+import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,6 +23,71 @@ from .render import Song, Style
 FORMAT = 2
 # The first output's id by shape, for a format 1 file.
 FIRST_ID = {"wide": "wide", "tall": "short", "square": "square", "portrait": "portrait"}
+
+
+LOCK = Path(".cache", "project.lock")
+
+
+class Changed(ValueError):
+    """project.json changed on disk since this copy of it was read: saving would undo that change."""
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_bytes(path: Path) -> bytes:
+    """The file's bytes; on Windows a reader can meet the moment another process replaces it."""
+    for wait in (0.02, 0.05, 0.1, 0.2, 0.4):
+        try:
+            return path.read_bytes()
+        except PermissionError:
+            time.sleep(wait)
+    return path.read_bytes()
+
+
+@contextlib.contextmanager
+def locked(folder: Path) -> Iterator[None]:
+    """One writer at a time for the project in `folder`, across processes: the page, a command and
+    a tool each read, change and write project.json under it."""
+    path = folder / LOCK
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a+b") as f:
+        if sys.platform == "win32":
+            import msvcrt
+
+            while True:
+                try:
+                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    continue
+            try:
+                yield
+            finally:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def replace_file(path: Path, data: bytes) -> None:
+    """`data` as the whole of `path`, never half written: a temp file beside it, then a rename."""
+    temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temp.write_bytes(data)
+    for wait in (0.02, 0.05, 0.1, 0.2, 0.4, 0.8):
+        try:
+            os.replace(temp, path)
+            return
+        except PermissionError:
+            time.sleep(wait)
+    os.replace(temp, path)
 
 
 @dataclass
@@ -69,6 +140,8 @@ class Project:
     current: str = "wide"  # the output the page and the commands work on when none is named
     # The output one command works on (--output), in place of the current one; never saved.
     chosen: str | None = field(default=None, compare=False, repr=False)
+    # (file, hash of its bytes) as this copy last read or wrote it; save refuses a file changed since.
+    read: tuple[str, str] | None = field(default=None, compare=False, repr=False)
 
     @property
     def output(self) -> Output:
@@ -117,8 +190,10 @@ class Project:
 
     @classmethod
     def load(cls, path: Path) -> Project:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return cls.from_dict(path.parent, data)
+        raw = read_bytes(path)
+        project = cls.from_dict(path.parent, json.loads(raw.decode("utf-8")))
+        project.read = (str(path.resolve()), digest(raw))
+        return project
 
     @classmethod
     def from_dict(cls, folder: Path, data: dict) -> Project:
@@ -185,7 +260,29 @@ class Project:
         }
 
     def save(self, path: Path) -> None:
-        path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=1), encoding="utf-8")
+        """Write project.json. A copy read from this file refuses (Changed) when the file changed
+        since: another program wrote it, and writing now would undo that."""
+        data = json.dumps(self.to_dict(), ensure_ascii=False, indent=1).encode("utf-8")
+        where = str(path.resolve())
+        if not path.exists():
+            path.write_bytes(data)
+        else:
+            with locked(path.parent):
+                if self.read and self.read[0] == where and digest(read_bytes(path)) != self.read[1]:
+                    raise Changed(
+                        f"{path} changed since it was read; read it again and redo the change"
+                    )
+                replace_file(path, data)
+        self.read = (where, digest(data))
+
+    def changed_on_disk(self, path: Path) -> bool:
+        """This copy came from `path`, and the file differs now from what it last read or wrote."""
+        if self.read is None or self.read[0] != str(path.resolve()):
+            return False
+        try:
+            return digest(read_bytes(path)) != self.read[1]
+        except FileNotFoundError:
+            return False
 
     def path(self, name: str) -> str:
         return str((self.folder / name).resolve()) if name else ""

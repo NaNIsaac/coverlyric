@@ -113,14 +113,18 @@ def pick_folder(start: Path) -> str:
         root.destroy()
 
 
-def main(argv: list[str] | None = None) -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="coverlyric", description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command")
     app = sub.add_parser("app", help="open the page in the browser (the default)")
+    app.add_argument(
+        "project", nargs="?", type=Path, help="a project folder to open the page on (default: home)"
+    )
     app.add_argument("--home", type=Path, help="folder for work and finished videos")
     app.add_argument("--port", type=int, default=0)
     app.add_argument("--no-browser", action="store_true")
+    sub.add_parser("mcp", help="tools for an AI client over stdio (needs coverlyric[mcp])")
     cli.add_commands(sub)
     job = sub.add_parser("render-job")
     job.add_argument("job", type=Path)
@@ -128,6 +132,11 @@ def main(argv: list[str] | None = None) -> None:
     auto_job.add_argument("job", type=Path)
     pick = sub.add_parser("pick-folder")
     pick.add_argument("start", type=Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
     # A pipe, a file or an old console gets the locale code page on Windows (cp1252 or cp949),
     # which cannot write every Korean line; the page reads the job pipes as UTF-8.
     for stream in (sys.stdout, sys.stderr):
@@ -141,7 +150,25 @@ def main(argv: list[str] | None = None) -> None:
         browser = not getattr(args, "no_browser", False) and not os.environ.get(
             "COVERLYRIC_NO_BROWSER"
         )
-        serve(home.resolve(), getattr(args, "port", 0), browser)
+        project = getattr(args, "project", None)
+        if project is not None:
+            file = cli.project_file(project)
+            if not file.is_file():
+                parser.error(f"no project at {project} (a folder with project.json, or the file)")
+            folder = file.parent.resolve()
+            serve(folder / ".cache" / "page", args.port, browser, folder)
+        else:
+            serve(home.resolve(), getattr(args, "port", 0), browser)
+    elif args.command == "mcp":
+        try:
+            from .mcp_server import run_stdio
+        except ImportError:
+            print(
+                "coverlyric mcp needs the mcp extra: uv tool install 'coverlyric[mcp]'",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        run_stdio()
     elif args.command in cli.COMMANDS:
         sys.exit(cli.main(args))
     elif args.command == "auto-job":

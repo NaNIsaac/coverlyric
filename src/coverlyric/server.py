@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import colorsys
 import contextlib
+import functools
 import importlib.util
 import io
 import json
@@ -13,6 +14,7 @@ import logging
 import math
 import os
 import re
+import secrets
 import shutil
 import signal
 import subprocess
@@ -31,7 +33,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from PIL import Image
 
 from . import __version__, anim, auto, cli, fonts, looks, media, overlay, render, tall, timing
-from .project import Project
+from .project import Changed, Project
 from .render import Style
 
 WEB = Path(__file__).parent / "web"
@@ -165,34 +167,69 @@ def video_file(title: str, style: render.Style, nth: int = 1) -> str:
     return f"{safe_name(title)}{tall.SUFFIX.get(style.shape, '')}{f'-{nth}' if nth > 1 else ''}.mp4"
 
 
+OWN_FOLDER = "프로젝트 폴더에서는 새로 시작하거나 예제를 열 수 없습니다. 그 폴더의 파일을 지키기 위해서입니다."
+
+
+def editing(method):
+    """A change to the project: project.json is read again first when another program changed it,
+    and one change runs at a time."""
+
+    @functools.wraps(method)
+    def run(self, *args, **kwargs):
+        with self.edit_lock:
+            self.sync()
+            return method(self, *args, **kwargs)
+
+    return run
+
+
 class App:
-    def __init__(self, home: Path):
+    def __init__(self, home: Path, folder: Path | None = None):
         self.home = home
-        self.work = home / "작업 중"
-        self.default_output = home / "만든 영상"
+        # A project folder of the user's (`coverlyric app <project>`): the page works in it, keeps
+        # its own files in .cache/page, saves videos beside the project and never starts over there.
+        self.own_folder = folder is not None
+        self.work = folder if folder is not None else home / "작업 중"
+        self.scratch = self.work / ".cache" / "page" if folder is not None else self.work
+        self.default_output = self.work if folder is not None else home / "만든 영상"
         self.settings = home / "settings.json"
-        self.output = self.saved_output() or self.default_output
+        saved = None if self.own_folder else self.saved_output()
+        self.output = saved or self.default_output
         self.work.mkdir(parents=True, exist_ok=True)
+        self.scratch.mkdir(parents=True, exist_ok=True)
         self.output.mkdir(parents=True, exist_ok=True)
         self.file = self.work / "project.json"
         self.lock = threading.Lock()
+        self.edit_lock = threading.RLock()
         self.starting = threading.Lock()  # a double click must not start two jobs
+        # Sent with the state and back with each save: new only when project.json changed elsewhere.
+        self.rev = secrets.token_hex(4)
         self.project = Project.load(self.file) if self.file.exists() else Project(self.work)
         # Written when a render starts and removed when it ends: still there now, the program was
         # closed or the PC went off in the middle of one.
-        self.marker = self.work / "rendering.json"
+        self.marker = self.scratch / "rendering.json"
         self.job: dict = self.interrupted() or {"state": "idle"}
         self.log = home / "coverlyric.log"
         self.auto: dict = {"state": "idle"}
         self.auto_proc: subprocess.Popen | None = None
+        self.auto_texts: list[str] | None = None  # the lyrics an automatic timing run was given
         self.beat_grid: tuple = (None, None)  # (song file and its time, sections.Grid)
         self.proc: subprocess.Popen | None = None
         self.clip: dict = {"state": "idle"}
         self.clip_proc: subprocess.Popen | None = None
-        self.clip_file = self.work / "preview-clip.mp4"
+        self.clip_file = self.scratch / "preview-clip.mp4"
 
     def save(self) -> None:
         self.project.save(self.file)
+
+    def sync(self) -> None:
+        """Take project.json as it is when another program changed it since this page last read or
+        wrote it: a command, a tool or a second page."""
+        with self.edit_lock:
+            if self.project.changed_on_disk(self.file):
+                self.project = Project.load(self.file)
+                self.rev = secrets.token_hex(4)
+                render.forget_art()
 
     def interrupted(self) -> dict | None:
         """The job left by a render that never finished, after its half-made video is removed."""
@@ -202,10 +239,12 @@ class App:
             out = Path(json.loads(self.marker.read_text(encoding="utf-8"))["out"])
         except (OSError, ValueError, KeyError, TypeError):
             out = None
-        parts = {out.with_name(out.stem + ".making.mp4")} if out else set()
-        parts.update(self.output.glob("*.making.mp4"))
-        for part in parts:
-            remove_part(part, wait=0)
+        if not self.own_folder:
+            # Beside a project another program may be rendering into a making file right now.
+            parts = {out.with_name(out.stem + ".making.mp4")} if out else set()
+            parts.update(self.output.glob("*.making.mp4"))
+            for part in parts:
+                remove_part(part, wait=0)
         with contextlib.suppress(OSError):
             self.marker.unlink(missing_ok=True)
         LOG.info("the last render did not finish: %s", out.name if out else "?")
@@ -231,10 +270,11 @@ class App:
         except OSError as e:
             raise ValueError("이 폴더에는 저장할 수 없습니다. 다른 폴더를 고릅니다.") from e
         self.output = path
-        chosen = "" if path == self.default_output else str(path)
-        self.settings.write_text(
-            json.dumps({"output": chosen}, ensure_ascii=False), encoding="utf-8"
-        )
+        if not self.own_folder:  # a project's page chooses for this run only
+            chosen = "" if path == self.default_output else str(path)
+            self.settings.write_text(
+                json.dumps({"output": chosen}, ensure_ascii=False), encoding="utf-8"
+            )
         LOG.info("output folder: %s", path)
         return self.state()
 
@@ -261,7 +301,11 @@ class App:
         return saved
 
     def state(self) -> dict:
+        self.sync()
         data = self.project.to_dict()
+        data["rev"] = self.rev
+        data["own_folder"] = self.own_folder
+        data["folder"] = str(self.work.resolve())
         data["has_audio"] = bool(self.project.audio)
         data["has_art"] = bool(self.project.art)
         data["has_video"] = bool(self.project.video)
@@ -272,6 +316,7 @@ class App:
         data["outputs"] = cli.outputs(self.project)
         return data
 
+    @editing
     def choose_output(self, data: dict) -> dict:
         """Saves what the page holds, then changes its output: {"use": id} makes one current;
         {"shape": s} makes the first output of that shape current, adding one copied from the
@@ -294,8 +339,14 @@ class App:
         self.save()
         return self.state()
 
+    @editing
     def update(self, data: dict) -> None:
+        if "rev" in data and str(data["rev"]) != self.rev:
+            raise Changed(
+                "다른 곳(명령이나 다른 창)에서 프로젝트가 바뀌었습니다. 바뀐 내용을 다시 읽었습니다."
+            )
         p = self.project
+        before = cli.listed_files(p)
         if data.get("current", p.current) != p.current:
             # Sent before a switch or from a second window: its look is another output's.
             data = {k: v for k, v in data.items() if k not in ("style", "anim", "video")}
@@ -317,15 +368,16 @@ class App:
                 )
             p.style = style
         if "video" in data and not data["video"]:
-            self.drop_video()
+            p.video = ""
         if "title_image" in data and not data["title_image"]:
-            self.drop_title_image()
+            p.title_image = ""
         if "anim" in data:
             # Reorder or remove the moving picture's files; new ones come through upload.
             kept = [str(name) for name in data["anim"] if str(name) in p.anim]
             self.drop_anim(set(p.anim) - set(kept))
             p.anim = kept
         self.save()
+        cli.delete_replaced(p, before)
 
     def drop_anim(self, names: set[str]) -> None:
         folder = (self.work / "anim").resolve()
@@ -335,21 +387,13 @@ class App:
             if path.parent == folder:  # never a file outside the project's anim folder
                 path.unlink(missing_ok=True)
 
-    def drop_title_image(self) -> None:
-        for old in self.work.glob("title.*"):
-            old.unlink()
-        self.project.title_image = ""
-
-    def drop_video(self) -> None:
-        """Take the current output's video out; its file goes unless another output uses it."""
-        p = self.project
-        others = {o.video for o in p.outputs if o is not p.output}
-        if p.video and p.video not in others:
-            (self.work / p.video).unlink(missing_ok=True)
-        p.video = ""
-
+    @editing
     def upload(self, kind: str, name: str, body: bytes) -> dict:
+        """A file put into the project. Only the file the project listed for it is replaced, and
+        it goes once the project is saved; the new file never writes over another of the folder."""
         suffix = Path(name).suffix.lower()
+        p = self.project
+        before = cli.listed_files(p)
         if kind == "audio":
             if suffix not in AUDIO:
                 raise ValueError(
@@ -357,7 +401,7 @@ class App:
                 )
             # Read the new file under another name first: a file that is not a song must not cost
             # the song already in the project.
-            trial = self.work / f"upload{suffix}"
+            trial = self.scratch / f"upload{suffix}"
             trial.write_bytes(body)
             try:
                 length = media.duration(str(trial))
@@ -366,9 +410,7 @@ class App:
                 raise ValueError(
                     "노래 파일을 읽을 수 없습니다. 다른 파일을 고릅니다 (mp3, wav, m4a, flac, ogg)."
                 ) from None
-            for old in self.work.glob("song.*"):
-                old.unlink()
-            target = self.work / f"song{suffix}"
+            target = cli.free_file(p, p.audio, "song", suffix)
             trial.replace(target)
             self.project.audio = target.name
             self.project.duration = length
@@ -382,23 +424,20 @@ class App:
                     picture.load()
             except (OSError, SyntaxError, Image.DecompressionBombError):
                 raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.") from None
-            for old in self.work.glob("cover.*"):
-                old.unlink()
-            target = self.work / f"cover{suffix}"
+            target = cli.free_file(p, p.art, "cover", suffix)
             target.write_bytes(body)
             self.project.art = target.name
         elif kind == "title":
             if suffix not in IMAGES:
                 raise ValueError("지원하지 않는 그림 형식입니다. png, jpg, webp 파일을 고릅니다.")
-            trial = self.work / f"upload{suffix}"
+            trial = self.scratch / f"upload{suffix}"
             trial.write_bytes(body)
             if render.title_lettering(str(trial), 10, 10, (0, 0, 0)) is None:
                 trial.unlink()
                 raise ValueError(
                     "글씨를 찾을 수 없습니다. 흰 바탕이나 투명한 바탕에 어두운 글씨 그림을 고릅니다."
                 )
-            self.drop_title_image()
-            target = self.work / f"title{suffix}"
+            target = cli.free_file(p, p.title_image, "title", suffix)
             trial.replace(target)
             self.project.title_image = target.name
         elif kind == "font":
@@ -417,7 +456,6 @@ class App:
                 Image.open(io.BytesIO(body)).verify()
             except (OSError, SyntaxError) as e:
                 raise ValueError("그림 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.") from e
-            p = self.project
             if suffix == ".gif" or any(name.lower().endswith(".gif") for name in p.anim):
                 self.drop_anim(set(p.anim))
                 p.anim = []
@@ -435,26 +473,29 @@ class App:
                 raise ValueError(
                     "지원하지 않는 영상 형식입니다. mp4, mov, webm, mkv, avi 파일을 고릅니다."
                 )
-            trial = self.work / f"upload{suffix}"
+            trial = self.scratch / f"upload{suffix}"
             trial.write_bytes(body)
             if not overlay.streams(str(trial))[0]:
                 trial.unlink()
                 raise ValueError("영상 파일을 읽을 수 없습니다. 다른 파일을 고릅니다.")
-            self.drop_video()
-            target = self.work / f"{cli.video_stem(self.project)}{suffix}"
+            target = cli.free_file(p, p.video, cli.video_stem(p), suffix)
             trial.replace(target)
             self.project.video = target.name
         else:
             raise ValueError(f"unknown upload kind {kind}")
         render.forget_art()
         self.save()
+        cli.delete_replaced(p, before)
         return self.state()
 
+    @editing
     def demo(self) -> dict:
+        if self.own_folder:
+            raise ValueError(OWN_FOLDER)
+        before = cli.listed_files(self.project)
         for old in [*self.work.glob("song.*"), *self.work.glob("cover.*")]:
             old.unlink()
         self.drop_anim(set(self.project.anim))
-        self.drop_video()
         shutil.copy(DEMO / "tone.wav", self.work / "song.wav")
         shutil.copy(DEMO / "cover.png", self.work / "cover.png")
         demo = Project.load(DEMO / "demo.json")
@@ -464,9 +505,13 @@ class App:
         self.project = demo
         render.forget_art()
         self.save()
+        cli.delete_replaced(demo, before)
         return self.state()
 
+    @editing
     def reset(self) -> dict:
+        if self.own_folder:
+            raise ValueError(OWN_FOLDER)
         if self.job.get("state") == "running":
             raise ValueError(
                 "영상을 만드는 중에는 새로 시작할 수 없습니다. 끝나거나 멈춘 뒤 다시 합니다."
@@ -572,7 +617,18 @@ class App:
         r, g, b = rgb()
         return f"#{r:02x}{g:02x}{b:02x}"
 
+    def job_data(self) -> dict:
+        """The project for a render child, with every file by its full path: the job file may be
+        outside the project folder."""
+        p = self.project
+        data = p.flat()
+        data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
+        data["anim"] = [p.path(name) for name in p.anim]
+        data["video"], data["title_image"] = p.path(p.video), p.path(p.title_image)
+        return data
+
     def start_render(self) -> dict:
+        self.sync()
         with self.starting:
             return self.begin_render()
 
@@ -597,10 +653,8 @@ class App:
             first, last = tall.span(p.style, p.song())
             total = last - first
         self.check_room(total, p.style)
-        job = self.work / "job.json"
-        data = p.flat()
-        data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
-        data["anim"] = [p.path(name) for name in p.anim]
+        job = self.scratch / "job.json"
+        data = self.job_data()
         data["out"] = str(out)
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         self.marker.write_text(json.dumps({"out": str(out)}, ensure_ascii=False), encoding="utf-8")
@@ -693,16 +747,16 @@ class App:
             raise ValueError(
                 "영상 만들기나 자동 맞추기가 끝난 뒤에 미리보기 영상을 만들 수 있습니다."
             )
+        self.sync()
         p = self.project
         if not p.audio or not p.art:
             raise ValueError("노래 파일과 앨범 표지가 필요합니다. 노래·표지 단계에서 넣습니다.")
         _, song = render.padded((), p.song(), p.style)
         start = min(render.video_time(max(0.0, at), p.style), max(0.0, song.duration - 1.0))
         end = min(song.duration, start + CLIP_S)
-        out = self.work / "preview-clip.mp4"
-        job = self.work / "clip-job.json"
-        data = p.flat()
-        data["audio"], data["art"] = p.path(p.audio), p.path(p.art)
+        out = self.clip_file
+        job = self.scratch / "clip-job.json"
+        data = self.job_data()
         data["out"], data["clip"] = str(out), [start, end]
         job.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         cmd = [sys.executable, "-m", "coverlyric", "render-job", str(job)]
@@ -808,6 +862,7 @@ class App:
                 )
 
     def start_auto(self, model: str) -> dict:
+        self.sync()
         with self.starting:
             return self.begin_auto(model)
 
@@ -844,8 +899,9 @@ class App:
             cmd = [uv, "run", "--frozen", "--no-dev", "--extra", "auto", "--project", str(PROJECT)]
             cmd += ["python"]
         cmd += ["-m", "coverlyric", "auto-job"]
-        job = self.work / "auto-job.json"
-        (self.work / "auto-result.json").unlink(missing_ok=True)
+        job = self.scratch / "auto-job.json"
+        (self.scratch / "auto-result.json").unlink(missing_ok=True)
+        self.auto_texts = [text for _, text in p.lines]
         job.write_text(
             json.dumps(
                 {"audio": p.path(p.audio), "lyrics": lyrics, "model": picked},
@@ -896,12 +952,20 @@ class App:
         code = proc.wait()
         if self.auto_proc is not proc:  # cancelled and replaced by a newer run
             return
-        result = self.work / "auto-result.json"
+        result = self.scratch / "auto-result.json"
         if code == 0 and result.exists():
             data = json.loads(result.read_text(encoding="utf-8"))
-            # Saved here, not by the page, so a page reloaded during the run still gets the times.
-            self.project.lines = [(t, text) for t, text in data["lines"]]
-            self.save()
+            # Saved here, not by the page, so a page reloaded during the run still gets the times;
+            # not over lyrics another program changed during the run.
+            with self.edit_lock:
+                self.sync()
+                texts = self.auto_texts
+                if texts is None or [text for _, text in self.project.lines] == texts:
+                    self.project.lines = [(t, text) for t, text in data["lines"]]
+                    with contextlib.suppress(Changed):
+                        self.save()
+                else:
+                    LOG.info("automatic timing not saved: the lyrics changed during the run")
             smaller = {"smaller": self.auto["smaller"]} if "smaller" in self.auto else {}
             self.auto = {"state": "done", **data, **smaller}
         elif self.auto.get("state") != "stopped":
@@ -1053,7 +1117,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
             try:
                 if url.path == "/":
                     self.file(WEB / "index.html")
-                elif url.path in ("/app.js", "/clock.js", "/app.css"):
+                elif url.path in ("/app.js", "/clock.js", "/merge.js", "/app.css"):
                     self.file(WEB / url.path[1:])
                 elif url.path == "/api/state":
                     self.json(app.state())
@@ -1093,6 +1157,8 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     )
                 else:
                     self.send(404, b"not found", "text/plain")
+            except Changed as e:
+                self.json({"error": str(e), "state": app.state()}, 409)
             except (ValueError, OSError) as e:
                 self.json({"error": str(e)}, 400)
 
@@ -1186,20 +1252,26 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     threading.Thread(target=server_ref[0].shutdown, daemon=True).start()
                 else:
                     self.send(404, b"not found", "text/plain")
+            except Changed as e:
+                self.json({"error": str(e), "state": app.state()}, 409)
             except (ValueError, OSError, json.JSONDecodeError) as e:
                 self.json({"error": str(e)}, 400)
 
     return Handler
 
 
-def serve(home: Path, port: int = 0, browser: bool = True) -> None:
+def serve(home: Path, port: int = 0, browser: bool = True, folder: Path | None = None) -> None:
     home.mkdir(parents=True, exist_ok=True)  # the log file opens before App makes its folders
     start_log(home)
-    app = App(home)
+    app = App(home, folder)
     ref: list = []
     server = ThreadingHTTPServer(("127.0.0.1", port), handler(app, ref))
     ref.append(server)
     url = f"http://127.0.0.1:{server.server_address[1]}/"
+    page = app.scratch / "page.json" if folder is not None else None
+    if page is not None:
+        # How `open_page` finds this page again instead of starting a second one on the project.
+        page.write_text(json.dumps({"url": url, "pid": os.getpid()}), encoding="utf-8")
     print(f"coverlyric 가사 영상 만들기: {url}")
     print("프로그램을 끝내려면 이 창을 닫거나 페이지의 [끝내기]를 누릅니다.", flush=True)
     if browser:
@@ -1211,3 +1283,6 @@ def serve(home: Path, port: int = 0, browser: bool = True) -> None:
     finally:
         app.stop_render()
         server.server_close()
+        if page is not None:
+            with contextlib.suppress(OSError):
+                page.unlink(missing_ok=True)

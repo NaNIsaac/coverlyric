@@ -31,7 +31,14 @@ The tests run with `uv run pytest`.
 uv run coverlyric                         # open the page (default)
 uv run coverlyric app --home <folder>     # keep work and videos in <folder>
 uv run coverlyric app --port 8765 --no-browser
+uv run coverlyric app <project>           # open the page on that project folder
 ```
+
+`app <project>` opens the page on that folder's `project.json`. The page keeps its own files in
+`.cache/page/` and saves videos in the project folder; starting over and the demo are not offered
+there. When a command or another window changes `project.json`, the page reads it when its window
+gets the focus back or saves, and puts its own changes back on top. A field both sides changed is
+named, and the user chooses. Nothing asks the server in between (0 calls a minute).
 
 ## Everything at once
 
@@ -77,7 +84,7 @@ and its `.srt`, `.lrc` and `.png` thumbnail are saved in the same folder. Where 
 | `chorus <project> [--length 30] [--apply]` | The block of lines repeated most, as a Short's part (`from`, `to`). `--apply` makes the project an upright video of that part (9:16 if it was 16:9). Fails when no line comes back. |
 | `sections <project> [--length 30] [--apply N]` | Up to 8 loop sections a whole number of bars long, near the length, the strongest opening first. A section starts on the beat a line starts on (or the beat before it) and gets one bar more or less when that ends it just before the next line comes in. `--apply N` makes the project a looping upright video of section N (`loop=true`). Needs the `align` extra. |
 | `align <project> [--from 1:35] [--to 2:42]` | When each letter of the lines starting in that stretch is sung, saved as the project's `letters` (used by `highlight=letter`). By default an upright project's part, else the whole song. The vocals are separated from the song (demucs) and each letter is placed as one syllable (torchaudio MMS_FA). A line whose first letter comes more than 0.6 s after the line starts, whose last letter reaches the next line, or whose letters are bunched into less than 0.05 s each is placed again: from the starts of the words heard in it when the `auto` extra is installed, else evenly. It says how many lines it placed again, and `project show` marks them. The first run downloads the models, about 1.2 GB, once. Needs the `align` extra. |
-| `project lines <project> --shift -0.3` | Moves every timed line. |
+| `project lines <project> --shift -0.3` | Moves every timed line; `--range 5` or `--range 5-9` moves only those lines. |
 | `project lines <project> --set 5=1:12.4 --text 5="new words"` | Changes one line's time or text. Times take `72.4` or `1:12.4`. |
 | `project lines <project> --import <subtitles>` / `--from-lyrics <file>` | Lines and times again from a subtitle file, or lines without times from a lyrics file. Letter times (`letters`) of lines whose number or text no longer match are dropped. |
 | `project lines <project> --letters 5=72.4,72.7,73.1` | Sets when each letter of line 5 is sung, saved in `letters` (used by `highlight=letter`). One time per letter or mark but spaces, or one per letter and digit (a mark takes the time of the letter before it). Once the line's text changes, the times are no longer used. |
@@ -120,6 +127,30 @@ uv run coverlyric project lines demo-song --import timing.srt
 uv run coverlyric project set demo-song lead=1 height=720
 uv run coverlyric render demo-song
 ```
+
+## From an AI client (MCP)
+
+`coverlyric mcp` offers the commands above as tools an AI client can call. It
+talks over stdio on this computer only, and needs the `mcp` extra.
+
+```sh
+uv sync --extra mcp
+uv run coverlyric mcp
+```
+
+| Tool | What it does |
+|---|---|
+| `project_show`, `project_set` | `project show`, `project set` (`output` picks the video) |
+| `lines_get`, `lines_set_text`, `lines_set_time`, `lines_shift` | read lines; set a line's text or start; move one line or a range |
+| `output_list`, `output_add`, `output_use` | `output list`, `add`, `use` |
+| `still` | one frame at a time, as a PNG image |
+| `clip_render` | a small preview video of a stretch; answers its path |
+| `render` | the whole video with its thumbnail, SRT and LRC; reports progress |
+| `open_page` | only when the user asks: the page on that project, the open one if there is one |
+
+A project is given by its folder, and `project.json` is its only state: nothing is kept between
+calls, and a change is saved at once. Files made by `still` and `clip_render` are in `.cache/mcp/`
+and can be deleted.
 
 ## The installed program
 
