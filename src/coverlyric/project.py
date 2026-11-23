@@ -26,6 +26,11 @@ FIRST_ID = {"wide": "wide", "tall": "short", "square": "square", "portrait": "po
 
 
 LOCK = Path(".cache", "project.lock")
+LOCK_WAIT = 10.0  # seconds a save waits for another one before giving up (#75)
+
+
+class Busy(TimeoutError):
+    """Another process has held the project's lock longer than any save takes."""
 
 
 class Changed(ValueError):
@@ -47,34 +52,50 @@ def read_bytes(path: Path) -> bytes:
 
 
 @contextlib.contextmanager
-def locked(folder: Path) -> Iterator[None]:
+def locked(folder: Path, wait: float | None = None) -> Iterator[None]:
     """One writer at a time for the project in `folder`, across processes: the page, a command and
-    a tool each read, change and write project.json under it."""
+    a tool each read, change and write project.json under it. A writer holds it for milliseconds, so
+    one still holding it after `wait` seconds (LOCK_WAIT) is stuck: Busy then, rather than waiting for ever
+    (#75)."""
     path = folder / LOCK
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a+b") as f:
         if sys.platform == "win32":
             import msvcrt
 
-            while True:
-                try:
-                    msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
-                    break
-                except OSError:
-                    continue
-            try:
-                yield
-            finally:
+            def take() -> None:
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+
+            def give() -> None:
                 f.seek(0)
                 msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
         else:
             import fcntl
 
-            fcntl.flock(f, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
+            def take() -> None:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            def give() -> None:
                 fcntl.flock(f, fcntl.LOCK_UN)
+
+        wait = LOCK_WAIT if wait is None else wait
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                take()
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise Busy(
+                        f"{folder / 'project.json'} is being saved by another coverlyric (the page, "
+                        f"a command or a tool) that has not finished in {wait:g} s; close it or "
+                        f"wait, then try again"
+                    ) from None
+                time.sleep(0.02)
+        try:
+            yield
+        finally:
+            give()
 
 
 def replace_file(path: Path, data: bytes) -> None:
