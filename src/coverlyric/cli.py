@@ -309,6 +309,19 @@ def put_file(project: Project, listed: str, source: Path | None, stem: str) -> s
     return target.name
 
 
+def free_file(project: Project, listed: str, stem: str, suffix: str) -> Path:
+    """Where a new stem + suffix file goes: over `listed`, the file it replaces, while nothing else
+    in the project uses it; else stem + suffix, or the first free numbered name. No other file in
+    the folder is written over."""
+    old = project.folder / listed if listed else None
+    alone = old is not None and listed_files(project).count(listed) == 1
+    target, n = project.folder / f"{stem}{suffix}", 1
+    while target.exists() and not (alone and target == old):
+        n += 1
+        target = project.folder / f"{stem}-{n}{suffix}"
+    return target
+
+
 def listed_files(project: Project) -> list[str]:
     """The names of the project's files, once for each use."""
     names = [project.audio, project.art, project.title_image]
@@ -338,6 +351,18 @@ def line_number(project: Project, text: str) -> int:
     return n
 
 
+def line_range(project: Project, text: str | None) -> tuple[int, int]:
+    """N or N-M as the first and last line; every line for None."""
+    if text is None:
+        return 1, len(project.lines)
+    a, sep, b = text.partition("-")
+    first = line_number(project, a)
+    last = line_number(project, b) if sep else first
+    if last < first:
+        raise Usage(f"--range runs from the lower line: {text!r}")
+    return first, last
+
+
 def edit_lines(project: Project, args: argparse.Namespace) -> list[str]:
     """The line changes in a fixed order: replace the lines, then move all, then set single lines."""
     done = []
@@ -361,8 +386,15 @@ def edit_lines(project: Project, args: argparse.Namespace) -> list[str]:
         ]
     if args.shift:
         by = seconds(args.shift)
-        project.lines = [(None if t is None else max(0.0, t + by), x) for t, x in project.lines]
-        done.append(f"shifted {by:+.2f} s")
+        first, last = line_range(project, args.range)
+        project.lines = [
+            (max(0.0, t + by), x) if t is not None and first <= n <= last else (t, x)
+            for n, (t, x) in enumerate(project.lines, 1)
+        ]
+        which = "" if args.range is None else f" (lines {first}-{last})"
+        done.append(f"shifted {by:+.2f} s{which}")
+    elif args.range is not None:
+        raise Usage("--range goes with --shift")
     for item in args.set or []:
         n, sep, value = item.partition("=")
         if not sep:
@@ -631,8 +663,10 @@ def make_video(
     out: Path | None,
     clip: tuple[float, float] | None = None,
     quick: bool = False,
+    report=None,
 ) -> dict:
-    """Render the project; a whole video gets its thumbnail and timing files beside it."""
+    """Render the project; a whole video gets its thumbnail and timing files beside it. `report`
+    (done, total) is called as it goes; the default writes a line to stderr every 5 percent."""
     out = out or project.folder / video_name(project)
     out.parent.mkdir(parents=True, exist_ok=True)
     song = project.song()
@@ -647,7 +681,7 @@ def make_video(
             project.style,
             jobs.workers(),
             clip,
-            progress("render"),
+            report or progress("render"),
             quick,
             note=lambda text: print(f"memory {text}", file=sys.stderr, flush=True),
         )
@@ -878,6 +912,7 @@ def add_commands(sub) -> None:
     lines = ps.add_parser("lines", parents=[common], help="change line times or text")
     lines.add_argument("project", type=Path)
     lines.add_argument("--shift", help="move every timed line, e.g. -0.3")
+    lines.add_argument("--range", metavar="N[-M]", help="--shift only line N, or lines N to M")
     lines.add_argument("--set", action="append", metavar="N=TIME", help="line N starts at TIME")
     lines.add_argument("--text", action="append", metavar="N=TEXT", help="line N reads TEXT")
     lines.add_argument(
