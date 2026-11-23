@@ -1736,7 +1736,7 @@ def encode(
     if lead:
         from . import tall
 
-        end = last + lead - tall.LOOP  # past the clip's end by the lead less the blend (tall.lead)
+        end = last + lead - tall.blend(style)  # past the clip's end by the lead less the blend
     length = end - first
     begin, total = round(first * fps), math.ceil(end * fps)
     step = QUICK_STEP if quick else 1
@@ -1772,7 +1772,7 @@ def encode(
         # The song before the clip comes in under the clip's end and plays to the sample before the
         # clip's first; no fade at the file's start or end (tall.lead_graph).
         before = ["-ss", f"{max(0.0, heard - lead):.3f}", "-t", f"{lead:.3f}", "-i", song.audio]
-        graph = tall.lead_graph(last - first, lead)
+        graph = tall.lead_graph(last - first, lead, tall.blend(style))
         sound, audio, overlap = ["-map", "[sound]"], ["-filter_complex", graph], 0.0
     if overlap:
         # The moments before the clip, mixed into its end (tall.loop_graph); the fade in stays on

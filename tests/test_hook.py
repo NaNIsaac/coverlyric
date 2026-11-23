@@ -75,3 +75,14 @@ def test_the_loop_blends_loop_blend_seconds():
         "no more than the clip's start"
     )
     assert tall.loop_length(replace(style, loop=False, loop_blend=0.3), song) == 0.0
+
+
+def test_the_bottom_band_keeps_its_text_after_the_hook_and_the_crop():
+    lines, song, style = short(hook=HOOK, crop_top=90, bars_bottom="아래 띠 글")
+    fr = tall.frame_of(style)
+    bottom = fr.bar - tall.HOOK_SHIFT + 90
+    img = pixels(render.frame(8.0, lines, song, style))
+    assert (img[fr.h - bottom :] > 230).all(axis=-1).sum() > 300
+    blank = pixels(render.frame(8.0, lines, song, replace(style, bars_bottom="")))
+    assert (blank[fr.h - bottom :] == 0).all()
+    assert np.array_equal(img[: fr.h - bottom], blank[: fr.h - bottom]), "only the band changes"

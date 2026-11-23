@@ -38,7 +38,6 @@ PITCH = 1.18  # row distance in em
 BAND_PAD = (30, 16)
 BARS_MOST = 0.25  # a band takes at most this share of the height
 CHANGE = 0.3  # seconds a new line takes to move up into the middle
-LOOP = 0.5  # seconds of the end that blend into the moments before the start
 LEAD_OUT, LEAD_IN = 0.9, 0.45  # loop_lead: the clip's fade out and the lead's fade in, seconds
 MAX_BLOCK = 8  # the longest block of lines 후렴 찾기 compares
 AUDIO_FADE = 0.3
@@ -53,6 +52,7 @@ LETTER_POP, POP_IN = 1.3, 0.1
 DISC_SIDE = 860
 DISC_DIM = 0.4
 WEAR_SEED = 11
+MIN_BLEND = 0.05  # a loop blend shorter than this is none
 # hook: the caption's px, weight and row pitch in em, and how much taller the top band gets; the
 # picture moves down by that much and the bottom band gives the room.
 HOOK_PX, HOOK_WEIGHT, HOOK_PITCH = 84, 800, 1.28
@@ -122,15 +122,15 @@ def cues(
     style: render.Style, song: render.Song, lines: list[timing.Line]
 ) -> tuple[list[timing.Cue], float]:
     """The upright video's subtitles on its own clock, and its length: the clip's lines, then with a
-    loop lead the lead's lines from the LOOP blend on, as the picture shows them. A line cut to
+    loop lead the lead's lines from the blend on, as the picture shows them. A line cut to
     MIN_PIECE seconds or less at either edge is left out."""
     timed = sorted((t, text) for t, text in lines if t is not None)
     first, last = span(style, song)
     before = lead(style, song, tuple(timed))
     parts = [(first, last, 0.0)]
     if before:
-        end = last - first - LOOP
-        parts = [(first, last - LOOP, 0.0), (first - before, first, end)]
+        end = last - first - blend(style)
+        parts = [(first, last - blend(style), 0.0), (first - before, first, end)]
     out = []
     for start, stop, at in parts:
         for a, b, text in timing.cues(timed, song.duration):
@@ -141,21 +141,28 @@ def cues(
     return sorted(out), at + stop - start
 
 
+def blend(style: render.Style) -> float:
+    """Seconds of a looping Short's end that blend into what comes before its start (loop_blend),
+    for the picture, the sound and the subtitles alike; at least MIN_BLEND, so a loop lead always
+    has a blend to come in under."""
+    return max(MIN_BLEND, style.loop_blend)
+
+
 def loop_length(style: render.Style, song: render.Song) -> float:
     """How much of the end blends into what comes before the start: loop_blend, less when the clip
     starts sooner than that, 0 without a loop."""
     if not style.loop:
         return 0.0
     first, _ = span(style, song)
-    length = min(max(0.0, style.loop_blend), first)
-    return length if length >= 0.05 else 0.0
+    length = min(blend(style), first)
+    return length if length >= MIN_BLEND else 0.0
 
 
 def lead(style: render.Style, song: render.Song, lines: tuple[tuple[float, str], ...]) -> float:
     """How much of the song before the clip a looping Short ends with (loop_lead): loop_lead
     seconds, or with loop_lead_line the line sung just before the clip (from its start to the
     clip's), kept inside the song. 0 without a loop, over the user's video, or when it would be no
-    longer than the LOOP blend, which then joins the end to the start as before."""
+    longer than the blend, which then joins the end to the start as before."""
     if not style.loop or song.video:
         return 0.0
     first, _ = span(style, song)
@@ -164,15 +171,15 @@ def lead(style: render.Style, song: render.Song, lines: tuple[tuple[float, str],
         before = [start for start, text in lines if start < first - 1e-3 and text]
         length = first - before[-1] if before else 0.0
     length = min(max(0.0, length), first)
-    return length if length > LOOP + 1e-3 else 0.0
+    return length if length > blend(style) + 1e-3 else 0.0
 
 
-def lead_graph(length: float, lead: float) -> str:
+def lead_graph(length: float, lead: float, blend: float) -> str:
     """ffmpeg's audio filter for a loop lead-in: input 1 is the clip, `length` seconds, input 2
     the `lead` seconds before it. The clip fades out over its last LEAD_OUT seconds; the lead comes
-    in LOOP seconds before the clip's end, fading in over LEAD_IN, and plays to its end, which is the
+    in `blend` seconds before the clip's end, fading in over LEAD_IN, and plays to its end, which is the
     sample before the clip's first. Neither the file's start nor its end fades."""
-    start = length - LOOP
+    start = length - blend
     return (
         f"[1:a]afade=t=out:st={max(0.0, length - LEAD_OUT):.3f}:d={LEAD_OUT}[end];"
         f"[2:a]afade=t=in:st=0:d={LEAD_IN},adelay={round(start * 1000)}:all=1[before];"
@@ -392,17 +399,23 @@ def draw_bars(img: Image.Image, style: render.Style, fr: Frame) -> None:
     fill = (*render.hex_rgb(style.bars_colour), 255)
     d.rectangle((0, 0, fr.w, fr.bar - 1), fill=fill)
     d.rectangle((0, fr.h - fr.bar, fr.w, fr.h), fill=fill)
-    face = fonts.resolve(style.font)
-    ink = (*bar_ink(style.bars_colour), 255)
     for text, y in ((style.bars_top, fr.bar / 2), (style.bars_bottom, fr.h - fr.bar / 2)):
-        text = " ".join(text.split())
-        if not text:
-            continue
-        size = min(style.bars_size, fr.bar * 0.6)
-        f = render.font(face, size, 650)
-        while render.text_width(text, f) > fr.w - 2 * fr.margin and f.size > 12:
-            f = render.font(face, f.size * 0.92, 650)
-        render.tracked(d, (fr.w / 2, y), text, f, ink)
+        band_text(d, style, fr, text, y, fr.bar)
+
+
+def band_text(
+    d: ImageDraw.ImageDraw, style: render.Style, fr: Frame, text: str, y: float, height: float
+) -> None:
+    """One band's text on one line, centred at y, made smaller when wider than the frame or taller
+    than the band."""
+    text = " ".join(text.split())
+    if not text or height <= 0:
+        return
+    face = fonts.resolve(style.font)
+    f = render.font(face, min(style.bars_size, height * 0.6), 650)
+    while render.text_width(text, f) > fr.w - 2 * fr.margin and f.size > 12:
+        f = render.font(face, f.size * 0.92, 650)
+    render.tracked(d, (fr.w / 2, y), text, f, (*bar_ink(style.bars_colour), 255))
 
 
 def later(times: tuple[float, ...], j: int) -> float:
@@ -595,10 +608,10 @@ class Painter:
             self.make_disc()
         self.overlap = loop_length(style, song)
         # With a lead the clip goes on past its end into the song before its start, `lead` seconds
-        # less the LOOP blend; lines after the clip never show, not even as the next line.
+        # less the blend; lines after the clip never show, not even as the next line.
         self.lead = lead(style, song, lines)
         if self.lead:
-            self.overlap = LOOP
+            self.overlap = blend(style)
             self.lines = tuple(
                 (start, text) if start < self.span[1] else (start, "") for start, text in self.lines
             )
@@ -788,7 +801,8 @@ class Painter:
 
     def finish(self, img: Image.Image) -> Image.Image:
         """The picture between the bands without its top crop_top px, moved down under the hook's
-        taller band; the bottom band takes what is left."""
+        taller band. The bottom band takes what is left: crop_top - HOOK_SHIFT px more or less than
+        bars_height gave it, with bars_bottom drawn again in the middle of it."""
         if self.hook is None and not self.crop:
             return img
         fr = self.frame
@@ -799,7 +813,22 @@ class Painter:
         out.paste(img.crop((0, fr.bar + self.crop, fr.w, fr.h - fr.bar)), (0, fr.bar + shift))
         if self.hook is not None:
             out.alpha_composite(self.hook, (0, 0))
+        bottom = self.bottom_band()
+        if self.style.bars_bottom.strip() and bottom > 0:
+            band_text(
+                ImageDraw.Draw(out),
+                self.style,
+                fr,
+                self.style.bars_bottom,
+                fr.h - bottom / 2,
+                bottom,
+            )
         return out
+
+    def bottom_band(self) -> int:
+        """The bottom band's height after the hook and crop_top."""
+        shift = HOOK_SHIFT if self.hook is not None else 0
+        return self.frame.bar - shift + self.crop
 
     def raw(self, t: float) -> bytes:
         state = self.state(t)
