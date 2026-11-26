@@ -63,7 +63,7 @@ jobs:
           & "$app\uv\uv.exe" run --project $app --frozen --no-dev coverlyric --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverlyric-setup
           path: installer/Output/coverlyric-setup.exe
@@ -76,7 +76,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: coverlyric-setup
 
