@@ -12,7 +12,7 @@
 
 Windows 10/11 64비트, RAM 4 GB 이상이 필요합니다.
 
-1. [최신 릴리스](https://github.com/NaNIsaac/coverlyric/releases/latest)에서 `coverlyric-setup.exe` 를
+1. [최신 릴리스](https://github.com/neurin-ocha/coverlyric/releases/latest)에서 `coverlyric-setup.exe` 를
    내려받아 실행합니다. 관리자 권한은 필요 없습니다. "Windows의 PC 보호" 창이 뜨면 **추가 정보** →
    **실행**을 누릅니다.
 2. 데이터 폴더(만든 영상, 작업 중인 노래, 설정, 기록을 두는 곳, 처음 값은 문서\coverlyric)를 고르고
@@ -37,7 +37,7 @@ Windows 설정의 **앱**에서 지우며, 데이터 폴더는 남습니다.
 - [사용법](docs/guide.md): 화면마다 모든 설정, 쇼츠와 세로 영상, 문제 해결
 - [명령줄](docs/cli.md): 소스에서 실행, 페이지 없이 만드는 명령
 - [에이전트용](docs/agents.md): 명령으로 영상을 만드는 순서
-- [이슈](https://github.com/NaNIsaac/coverlyric/issues): 문제가 계속되면 데이터 폴더의 `coverlyric.log` 를
+- [이슈](https://github.com/neurin-ocha/coverlyric/issues): 문제가 계속되면 데이터 폴더의 `coverlyric.log` 를
   첨부합니다.
 
 라이선스: 코드 MIT, 글꼴 SIL OFL 1.1.

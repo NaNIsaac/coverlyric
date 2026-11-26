@@ -13,7 +13,7 @@ The lyric times come from listening to the song on this PC. It makes 16:9 videos
 
 It needs Windows 10/11 64-bit and 4 GB of RAM or more.
 
-1. Download `coverlyric-setup.exe` from the [latest release](https://github.com/NaNIsaac/coverlyric/releases/latest)
+1. Download `coverlyric-setup.exe` from the [latest release](https://github.com/neurin-ocha/coverlyric/releases/latest)
    and run it. No administrator rights are needed. If "Windows protected your PC" shows, click
    **More info** → **Run anyway**.
 2. Choose the data folder (where videos, the song in progress, settings and the log are kept;
@@ -43,7 +43,7 @@ lyrics.
 - [Guide](docs/guide.en.md): every setting on each step, Shorts and upright videos, troubleshooting
 - [Command line](docs/cli.en.md): run from source, make videos without the page
 - [For agents](docs/agents.md): the commands to make a video, in order
-- [Issues](https://github.com/NaNIsaac/coverlyric/issues): if a problem stays, attach
+- [Issues](https://github.com/neurin-ocha/coverlyric/issues): if a problem stays, attach
   `coverlyric.log` from the data folder.
 
 Licence: code MIT, fonts SIL OFL 1.1.

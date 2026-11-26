@@ -11,7 +11,7 @@ With [uv](https://docs.astral.sh/uv/) and git, get the repository and run it fro
 installs Python and the packages the first time.
 
 ```sh
-git clone https://github.com/NaNIsaac/coverlyric
+git clone https://github.com/neurin-ocha/coverlyric
 cd coverlyric
 uv run coverlyric
 ```
