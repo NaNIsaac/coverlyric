@@ -173,6 +173,6 @@ Start-Program $uv (Join-Path $root '.venv')
 if ($LASTEXITCODE -ne 0) {
     Write-Host ''
     Write-Host "프로그램이 오류로 끝났습니다 (종료 코드 $LASTEXITCODE). 위 메시지를 확인합니다."
-    Write-Host '해결되지 않으면 이 창의 내용을 https://github.com/NaNIsaac/coverlyric/issues 에 올립니다.'
+    Write-Host '해결되지 않으면 이 창의 내용을 https://github.com/neurin-ocha/coverlyric/issues 에 올립니다.'
     exit 1
 }

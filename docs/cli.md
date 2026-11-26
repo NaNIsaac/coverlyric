@@ -11,7 +11,7 @@
 `uv` 가 처음 한 번 설치합니다.
 
 ```sh
-git clone https://github.com/NaNIsaac/coverlyric
+git clone https://github.com/neurin-ocha/coverlyric
 cd coverlyric
 uv run coverlyric
 ```

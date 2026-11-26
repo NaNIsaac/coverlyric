@@ -342,7 +342,7 @@ line.
 |---|---|
 | "uv를 찾지 못했습니다" (uv not found) | Install again with `coverlyric-setup.exe`. The data folder stays. |
 | "디스크 공간 부족" (not enough disk) | Free space on the drive it names and start again. For a video, a save folder on another drive also works. |
-| "프로그램이 오류로 끝났습니다" (program ended with an error) | Post the error from the terminal window as an [issue](https://github.com/NaNIsaac/coverlyric/issues). On the first start, check the internet connection first. |
+| "프로그램이 오류로 끝났습니다" (program ended with an error) | Post the error from the terminal window as an [issue](https://github.com/neurin-ocha/coverlyric/issues). On the first start, check the internet connection first. |
 | The browser does not open | Paste the `http://127.0.0.1:...` address from the terminal window into the browser. |
 | Letters show as boxes | The font has no Korean; pick another. |
 | "N번째 줄에 시간이 없습니다" (line N has no time) | Give that line a time in the list or remove it with ✕. |
