@@ -264,6 +264,23 @@
       <div class="field upright-only clip-field">
         <div class="clip-head">구간 <span id="clip-range" class="clock"></span></div>
         <canvas id="clip-wave" class="clip-wave" aria-label="구간: 양 끝을 끌어 옮깁니다"></canvas>
+        <div id="clip-info" class="clip-info" aria-live="polite"></div>
+        <div class="clip-nudge">
+          <div class="part-nudge" role="group" aria-label="시작 옮기기">
+            <span>시작</span>
+            <button type="button" class="quiet small" data-end="from" data-by="-1" data-unit="bar" title="Shift+,">−마디</button>
+            <button type="button" class="quiet small" data-end="from" data-by="-1" data-unit="beat" title=",">−박</button>
+            <button type="button" class="quiet small" data-end="from" data-by="1" data-unit="beat" title=".">+박</button>
+            <button type="button" class="quiet small" data-end="from" data-by="1" data-unit="bar" title="Shift+.">+마디</button>
+          </div>
+          <div class="part-nudge" role="group" aria-label="끝 옮기기">
+            <span>끝</span>
+            <button type="button" class="quiet small" data-end="to" data-by="-1" data-unit="bar" title="Shift+[">−마디</button>
+            <button type="button" class="quiet small" data-end="to" data-by="-1" data-unit="beat" title="[">−박</button>
+            <button type="button" class="quiet small" data-end="to" data-by="1" data-unit="beat" title="]">+박</button>
+            <button type="button" class="quiet small" data-end="to" data-by="1" data-unit="bar" title="Shift+]">+마디</button>
+          </div>
+        </div>
         <div class="clip-row">
           <button id="clip-play" class="quiet small">▶ 구간 듣기</button>
           <button id="clip-chorus" class="quiet small">후렴 찾기</button>
@@ -436,6 +453,7 @@
 </div>
 <script src="/clock.js"></script>
 <script src="/merge.js"></script>
+<script src="/seam.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
