@@ -271,10 +271,23 @@ Files in the save folder:
 line.
 
 - The light stretch on the waveform is the part. Drag the bar at either end; it lands on the nearest
-  line start (the end bar also on the song's end). Its start, end and length are shown above.
+  line start (the end bar also on the song's end). Its start and end are shown above.
+- Under the waveform, **시작** (start) and **끝** (end) each have **−마디 −박 +박 +마디**, moving that
+  end a bar (four beats) or a beat back or on. On the keyboard `,` `.` move the start and `[` `]`
+  the end by a beat; with Shift, by a bar. Beats come from the song's beat (the `align` extra);
+  without the extra, or when no steady beat is found, the buttons become **−줄 −0.1초 +0.1초 +줄**
+  and move by 0.1 s or to the line start before or after. An end off the beat goes to the nearest
+  beat in that direction first.
+- The line above the buttons gives the part's length (seconds, and bars and leftover beats with a
+  beat grid) and the first and last lines that start in it. A red note says when the start or the
+  end falls while a line is sung: from its first letter to 0.15 s after its last with letter
+  times, or 0.3 s a letter without them.
 - A press inside the part moves the preview there. The preview time bar moves inside the part only,
   and the part's first line is in the middle, large, from the first frame.
-- **▶ 구간 듣기** (play the part) plays the part once; a second press stops it.
+- **▶ 구간 듣기** (play the part) plays the part on repeat until pressed again. With **끝을 처음과
+  이어지게** on, the end's last 0.5 s (the blend) crosses into the sound just before the start, as in
+  the video; with it off, the end jumps to the start. The lead-in (끝에 붙일 앞부분) is not played.
+  Moving an end while it plays starts it again: 2 s before the new end, or at the new start.
 - **후렴 찾기** (find the chorus) looks in the timed lyrics for the block of lines repeated most (the
   more lines repeat together, the higher it ranks) and moves the part, at its length, to start on that
   block's first line. Spaces, punctuation and case do not count. When no line comes back it only says

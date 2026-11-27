@@ -556,6 +556,15 @@ class App:
         first, last = found or (None, None)
         return {"from": first, "to": last}
 
+    def song_grid(self, song: render.Song):
+        """The song's beat grid, worked out once per song file."""
+        from . import sections
+
+        key = (song.audio, os.path.getmtime(song.audio))
+        if self.beat_grid[0] != key:
+            self.beat_grid = (key, sections.grid(song.audio))
+        return self.beat_grid[1]
+
     def find_sections(self, length: float) -> dict:
         """반복 구간 찾기: loop sections a whole number of bars long, best first."""
         from . import align, sections
@@ -566,11 +575,27 @@ class App:
         if not p.audio:
             raise ValueError("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다.")
         song = p.song()
-        key = (song.audio, os.path.getmtime(song.audio))
-        if self.beat_grid[0] != key:
-            self.beat_grid = (key, sections.grid(song.audio))
         lines = tuple(timing.ready([line for line in p.lines if line[0] is not None]))
-        return {"sections": sections.sections(lines, self.beat_grid[1], song.duration, length)}
+        return {"sections": sections.sections(lines, self.song_grid(song), song.duration, length)}
+
+    def pick_part(
+        self, first: float, last: float, end: str = "", by: int = 0, unit: str = "beat"
+    ) -> dict:
+        """The Short's part from `first` to `last`, with `end` moved `by` beats or bars when given,
+        and what it holds (part.describe). The beat grid comes from the align extra; without it, or
+        when the song has no steady beat, the ends move by 0.1 s and from line start to line start."""
+        from . import align, part
+
+        p = self.project
+        song = p.song()
+        beats = None
+        if p.audio and not align.missing(("librosa",)):
+            with contextlib.suppress(ValueError):
+                beats = tuple(float(b) for b in self.song_grid(song).beats)
+        starts = [t for t, text in p.lines if t is not None and text.strip()]
+        if end in ("from", "to") and by:
+            first, last = part.move(first, last, end, by, unit, song.duration, beats, starts)
+        return part.describe(first, last, p.lines, song.duration, beats, song.letters)
 
     def look_stills(self, t: float, width: int = 320) -> dict:
         """Each look's keys and a small JPEG of the frame at time t in it, for the 꾸미기 cards."""
@@ -1117,7 +1142,7 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
             try:
                 if url.path == "/":
                     self.file(WEB / "index.html")
-                elif url.path in ("/app.js", "/clock.js", "/merge.js", "/app.css"):
+                elif url.path in ("/app.js", "/clock.js", "/merge.js", "/seam.js", "/app.css"):
                     self.file(WEB / url.path[1:])
                 elif url.path == "/api/state":
                     self.json(app.state())
@@ -1217,6 +1242,20 @@ def handler(app: App, server_ref: list) -> type[BaseHTTPRequestHandler]:
                     if data:
                         app.update(data)
                     self.json(app.find_sections(float(query.get("len", ["30"])[0])))
+                elif url.path == "/api/part":
+                    data = json.loads(self.body() or b"{}")
+                    if data:
+                        app.update(data)
+                    q = {k: v[0] for k, v in query.items()}
+                    self.json(
+                        app.pick_part(
+                            float(q.get("from", 0)),
+                            float(q.get("to", 0)),
+                            q.get("end", ""),
+                            int(q.get("by", 0)),
+                            q.get("unit", "beat"),
+                        )
+                    )
                 elif url.path == "/api/render":
                     self.json(app.start_render())
                 elif url.path == "/api/auto":

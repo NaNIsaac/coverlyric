@@ -464,7 +464,7 @@ function fillClip() {
   const s = state.style;
   const end = clipEnd();
   const plain = (t) => clock(t).replace(/\.\d+$/, "");
-  $("clip-range").textContent = `${plain(s.clip_from)} – ${plain(end)} (${Math.round(end - s.clip_from)}초)`;
+  $("clip-range").textContent = `${clock(s.clip_from)} – ${clock(end)}`;
   $("loop").checked = s.loop;
   $("loop-lead-row").hidden = !s.loop;
   const lead = s.loop_lead_line ? "line" : String(s.loop_lead);
@@ -483,6 +483,8 @@ function fillClip() {
   }
   drawClip();
   fillOutputs();
+  if (upright) askPart();
+  else stopListening();
 }
 
 function lineStarts() {
@@ -582,28 +584,174 @@ function bindClip() {
   });
   const release = () => {
     if (!held) return;
+    const moved = held;
     held = null;
     showAt(state.style.clip_from, 0);
+    scheduleSync(0);
+    relisten(moved);
   };
   c.addEventListener("pointerup", release);
   c.addEventListener("pointercancel", release);
   new ResizeObserver(drawClip).observe(c);
 }
 
-// Plays the part once from its start and stops at its end; a second press stops it.
-function playClip() {
-  const p = $("player");
+// 구간 듣기 plays the part on repeat until it is pressed again, joined as the render joins it: with
+// "끝을 처음과 이어지게" on, the end's last loop_blend seconds cross into the sound just before the
+// start (seam.js); with it off the end jumps to the start, as a Short without the blend repeats. The
+// loop lead is not played. The song is decoded once at full rate for this (about 85 MB for four
+// minutes of stereo); a format the browser cannot decode falls back to a plain jump on the player.
+let decoded = null;
+let listening = null;
+let audioCtx = null;
+const SEAM_LEAD = 2; // seconds before the end the loop restarts at after the end moves
+
+async function songAudio() {
+  const src = $("player").src;
+  if (decoded && decoded.src === src) return decoded.buffer;
+  audioCtx ||= new AudioContext();
+  const data = await (await fetch(src)).arrayBuffer();
+  decoded = { src, buffer: await audioCtx.decodeAudioData(data) };
+  return decoded.buffer;
+}
+
+function stopListening() {
+  const was = listening;
+  if (!was) return;
+  listening = null;
+  if (was.node) {
+    was.node.stop();
+    was.node.disconnect();
+  } else {
+    $("player").pause();
+  }
+  $("clip-play").textContent = "▶ 구간 듣기";
+  $("clip-play").setAttribute("aria-pressed", "false");
+  if (was.onstop) was.onstop();
+}
+
+async function listen(offset = 0, onstop = null) {
   if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
-  if (!p.paused) { p.pause(); return; }
-  p.currentTime = state.style.clip_from;
-  p.play();
+  if (listening) {
+    onstop ||= listening.onstop;
+    listening.onstop = null;
+    stopListening();
+  }
+  const p = $("player");
+  p.pause();
+  const from = state.style.clip_from, to = clipEnd();
+  const mine = { from, length: to - from, onstop, node: null, shown: 0 };
+  listening = mine;
   $("clip-play").textContent = "■ 멈추기";
-  const watch = () => {
-    if (!p.paused && p.currentTime < clipEnd()) { requestAnimationFrame(watch); return; }
-    p.pause();
-    $("clip-play").textContent = "▶ 구간 듣기";
+  $("clip-play").setAttribute("aria-pressed", "true");
+  let song = null;
+  try { song = await songAudio(); } catch (e) { song = null; }
+  if (listening !== mine) return;
+  if (!song) {
+    p.currentTime = from + Math.min(Math.max(0, offset), mine.length);
+    p.play();
+    const watch = () => {
+      if (listening !== mine) return;
+      if (p.paused) { stopListening(); return; }
+      if (p.currentTime >= clipEnd()) p.currentTime = state.style.clip_from;
+      requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+    return;
+  }
+  const blend = state.style.loop ? Math.max(MIN_BLEND, state.style.loop_blend) : 0;
+  const channels = [...Array(song.numberOfChannels).keys()].map((c) => song.getChannelData(c));
+  const pass = seamLoop(channels, song.sampleRate, from, to, blend);
+  const buffer = audioCtx.createBuffer(pass.length, pass[0].length, song.sampleRate);
+  pass.forEach((data, c) => buffer.copyToChannel(data, c));
+  await audioCtx.resume();
+  if (listening !== mine) return;
+  const node = audioCtx.createBufferSource();
+  node.buffer = buffer;
+  node.loop = true;
+  node.connect(audioCtx.destination);
+  const at = Math.min(Math.max(0, offset), Math.max(0, buffer.duration - 0.05));
+  node.start(0, at);
+  mine.node = node;
+  mine.length = buffer.duration;
+  mine.began = audioCtx.currentTime - at;
+  const tick = () => {
+    if (listening !== mine) return;
+    const t = mine.from + ((audioCtx.currentTime - mine.began) % mine.length);
+    $("time").value = t;
+    drawClip();
+    if (performance.now() - mine.shown > 1000 && !document.hidden) {
+      mine.shown = performance.now();
+      showAt(t, 0);
+    }
+    requestAnimationFrame(tick);
   };
-  requestAnimationFrame(watch);
+  requestAnimationFrame(tick);
+}
+
+function playClip() {
+  if (listening) stopListening();
+  else listen(0);
+}
+
+// After an end moves while the part plays, it plays again with the new end: from the start when the
+// start moved, from SEAM_LEAD seconds before the end when the end moved, so the new seam is heard.
+function relisten(end) {
+  if (!listening) return;
+  listen(end === "to" ? clipEnd() - state.style.clip_from - SEAM_LEAD : 0);
+}
+
+// The part's line under the wave: length in seconds and bars, its first and last sung lines, and a
+// mark for an end that falls while a line sounds (part.describe on the server, which also moves
+// the ends). Requests run one at a time, so quick presses move the ends one step each.
+let partQueue = Promise.resolve();
+let partTimer = null;
+
+function askPart() {
+  clearTimeout(partTimer);
+  partTimer = setTimeout(() => movePart("", 0, "beat"), 250);
+}
+
+function movePart(end, by, unit) {
+  partQueue = partQueue.then(async () => {
+    if (!state || state.style.shape === "wide") return;
+    const s = state.style;
+    const q = new URLSearchParams({ from: s.clip_from, to: clipEnd(), end, by, unit });
+    try {
+      const res = await api(`/api/part?${q}`, { method: "POST", body: JSON.stringify(payload()) });
+      const info = await res.json();
+      const same = () => Math.abs(info.from - s.clip_from) < 1e-3 && Math.abs(info.to - clipEnd()) < 1e-3;
+      if (by && !same()) {
+        setClip(info.from, info.to);
+        scheduleSync(0);
+        relisten(end);
+      }
+      if (same()) showPart(info);
+    } catch (e) {
+      toast(e.message);
+    }
+  });
+  return partQueue;
+}
+
+function showPart(info) {
+  const bits = [`${info.seconds.toFixed(1)}초`];
+  if (info.grid) bits.push(info.beats ? `${info.bars}마디 ${info.beats}박` : `${info.bars}마디`);
+  if (info.first) {
+    bits.push(info.first.line === info.last.line ? info.first.text : `${info.first.text} … ${info.last.text}`);
+  }
+  const box = $("clip-info");
+  box.replaceChildren(bits.join(" · "));
+  for (const hit of info.inside) {
+    const warn = document.createElement("span");
+    warn.className = "warn";
+    warn.textContent = `${hit.end === "from" ? "시작" : "끝"}이 '${hit.text}' 줄을 부르는 중에 걸립니다.`;
+    box.append(warn);
+  }
+  for (const b of document.querySelectorAll(".part-nudge button")) {
+    const sign = b.dataset.by === "1" ? "+" : "−";
+    const unit = b.dataset.unit === "bar" ? (info.grid ? "마디" : "줄") : (info.grid ? "박" : "0.1초");
+    b.textContent = sign + unit;
+  }
 }
 
 // 반복 구간 찾기: parts a whole number of bars long, best first. A press on one makes it the part and
@@ -611,9 +759,9 @@ function playClip() {
 let looping = null;
 
 function playLoop(item, button) {
-  const p = $("player");
-  for (const b of document.querySelectorAll("#sections button")) b.setAttribute("aria-pressed", "false");
-  if (looping === item && !p.paused) { p.pause(); looping = null; return; }
+  const again = looping === item && listening;
+  stopListening();
+  if (again) return;
   if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
   setClip(item.from, item.to);
   state.style.loop = true;
@@ -621,15 +769,7 @@ function playLoop(item, button) {
   scheduleSync(0);
   looping = item;
   button.setAttribute("aria-pressed", "true");
-  p.currentTime = item.from;
-  p.play();
-  const watch = () => {
-    if (looping !== item) return;
-    if (p.paused) { looping = null; button.setAttribute("aria-pressed", "false"); return; }
-    if (p.currentTime >= item.to) p.currentTime = item.from;
-    requestAnimationFrame(watch);
-  };
-  requestAnimationFrame(watch);
+  listen(0, () => { looping = null; button.setAttribute("aria-pressed", "false"); });
 }
 
 function showSections(found) {
@@ -1219,6 +1359,7 @@ function followPlayer() {
 function togglePlay() {
   const p = $("player");
   if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
+  if (listening) { stopListening(); return; }
   if (p.paused) p.play(); else p.pause();
 }
 
@@ -1229,6 +1370,9 @@ function seekBy(seconds) {
 }
 
 const TEXT_FIELDS = 'input:not([type]), input[type="text"], input[type="number"], textarea, select, [contenteditable]';
+
+// , and . move the part's start a beat back or on, [ and ] its end; with Shift, a bar.
+const PART_KEYS = { Comma: ["from", -1], Period: ["from", 1], BracketLeft: ["to", -1], BracketRight: ["to", 1] };
 
 // Space and the arrows drive the song unless the key belongs to the focused control: a text field,
 // a slider, the audio element, or a button reached with the keyboard.
@@ -1242,6 +1386,11 @@ function shortcut(e) {
     e.preventDefault();
     if (el && el !== document.body) el.blur();
     togglePlay();
+  } else if (PART_KEYS[e.code] && $("clip-wave").offsetParent && state.style.shape !== "wide") {
+    if (e.repeat) { e.preventDefault(); return; }
+    e.preventDefault();
+    const [end, by] = PART_KEYS[e.code];
+    movePart(end, by, e.shiftKey ? "bar" : "beat");
   } else if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
     if (el && el.matches('input[type="range"], input[type="radio"]')) return;
     e.preventDefault();
@@ -1850,6 +1999,10 @@ function bind() {
     r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
   }
   $("clip-play").addEventListener("click", playClip);
+  for (const b of document.querySelectorAll(".part-nudge button")) {
+    b.addEventListener("click", () => movePart(b.dataset.end, Number(b.dataset.by), b.dataset.unit));
+  }
+  $("player").addEventListener("play", () => { if (listening && listening.node) stopListening(); });
   $("clip-chorus").addEventListener("click", async () => {
     const length = Math.round(clipEnd() - state.style.clip_from) || 30;
     try {

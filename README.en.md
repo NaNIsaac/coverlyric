@@ -38,6 +38,17 @@ Windows Settings > **Apps** also keeps the data folder.
 **데모로 둘러보기** (try the demo), in the empty preview, starts with a practice song, cover and
 lyrics.
 
+## Picking a Short's part
+
+On **만들기** (make), choose **9:16 쇼츠**; the part shows on a waveform.
+
+- Drag either end, or move it with **−마디 −박 +박 +마디** (a bar or a beat back or on). On the
+  keyboard `,` `.` move the start and `[` `]` the end by a beat; with Shift, by a bar.
+- Under the waveform: the length in seconds and bars, the first and last sung lines, and a red
+  note when an end falls while a line is sung.
+- **▶ 구간 듣기** (play the part) plays it on repeat until pressed again, joined at the seam as the
+  video is.
+
 ## More
 
 - [Guide](docs/guide.en.md): every setting on each step, Shorts and upright videos, troubleshooting
