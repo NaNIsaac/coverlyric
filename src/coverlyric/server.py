@@ -33,7 +33,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from PIL import Image
 
 from . import __version__, anim, auto, cli, fonts, looks, media, overlay, render, tall, timing
-from .project import Changed, Project
+from .project import Changed, Project, kept_parts
 from .render import Style
 
 WEB = Path(__file__).parent / "web"
@@ -349,7 +349,7 @@ class App:
         before = cli.listed_files(p)
         if data.get("current", p.current) != p.current:
             # Sent before a switch or from a second window: its look is another output's.
-            data = {k: v for k, v in data.items() if k not in ("style", "anim", "video")}
+            data = {k: v for k, v in data.items() if k not in ("style", "anim", "video", "parts")}
         p.title = str(data.get("title", p.title))
         p.artist = str(data.get("artist", p.artist))
         p.album = str(data.get("album", p.album))
@@ -369,6 +369,8 @@ class App:
             p.style = style
         if "video" in data and not data["video"]:
             p.video = ""
+        if "parts" in data:
+            p.parts = kept_parts(data["parts"])
         if "title_image" in data and not data["title_image"]:
             p.title_image = ""
         if "anim" in data:

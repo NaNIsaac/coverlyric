@@ -363,7 +363,16 @@ body.upright .wide-only { display: none; }
 body:not(.upright) .upright-only { display: none; }
 .seg.shapes { grid-template-columns: repeat(4, 1fr); }
 .clip-field { margin-bottom: 12px; }
-.clip-head { display: flex; justify-content: space-between; }
+.clip-head { display: flex; justify-content: space-between; align-items: center; }
+.clip-head-right { display: flex; align-items: center; gap: 6px; }
+.clip-head-right button { height: 24px; padding: 0 6px; font-size: 12px; }
+.part-keep { display: flex; gap: 6px; margin-bottom: 6px; }
+.part-keep input { flex: 1; min-width: 0; height: 28px; font-size: 12px; }
+.parts { margin: 0 0 8px; padding: 0; list-style: none; }
+.parts li { display: flex; align-items: center; gap: 2px; }
+.parts button { height: 26px; padding: 0 6px; font-size: 12px; }
+.parts .part-play { display: block; flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parts .part-play[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
 .clip-wave { display: block; width: 100%; height: 48px; margin: 6px 0; background: var(--field); touch-action: none; }
 .clip-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .clip-info { min-height: 18px; margin-bottom: 4px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }

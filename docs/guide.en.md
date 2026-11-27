@@ -271,7 +271,12 @@ Files in the save folder:
 line.
 
 - The light stretch on the waveform is the part. Drag the bar at either end; it lands on the nearest
-  line start (the end bar also on the song's end). Its start and end are shown above.
+  line start or bar line (the end bar also on the song's end). Its start and end are shown above.
+- The waveform shows the part and a margin either side (20 % of its length, 2 s at least). **전체**
+  (whole) at the top right shows the whole song, and **확대** (zoom) the part again. With a beat grid,
+  short ticks at the top are beats and faint lines across the wave are bar lines, every four beats
+  from the part's start, so they show where an end gives whole bars. Short ticks at the bottom are
+  line starts.
 - Under the waveform, **시작** (start) and **끝** (end) each have **−마디 −박 +박 +마디**, moving that
   end a bar (four beats) or a beat back or on. On the keyboard `,` `.` move the start and `[` `]`
   the end by a beat; with Shift, by a bar. Beats come from the song's beat (the `align` extra);
@@ -288,6 +293,14 @@ line.
   이어지게** on, the end's last 0.5 s (the blend) crosses into the sound just before the start, as in
   the video; with it off, the end jumps to the start. The lead-in (끝에 붙일 앞부분) is not played.
   Moving an end while it plays starts it again: 2 s before the new end, or at the new start.
+- **후보로 저장** (keep as a candidate) keeps the current part under a name. An empty name gives A,
+  B, C and so on; a name already used is replaced. Candidates are saved with each video in the project
+  and stay when it is opened again. Each candidate's row has:
+  - **▶ name**: plays that candidate on repeat without changing the part, marked on the waveform with
+    a dashed box. A second press stops it.
+  - **구간으로** (make it the part): makes the candidate the part, and goes on playing the new part if
+    one was playing.
+  - **×**: removes the candidate.
 - **후렴 찾기** (find the chorus) looks in the timed lyrics for the block of lines repeated most (the
   more lines repeat together, the higher it ranks) and moves the part, at its length, to start on that
   block's first line. Spaces, punctuation and case do not count. When no line comes back it only says

@@ -103,7 +103,7 @@ async function refresh() {
 }
 
 function payload() {
-  return { rev: state.rev, current: state.current, title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, clean_tags: state.clean_tags };
+  return { rev: state.rev, current: state.current, title: state.title, artist: state.artist, album: state.album, released: state.released, lines: state.lines, style: state.style, anim: state.anim, parts: state.parts || [], clean_tags: state.clean_tags };
 }
 
 function scheduleSync(delay = 150) {
@@ -485,6 +485,7 @@ function fillClip() {
   fillOutputs();
   if (upright) askPart();
   else stopListening();
+  fillParts();
 }
 
 function lineStarts() {
@@ -496,10 +497,10 @@ function firstLine() {
   return starts.length ? Math.min(...starts) : 0;
 }
 
-// A dragged end lands on the nearest line start, or the song's end for the end handle, so the part
-// starts and stops where a line does.
+// A dragged end lands on the nearest line start or bar line, or the song's end for the end handle,
+// so the part starts and stops where a line or a bar does.
 function nearestStart(t, orEnd) {
-  const marks = lineStarts();
+  const marks = lineStarts().concat(partMarks ? partMarks.bars : []);
   if (orEnd) marks.push(state.duration || 0);
   return marks.length ? marks.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a)) : t;
 }
@@ -518,6 +519,21 @@ function songLength() {
   return (state && state.duration) || (peaks && peaks.duration) || 0;
 }
 
+// The part's wave shows the part with a margin on either side (확대, the default), or the whole song
+// (전체). While an end is dragged the view holds still, so the end stays under the pointer.
+let clipZoom = true;
+let heldView = null;
+let partMarks = null; // {beats, bars}: seconds near the part, from part.describe
+
+function clipView() {
+  if (heldView) return heldView;
+  const duration = songLength();
+  if (!clipZoom) return [0, duration];
+  const from = state.style.clip_from, to = clipEnd();
+  const pad = Math.max(2, (to - from) * 0.2);
+  return [Math.max(0, from - pad), Math.min(duration, to + pad)];
+}
+
 function drawClip() {
   const c = $("clip-wave");
   const duration = songLength();
@@ -527,16 +543,42 @@ function drawClip() {
   const h = (c.height = Math.round(c.clientHeight * ratio));
   const g = c.getContext("2d");
   const css = getComputedStyle(document.documentElement);
-  const x = (t) => (t / duration) * w;
+  const [v0, v1] = clipView();
+  const x = (t) => ((t - v0) / (v1 - v0)) * w;
   if (peaks) {
     g.fillStyle = css.getPropertyValue("--line");
     for (let px = 0; px < w; px++) {
-      const top = peaks[Math.floor((px / w) * peaks.length)] || 0;
+      const t0 = v0 + (px / w) * (v1 - v0), t1 = v0 + ((px + 1) / w) * (v1 - v0);
+      const i0 = Math.floor((t0 / duration) * peaks.length);
+      const i1 = Math.max(i0 + 1, Math.floor((t1 / duration) * peaks.length));
+      let top = 0;
+      for (let i = i0; i < i1 && i < peaks.length; i++) top = Math.max(top, peaks[i] || 0);
       g.fillRect(px, h / 2 - (top * h) / 2, 1, Math.max(1, top * h));
     }
   }
+  if (partMarks) {
+    // Beats as ticks at the top, bar lines (whole bars from the part's start) across the wave, each
+    // only when there is room to tell them apart.
+    g.fillStyle = css.getPropertyValue("--muted");
+    const gap = (list) => (list.length > 1 ? x(list[1]) - x(list[0]) : w);
+    if (gap(partMarks.beats) >= 4 * ratio) {
+      for (const t of partMarks.beats) if (t >= v0 && t <= v1) g.fillRect(Math.round(x(t)), 0, ratio, 4 * ratio);
+    }
+    if (gap(partMarks.bars) >= 6 * ratio) {
+      g.globalAlpha = 0.45;
+      for (const t of partMarks.bars) if (t >= v0 && t <= v1) g.fillRect(Math.round(x(t)), 0, ratio, h);
+      g.globalAlpha = 1;
+    }
+  }
   g.fillStyle = css.getPropertyValue("--muted");
-  for (const t of lineStarts()) g.fillRect(Math.round(x(t)), h - 6 * ratio, ratio, 6 * ratio);
+  for (const t of lineStarts()) if (t >= v0 && t <= v1) g.fillRect(Math.round(x(t)), h - 6 * ratio, ratio, 6 * ratio);
+  const hearing = listening && listening.range;
+  if (hearing) {
+    g.strokeStyle = css.getPropertyValue("--ink");
+    g.setLineDash([4 * ratio, 3 * ratio]);
+    g.strokeRect(x(hearing.from), ratio, x(hearing.to) - x(hearing.from), h - 2 * ratio);
+    g.setLineDash([]);
+  }
   const a = x(state.style.clip_from), b = x(clipEnd());
   g.fillStyle = css.getPropertyValue("--accent");
   g.globalAlpha = 0.22;
@@ -545,16 +587,20 @@ function drawClip() {
   g.fillRect(Math.round(a), 0, 3 * ratio, h);
   g.fillRect(Math.round(b) - 3 * ratio, 0, 3 * ratio, h);
   g.fillStyle = css.getPropertyValue("--ink");
-  g.fillRect(Math.round(x(Number($("time").value))), 0, ratio, h);
+  g.fillRect(Math.round(x(hearing ? listening.at : Number($("time").value))), 0, ratio, h);
 }
 
 // The handles at the part's two ends are dragged; a press inside the part moves the preview there.
 function bindClip() {
   const c = $("clip-wave");
   let held = null;
-  const timeAt = (e) => Math.min(songLength(), Math.max(0, (e.offsetX / c.clientWidth) * songLength()));
+  const timeAt = (e) => {
+    const [v0, v1] = clipView();
+    return Math.min(songLength(), Math.max(0, v0 + (e.offsetX / c.clientWidth) * (v1 - v0)));
+  };
   const handle = (e) => {
-    const px = (t) => (t / songLength()) * c.clientWidth;
+    const [v0, v1] = clipView();
+    const px = (t) => ((t - v0) / (v1 - v0)) * c.clientWidth;
     const a = Math.abs(px(state.style.clip_from) - e.offsetX);
     const b = Math.abs(px(clipEnd()) - e.offsetX);
     if (Math.min(a, b) > 8) return null;
@@ -576,6 +622,7 @@ function bindClip() {
     if (!songLength()) return;
     held = handle(e);
     if (held) {
+      heldView = clipView();
       c.setPointerCapture(e.pointerId);
       return;
     }
@@ -586,6 +633,7 @@ function bindClip() {
     if (!held) return;
     const moved = held;
     held = null;
+    heldView = null;
     showAt(state.style.clip_from, 0);
     scheduleSync(0);
     relisten(moved);
@@ -593,6 +641,12 @@ function bindClip() {
   c.addEventListener("pointerup", release);
   c.addEventListener("pointercancel", release);
   new ResizeObserver(drawClip).observe(c);
+  $("clip-zoom").addEventListener("click", () => {
+    clipZoom = !clipZoom;
+    $("clip-zoom").textContent = clipZoom ? "전체" : "확대";
+    $("clip-zoom").setAttribute("aria-pressed", String(clipZoom));
+    drawClip();
+  });
 }
 
 // 구간 듣기 plays the part on repeat until it is pressed again, joined as the render joins it: with
@@ -629,7 +683,9 @@ function stopListening() {
   if (was.onstop) was.onstop();
 }
 
-async function listen(offset = 0, onstop = null) {
+// `range` ({from, to}) plays a kept part instead of the part being edited; moving the part's ends
+// does not touch it.
+async function listen(offset = 0, onstop = null, range = null) {
   if (!state.has_audio) { toast("노래 파일이 없습니다. 노래·표지 단계에서 넣습니다."); return; }
   if (listening) {
     onstop ||= listening.onstop;
@@ -638,8 +694,8 @@ async function listen(offset = 0, onstop = null) {
   }
   const p = $("player");
   p.pause();
-  const from = state.style.clip_from, to = clipEnd();
-  const mine = { from, length: to - from, onstop, node: null, shown: 0 };
+  const from = range ? range.from : state.style.clip_from, to = range ? range.to : clipEnd();
+  const mine = { from, length: to - from, onstop, node: null, shown: 0, range, at: from };
   listening = mine;
   $("clip-play").textContent = "■ 멈추기";
   $("clip-play").setAttribute("aria-pressed", "true");
@@ -652,7 +708,9 @@ async function listen(offset = 0, onstop = null) {
     const watch = () => {
       if (listening !== mine) return;
       if (p.paused) { stopListening(); return; }
-      if (p.currentTime >= clipEnd()) p.currentTime = state.style.clip_from;
+      if (p.currentTime >= to) p.currentTime = from;
+      mine.at = p.currentTime;
+      if (range) drawClip();
       requestAnimationFrame(watch);
     };
     requestAnimationFrame(watch);
@@ -677,6 +735,12 @@ async function listen(offset = 0, onstop = null) {
   const tick = () => {
     if (listening !== mine) return;
     const t = mine.from + ((audioCtx.currentTime - mine.began) % mine.length);
+    mine.at = t;
+    if (range) {
+      drawClip();
+      requestAnimationFrame(tick);
+      return;
+    }
     $("time").value = t;
     drawClip();
     if (performance.now() - mine.shown > 1000 && !document.hidden) {
@@ -696,7 +760,7 @@ function playClip() {
 // After an end moves while the part plays, it plays again with the new end: from the start when the
 // start moved, from SEAM_LEAD seconds before the end when the end moved, so the new seam is heard.
 function relisten(end) {
-  if (!listening) return;
+  if (!listening || listening.range) return;
   listen(end === "to" ? clipEnd() - state.style.clip_from - SEAM_LEAD : 0);
 }
 
@@ -734,6 +798,8 @@ function movePart(end, by, unit) {
 }
 
 function showPart(info) {
+  partMarks = info.marks || null;
+  drawClip();
   const bits = [`${info.seconds.toFixed(1)}초`];
   if (info.grid) bits.push(info.beats ? `${info.bars}마디 ${info.beats}박` : `${info.bars}마디`);
   if (info.first) {
@@ -752,6 +818,95 @@ function showPart(info) {
     const unit = b.dataset.unit === "bar" ? (info.grid ? "마디" : "줄") : (info.grid ? "박" : "0.1초");
     b.textContent = sign + unit;
   }
+}
+
+// Kept parts (후보): the part saved under a name to compare later. A press on one plays it on
+// repeat without changing the part; 구간으로 makes it the part; × removes it. They are saved with the
+// video, in project.json.
+function nextPartName() {
+  const taken = new Set((state.parts || []).map((x) => x.name));
+  for (let round = 1; ; round++) {
+    for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      const name = round === 1 ? letter : `${letter}${round}`;
+      if (!taken.has(name)) return name;
+    }
+  }
+}
+
+// The line heard at the part's start: the one still on at the cut (an empty entry ends a line), or
+// else the first to start inside the part.
+function firstLineIn(from, to) {
+  const timed = state.lines.filter(([t]) => t != null).sort((a, b) => a[0] - b[0]);
+  const on = timed.filter(([t]) => t <= from + 0.05).pop();
+  if (on && on[1]) return on[1];
+  const next = timed.find(([t, text]) => text && t > from + 0.05 && t < to);
+  return next ? next[1] : "";
+}
+
+function fillParts() {
+  const list = $("parts");
+  const parts = state.parts || [];
+  const hearing = listening && listening.range;
+  list.replaceChildren(...parts.map((item) => {
+    const li = document.createElement("li");
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "quiet small part-play";
+    const words = firstLineIn(item.from, item.to);
+    play.textContent = `▶ ${item.name}  ${clock(item.from)} – ${clock(item.to)} · ${(item.to - item.from).toFixed(1)}초${words ? ` · ${words}` : ""}`;
+    play.setAttribute("aria-pressed", String(!!hearing && hearing.name === item.name));
+    play.addEventListener("click", () => hearPart(item));
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "quiet small";
+    use.textContent = "구간으로";
+    use.addEventListener("click", () => usePart(item));
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "quiet small";
+    drop.textContent = "×";
+    drop.setAttribute("aria-label", `${item.name} 지우기`);
+    drop.addEventListener("click", () => dropPart(item));
+    li.append(play, use, drop);
+    return li;
+  }));
+  list.hidden = !parts.length;
+  $("part-name").placeholder = `후보 이름 (비우면 ${nextPartName()})`;
+}
+
+function savePart() {
+  const name = $("part-name").value.trim().slice(0, 40) || nextPartName();
+  const item = { name, from: Math.round(state.style.clip_from * 1000) / 1000, to: Math.round(clipEnd() * 1000) / 1000 };
+  state.parts = (state.parts || []).filter((x) => x.name !== name).concat([item]);
+  $("part-name").value = "";
+  fillParts();
+  scheduleSync(0);
+}
+
+function hearPart(item) {
+  const again = listening && listening.range && listening.range.name === item.name;
+  stopListening();
+  if (!again) listen(0, () => fillParts(), { ...item });
+  fillParts();
+  drawClip();
+}
+
+function usePart(item) {
+  const hearing = listening && listening.range;
+  setClip(item.from, item.to);
+  scheduleSync(0);
+  if (hearing) {
+    stopListening();
+    listen(0);
+  }
+  fillParts();
+}
+
+function dropPart(item) {
+  if (listening && listening.range && listening.range.name === item.name) stopListening();
+  state.parts = (state.parts || []).filter((x) => x !== item);
+  fillParts();
+  scheduleSync(0);
 }
 
 // 반복 구간 찾기: parts a whole number of bars long, best first. A press on one makes it the part and
@@ -1999,6 +2154,8 @@ function bind() {
     r.addEventListener("change", () => { state.style.tone = r.value; scheduleSync(0); });
   }
   $("clip-play").addEventListener("click", playClip);
+  $("part-save").addEventListener("click", savePart);
+  $("part-name").addEventListener("keydown", (e) => { if (e.key === "Enter") savePart(); });
   for (const b of document.querySelectorAll(".part-nudge button")) {
     b.addEventListener("click", () => movePart(b.dataset.end, Number(b.dataset.by), b.dataset.unit));
   }

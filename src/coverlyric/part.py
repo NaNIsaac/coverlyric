@@ -13,6 +13,7 @@ BEAT_STEP = 0.1  # seconds an end moves by "a beat" when the song has no beat gr
 HOLD = 0.15  # seconds a line's last letter is taken to sound after it starts
 PER_LETTER = 0.3  # seconds a letter is taken to last when a line has no letter times
 MIN_LENGTH = 0.5
+NEAR = 60.0  # seconds either side of the part whose beats and bar lines the page draws
 
 
 def _on(t: float, beats: Sequence[float]) -> int | None:
@@ -127,4 +128,19 @@ def describe(
     if beats:
         count = sum(1 for b in beats if first - SNAP <= b < last - SNAP)
         info["bars"], info["beats"] = divmod(count, BEATS_PER_BAR)
+        info["marks"] = marks(first, last, beats)
     return info
+
+
+def marks(first: float, last: float, beats: Sequence[float]) -> dict:
+    """The beats within NEAR seconds of the part, and which of them are bar lines: every fourth beat
+    counted from the part's start (the beat it is on, or the next one), so the lines show where
+    whole bars from that start fall."""
+    i0 = _on(first, beats)
+    if i0 is None:
+        i0 = next((k for k, b in enumerate(beats) if b > first), len(beats) - 1)
+    near = [(k, b) for k, b in enumerate(beats) if first - NEAR <= b <= last + NEAR]
+    return {
+        "beats": [round(b, 3) for _, b in near],
+        "bars": [round(b, 3) for k, b in near if (k - i0) % BEATS_PER_BAR == 0],
+    }

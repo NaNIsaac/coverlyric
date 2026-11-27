@@ -262,7 +262,7 @@
         <ol id="outputs" class="outputs" aria-label="만들 영상" hidden></ol>
       </div>
       <div class="field upright-only clip-field">
-        <div class="clip-head">구간 <span id="clip-range" class="clock"></span></div>
+        <div class="clip-head">구간 <span class="clip-head-right"><span id="clip-range" class="clock"></span><button type="button" id="clip-zoom" class="quiet small" aria-pressed="true" title="파형을 구간 둘레만 크게, 또는 노래 전체로">전체</button></span></div>
         <canvas id="clip-wave" class="clip-wave" aria-label="구간: 양 끝을 끌어 옮깁니다"></canvas>
         <div id="clip-info" class="clip-info" aria-live="polite"></div>
         <div class="clip-nudge">
@@ -287,6 +287,11 @@
           <button id="clip-sections" class="quiet small">반복 구간 찾기</button>
         </div>
         <ol id="sections" class="sections" hidden></ol>
+        <div class="part-keep">
+          <input type="text" id="part-name" maxlength="40" placeholder="후보 이름 (비우면 A, B, C…)" aria-label="후보 이름">
+          <button type="button" id="part-save" class="quiet small">＋ 후보로 저장</button>
+        </div>
+        <ol id="parts" class="parts" aria-label="저장한 후보" hidden></ol>
         <label class="check"><input type="checkbox" id="loop"> 끝을 처음과 이어지게</label>
         <label class="field" id="loop-lead-row">끝에 붙일 앞부분
           <select id="loop_lead">
