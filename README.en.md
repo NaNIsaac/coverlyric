@@ -48,6 +48,10 @@ On **만들기** (make), choose **9:16 쇼츠**; the part shows on a waveform.
   note when an end falls while a line is sung.
 - **▶ 구간 듣기** (play the part) plays it on repeat until pressed again, joined at the seam as the
   video is.
+- The waveform zooms to the part (**전체** shows the whole song) and draws bar lines counted from the
+  part's start.
+- **후보로 저장** (keep as a candidate) keeps the part under a name. Press a candidate to hear it on
+  repeat, **구간으로** to make it the part, **×** to remove it. Candidates are saved in the project.
 
 ## More
 

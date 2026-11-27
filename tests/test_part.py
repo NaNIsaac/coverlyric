@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from coverlyric import media, part, sections, server
+from coverlyric.project import Project
 from coverlyric.sections import Grid
 
 BEATS = tuple(0.5 * k for k in range(240))  # 120 bpm, a bar every 2 s
@@ -146,3 +147,43 @@ def test_the_first_line_is_the_first_one_that_starts_in_the_part():
     info = part.describe(5.3, 12.0, LINES, 60.0, BEATS, letters)
     assert info["first"]["line"] == 2
     assert info["inside"] == []
+
+
+def test_bar_lines_count_whole_bars_from_the_start():
+    m = part.marks(10.0, 20.0, BEATS)
+    assert 10.0 in m["bars"] and 12.0 in m["bars"] and 8.0 in m["bars"]
+    assert 10.5 in m["beats"] and 10.5 not in m["bars"]
+    off = part.marks(10.2, 20.0, BEATS)
+    assert 10.5 in off["bars"] and 12.5 in off["bars"]
+    assert min(m["beats"]) >= 10.0 - part.NEAR and max(m["beats"]) <= 20.0 + part.NEAR
+
+
+def test_the_page_gets_bar_lines_with_a_grid_only(app, monkeypatch):
+    assert 4.0 in app.pick_part(4.0, 12.0)["marks"]["bars"]
+    monkeypatch.setattr("coverlyric.align.missing", lambda names=(): "librosa not installed")
+    assert "marks" not in app.pick_part(4.0, 12.0)
+
+
+def test_kept_parts_are_saved_with_their_video_and_bad_ones_dropped(app):
+    app.update(
+        {
+            "parts": [
+                {"name": " A ", "from": 20.35, "to": 61.31},
+                {"name": "", "from": 1, "to": 2},
+                {"name": "back", "from": 5, "to": 4},
+                {"name": "x" * 60, "from": "3", "to": "9.5"},
+                "junk",
+            ]
+        }
+    )
+    want = [{"name": "A", "from": 20.35, "to": 61.31}, {"name": "x" * 40, "from": 3.0, "to": 9.5}]
+    assert app.project.parts == want
+    again = Project.load(app.work / "project.json")
+    assert again.parts == want
+    assert again.to_dict()["outputs"][0]["parts"] == want
+
+
+def test_parts_sent_for_another_video_are_not_taken(app):
+    app.update({"parts": [{"name": "A", "from": 1, "to": 5}]})
+    app.update({"current": "other", "parts": [{"name": "B", "from": 2, "to": 6}]})
+    assert [p["name"] for p in app.project.parts] == ["A"]

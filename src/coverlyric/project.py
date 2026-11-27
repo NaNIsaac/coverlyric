@@ -119,6 +119,8 @@ class Output:
     style: Style = field(default_factory=Style)
     anim: list[str] = field(default_factory=list)  # the moving picture: one GIF or images in order
     video: str = ""  # the user's own video under the lyrics, in place of the cover
+    # Parts kept to choose from for a Short: {"name": ..., "from": seconds, "to": seconds}.
+    parts: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> Output:
@@ -127,6 +129,7 @@ class Output:
             style=Style.from_dict(data.get("style", {})),
             anim=[str(name) for name in data.get("anim", [])],
             video=str(data.get("video", "")),
+            parts=kept_parts(data.get("parts", [])),
         )
 
     def to_dict(self) -> dict:
@@ -135,7 +138,25 @@ class Output:
             "style": self.style.to_dict(),
             "anim": list(self.anim),
             "video": self.video,
+            "parts": [dict(part) for part in self.parts],
         }
+
+
+PART_NAME = 40  # characters a kept part's name keeps
+
+
+def kept_parts(raw: object) -> list[dict]:
+    """The kept parts that read as parts: a name, and a start before the end, at 0 s or later."""
+    out = []
+    for entry in raw if isinstance(raw, list) else []:
+        try:
+            first, last = round(float(entry["from"]), 3), round(float(entry["to"]), 3)
+            name = str(entry.get("name", "")).strip()[:PART_NAME]
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+        if name and 0 <= first < last:
+            out.append({"name": name, "from": first, "to": last})
+    return out
 
 
 @dataclass
@@ -209,6 +230,14 @@ class Project:
     def video(self, value: str) -> None:
         self.output.video = value
 
+    @property
+    def parts(self) -> list[dict]:
+        return self.output.parts
+
+    @parts.setter
+    def parts(self, value: list[dict]) -> None:
+        self.output.parts = value
+
     @classmethod
     def load(cls, path: Path) -> Project:
         raw = read_bytes(path)
@@ -265,6 +294,7 @@ class Project:
             "style": self.style.to_dict(),
             "anim": list(self.anim),
             "video": self.video,
+            "parts": [dict(part) for part in self.parts],
             "title_image": self.title_image,
             "clean_tags": self.clean_tags,
             "notes": list(self.notes),
